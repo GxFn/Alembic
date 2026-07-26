@@ -22,9 +22,11 @@ import {
 } from '@alembic/agent/production';
 import type { AgentService } from '@alembic/agent/service';
 import {
+  assertCodeFactGenerationManifestV1,
   canonicalizeObservationPopulationV1,
   createFinalExpandedMiningScheduleReceiptV1,
   type FactRecordV1,
+  type FinalExpandedMiningScheduleReceiptV1,
   type ObservationPopulationInputV1,
 } from '@alembic/core/host-agent-workflows';
 import type { CertifiedPlanningFactsV1, CompiledColdStartPlanV2 } from '@alembic/core/plans';
@@ -47,9 +49,11 @@ import {
 const STRICT_ANALYSIS_MAX_EPOCHS = 8;
 
 export interface StrictAnalysisExecutionResultV1 {
+  readonly expansionLedgerHeadHash: string;
   readonly facts: readonly FactRecordV1[];
   readonly factExecutionReceipts: MainStrictFactExecutionResultV1['receipts'];
   readonly factExecutionManifest: MainStrictFactExecutionResultV1['manifest'];
+  readonly finalExpandedSchedule: FinalExpandedMiningScheduleReceiptV1;
   readonly epochs: readonly StrictAnalystEpochV1[];
   readonly epoch: StrictAnalystEpochV1;
   readonly fixpoint: ReturnType<typeof createStrictAnalysisFixpointV1>;
@@ -507,19 +511,24 @@ export async function executeStrictAnalysisAndProduction(
     presentation: { responseShape: 'system-task-result' },
   });
   const { epoch, fixpoint } = state;
+  const finalExpandedSchedule = prepared.expansionPort.finalSchedule;
   if (
     result.status !== 'success' ||
     result.toolCalls.length > 0 ||
     !epoch ||
     !fixpoint ||
+    !finalExpandedSchedule ||
     !state.producerReviewed
   ) {
     throw new Error(`STRICT_PRODUCTION_AGENT_FAILED:${result.status}`);
   }
+  const expansionLedgerHeadHash = resolveStrictExpansionLedgerHeadHashV1(finalExpandedSchedule);
   return Object.freeze({
+    expansionLedgerHeadHash,
     facts: state.execution.facts,
     factExecutionReceipts: state.execution.receipts,
     factExecutionManifest: state.execution.manifest,
+    finalExpandedSchedule,
     epochs: state.epochs,
     epoch,
     fixpoint,
@@ -527,6 +536,65 @@ export async function executeStrictAnalysisAndProduction(
     expressionSets: state.expressionSets,
     agentRunId: result.runId,
     agentUsage: result.usage,
+  });
+}
+
+export function resolveStrictExpansionLedgerHeadHashV1(
+  finalExpandedSchedule: FinalExpandedMiningScheduleReceiptV1
+): string {
+  const { finalExpandedScheduleHash, ...semantic } = finalExpandedSchedule;
+  if (
+    finalExpandedSchedule.schemaVersion !== 1 ||
+    hashCanonicalJson(semantic) !== finalExpandedScheduleHash
+  ) {
+    throw new Error('STRICT_FINAL_EXPANDED_SCHEDULE_INVALID');
+  }
+  // Core 的 sealed receipt 是 ledger 身份的唯一来源：有扩展时取最后一个 receipt，
+  // 无扩展时以 Core receipt 中规范化的空 receipt-hash 集合生成基准身份。
+  return (
+    finalExpandedSchedule.expansionReceiptHashes.at(-1) ??
+    hashCanonicalJson(finalExpandedSchedule.expansionReceiptHashes)
+  );
+}
+
+export function resolveStrictAnalysisPublicLineageV1(input: {
+  readonly analysis: StrictAnalysisExecutionResultV1;
+  readonly baselineScheduleHash: string;
+}): {
+  readonly expansionLedgerHeadHash: string;
+  readonly finalCodeFactGenerationManifestHash: string;
+  readonly finalExpandedScheduleHash: string;
+} {
+  const finalExpandedSchedule = input.analysis.finalExpandedSchedule;
+  if (!finalExpandedSchedule) {
+    throw new Error('STRICT_ANALYSIS_PUBLIC_LINEAGE_MISSING');
+  }
+  const expansionLedgerHeadHash = resolveStrictExpansionLedgerHeadHashV1(finalExpandedSchedule);
+  if (
+    finalExpandedSchedule.baselineScheduleHash !== input.baselineScheduleHash ||
+    finalExpandedSchedule.finalExpandedScheduleHash !==
+      input.analysis.fixpoint.finalExpandedScheduleHash ||
+    expansionLedgerHeadHash !== input.analysis.expansionLedgerHeadHash ||
+    hashCanonicalJson(finalExpandedSchedule.obligationIds) !==
+      hashCanonicalJson(
+        input.analysis.factExecutionReceipts.map((receipt) => receipt.obligationId).sort()
+      )
+  ) {
+    throw new Error('STRICT_ANALYSIS_PUBLIC_LINEAGE_DIVERGENCE');
+  }
+  try {
+    assertCodeFactGenerationManifestV1({
+      facts: input.analysis.facts,
+      receipts: input.analysis.factExecutionReceipts,
+      manifest: input.analysis.factExecutionManifest,
+    });
+  } catch (error: unknown) {
+    throw new Error('STRICT_ANALYSIS_FACT_MANIFEST_LINEAGE_INVALID', { cause: error });
+  }
+  return Object.freeze({
+    expansionLedgerHeadHash: input.analysis.expansionLedgerHeadHash,
+    finalExpandedScheduleHash: finalExpandedSchedule.finalExpandedScheduleHash,
+    finalCodeFactGenerationManifestHash: input.analysis.factExecutionManifest.manifestHash,
   });
 }
 

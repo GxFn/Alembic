@@ -1,12 +1,32 @@
+import { createFinalExpandedMiningScheduleReceiptV1 } from '@alembic/core/host-agent-workflows';
 import {
   createCandidateCoverageReceiptV1,
   createFinalCoverageBindingReceiptV1,
 } from '@alembic/core/knowledge';
 import { hashCanonicalJson } from '@alembic/core/project-context-foundation';
 import { describe, expect, it } from 'vitest';
+import { resolveStrictExpansionLedgerHeadHashV1 } from '../../lib/recipe-pipeline/generate/strict/StrictAnalysisRuntime.js';
 import { createServingSnapshotValidationReceiptV1 } from '../../lib/recipe-pipeline/generate/strict/StrictFinalizationRuntime.js';
 
 describe('strict serving snapshot validation receipt', () => {
+  it('derives the no-expansion ledger identity from the canonical Core receipt', () => {
+    const schedule = createFinalExpandedMiningScheduleReceiptV1({
+      baselineScheduleHash: sha('baseline'),
+      baselineObligationIds: ['fact-a'],
+      expansionReceipts: [],
+    });
+
+    expect(resolveStrictExpansionLedgerHeadHashV1(schedule)).toBe(
+      hashCanonicalJson(schedule.expansionReceiptHashes)
+    );
+    expect(() =>
+      resolveStrictExpansionLedgerHeadHashV1({
+        ...schedule,
+        finalExpandedScheduleHash: sha('tampered-schedule'),
+      })
+    ).toThrow('STRICT_FINAL_EXPANDED_SCHEDULE_INVALID');
+  });
+
   it('canonically binds the exact tool-neutral serving snapshot before the Core manifest', () => {
     const receipt = createServingSnapshotValidationReceiptV1(fixture());
 

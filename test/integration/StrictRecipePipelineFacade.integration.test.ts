@@ -159,9 +159,16 @@ describe('RecipePipelineFacade strict production integration', () => {
       ) as {
         schemaVersion?: number;
         analysis?: {
+          expansionLedgerHeadHash: string;
           epochs: Array<{ population: { populationHash: string } }>;
           evidence: { entries: Array<{ relativePath: string }> };
+          finalExpandedSchedule: {
+            expansionReceiptHashes: string[];
+            finalExpandedScheduleHash: string;
+            obligationIds: string[];
+          };
           factExecutionManifest: {
+            manifestHash: string;
             verdict: string;
             failedObligationIds: string[];
             unknownObligationIds: string[];
@@ -191,12 +198,24 @@ describe('RecipePipelineFacade strict production integration', () => {
           }>;
         };
         finalization?: {
-          servingSnapshotValidation?: { receiptHash?: string };
+          servingSnapshotValidation?: {
+            expansionLedgerHeadHash?: string;
+            finalCodeFactGenerationManifestHash?: string;
+            finalExpandedScheduleHash?: string;
+            receiptHash?: string;
+          };
           servingManifest?: {
             servingSnapshotValidationHash?: string;
             snapshotId?: string;
           };
-          preparedPublicRoute?: { route: { snapshotId: string } };
+          preparedPublicRoute?: {
+            route: {
+              expansionLedgerHeadHash?: string;
+              finalCodeFactGenerationManifestHash?: string;
+              finalExpandedScheduleHash?: string;
+              snapshotId: string;
+            };
+          };
         };
       };
       expect(checkpoint.schemaVersion).toBe(2);
@@ -231,6 +250,39 @@ describe('RecipePipelineFacade strict production integration', () => {
       expect(checkpoint.analysis?.fixpoint.terminalObligations).toHaveLength(
         checkpoint.analysis?.factExecutionReceipts.length
       );
+      const expansionReceiptHashes =
+        checkpoint.analysis?.finalExpandedSchedule.expansionReceiptHashes ?? [];
+      expect(expansionReceiptHashes).toHaveLength(1);
+      expect(checkpoint.analysis?.expansionLedgerHeadHash).toBe(expansionReceiptHashes.at(-1));
+      expect(checkpoint.analysis?.finalExpandedSchedule.obligationIds).toHaveLength(15);
+      expect(checkpoint.analysis?.finalExpandedSchedule.finalExpandedScheduleHash).toBe(
+        checkpoint.analysis?.fixpoint.finalExpandedScheduleHash
+      );
+      expect(checkpoint.finalization?.servingSnapshotValidation?.expansionLedgerHeadHash).toBe(
+        checkpoint.analysis?.expansionLedgerHeadHash
+      );
+      expect(checkpoint.finalization?.servingSnapshotValidation?.finalExpandedScheduleHash).toBe(
+        checkpoint.analysis?.finalExpandedSchedule.finalExpandedScheduleHash
+      );
+      expect(
+        checkpoint.finalization?.servingSnapshotValidation?.finalCodeFactGenerationManifestHash
+      ).toBe(checkpoint.analysis?.factExecutionManifest.manifestHash);
+      expect(checkpoint.finalization?.preparedPublicRoute?.route.expansionLedgerHeadHash).toBe(
+        checkpoint.analysis?.expansionLedgerHeadHash
+      );
+      expect(checkpoint.finalization?.preparedPublicRoute?.route.finalExpandedScheduleHash).toBe(
+        checkpoint.analysis?.finalExpandedSchedule.finalExpandedScheduleHash
+      );
+      expect(
+        checkpoint.finalization?.preparedPublicRoute?.route.finalCodeFactGenerationManifestHash
+      ).toBe(checkpoint.analysis?.factExecutionManifest.manifestHash);
+      expect(report.analysisHandle).toMatchObject({
+        expansionLedgerHeadHash: checkpoint.analysis?.expansionLedgerHeadHash,
+        finalExpandedScheduleHash:
+          checkpoint.analysis?.finalExpandedSchedule.finalExpandedScheduleHash,
+        finalCodeFactGenerationManifestHash:
+          checkpoint.analysis?.factExecutionManifest.manifestHash,
+      });
       const readyRecipeIds = new Set(
         checkpoint.privateCorpusContent?.readyMembers.map((member) => member.recipeId)
       );
@@ -335,6 +387,9 @@ describe('RecipePipelineFacade strict production integration', () => {
       const publicRoute = JSON.parse(
         await fsp.readFile(path.join(publicationRoot, 'active.json'), 'utf8')
       ) as {
+        expansionLedgerHeadHash: string;
+        finalCodeFactGenerationManifestHash: string;
+        finalExpandedScheduleHash: string;
         snapshotId: string;
         servingSnapshotManifestHash: string;
         vectorGenerationId: string;
@@ -342,6 +397,15 @@ describe('RecipePipelineFacade strict production integration', () => {
         servingSnapshotValidationHash?: unknown;
       };
       expect(publicRoute.snapshotId).toMatch(/^snapshot-[a-f0-9]{64}(?:-[a-f0-9-]{36})?$/u);
+      expect(publicRoute.expansionLedgerHeadHash).toBe(
+        checkpoint.analysis?.expansionLedgerHeadHash
+      );
+      expect(publicRoute.finalExpandedScheduleHash).toBe(
+        checkpoint.analysis?.finalExpandedSchedule.finalExpandedScheduleHash
+      );
+      expect(publicRoute.finalCodeFactGenerationManifestHash).toBe(
+        checkpoint.analysis?.factExecutionManifest.manifestHash
+      );
       await expect(
         fsp.stat(path.join(fixture.dataRoot, 'public/active.json'))
       ).rejects.toMatchObject({
@@ -419,6 +483,7 @@ describe('RecipePipelineFacade strict production integration', () => {
       const servingValidation = await readJson(
         path.join(snapshotRoot, 'serving-snapshot-validation.json')
       );
+      const publicLineage = await readJson(path.join(snapshotRoot, 'lineage.json'));
       expect(servingManifest.finalCoverageBindingHash).toBe(finalCoverage.receiptHash);
       expect(servingCoverage).toEqual(candidateCoverage);
       expect(dataManifest.candidateCoverageReceiptHash).toBe(candidateCoverage.receiptHash);
@@ -430,6 +495,23 @@ describe('RecipePipelineFacade strict production integration', () => {
         vectorGenerationId: publicRoute.vectorGenerationId,
         vectorManifestHash: publicRoute.vectorManifestHash,
         verdict: 'pass',
+      });
+      expect(servingValidation).toMatchObject({
+        expansionLedgerHeadHash: checkpoint.analysis?.expansionLedgerHeadHash,
+        finalExpandedScheduleHash:
+          checkpoint.analysis?.finalExpandedSchedule.finalExpandedScheduleHash,
+        finalCodeFactGenerationManifestHash:
+          checkpoint.analysis?.factExecutionManifest.manifestHash,
+      });
+      // Core manifest v1 通过 sealed validation receipt 绑定完整 lineage；不能擅自扩展其
+      // exact-key schema，因此这里同时验证 hash 边与物理 lineage readback。
+      expect(servingManifest.servingSnapshotValidationHash).toBe(servingValidation.receiptHash);
+      expect(publicLineage).toMatchObject({
+        expansionLedgerHeadHash: checkpoint.analysis?.expansionLedgerHeadHash,
+        finalExpandedScheduleHash:
+          checkpoint.analysis?.finalExpandedSchedule.finalExpandedScheduleHash,
+        finalCodeFactGenerationManifestHash:
+          checkpoint.analysis?.factExecutionManifest.manifestHash,
       });
       const publicDatabasePath = path.join(snapshotRoot, 'data/.asd/alembic.db');
       const publicDatabase = new Database(publicDatabasePath, {
@@ -569,6 +651,74 @@ describe('RecipePipelineFacade strict production integration', () => {
       } finally {
         detachedDatabase.close();
       }
+    } finally {
+      fixture.database.close();
+    }
+  }, 30_000);
+
+  it('rejects missing or tampered public lineage before PUBLIC_CAS_PREPARED and detects checkpoint divergence', async () => {
+    const fixture = await createFixture();
+    try {
+      await executeFixture(fixture);
+      const operationRoot = path.join(
+        fixture.dataRoot,
+        'strict-production/operations/strict-integration-run'
+      );
+      const checkpointPath = path.join(operationRoot, 'strict-production.checkpoint.json');
+      const journalPath = path.join(operationRoot, 'strict-production.journal.jsonl');
+      const activePath = path.join(
+        fixture.dataRoot,
+        '.asd/context/recipe-publications/active.json'
+      );
+      const originalCheckpoint = await readJson(checkpointPath);
+      const originalRows = (await fsp.readFile(journalPath, 'utf8'))
+        .trim()
+        .split('\n')
+        .map((row) => JSON.parse(row) as { state: string });
+      const baselineIndex = originalRows.findIndex(
+        (row) => row.state === 'BASELINE_FACT_SCHEDULE_FROZEN'
+      );
+      if (baselineIndex < 0) {
+        throw new Error('fixture baseline schedule journal row missing');
+      }
+
+      const runCase = async (
+        mutate: (checkpoint: Record<string, unknown>) => void,
+        expectedError: string
+      ) => {
+        const checkpoint = structuredClone(originalCheckpoint);
+        mutate(checkpoint);
+        await fsp.writeFile(checkpointPath, `${JSON.stringify(checkpoint)}\n`);
+        await fsp.writeFile(
+          journalPath,
+          `${originalRows
+            .slice(0, baselineIndex + 1)
+            .map((row) => JSON.stringify(row))
+            .join('\n')}\n`
+        );
+        await fsp.chmod(activePath, 0o600).catch(() => {});
+        await fsp.rm(activePath, { force: true });
+        await expect(executeFixture(fixture)).rejects.toThrow(expectedError);
+        const failedStates = (await fsp.readFile(journalPath, 'utf8'))
+          .trim()
+          .split('\n')
+          .map((row) => (JSON.parse(row) as { state: string }).state);
+        expect(failedStates).not.toContain('PUBLIC_CAS_PREPARED');
+      };
+
+      await runCase((checkpoint) => {
+        delete readRecord(checkpoint.analysis).finalExpandedSchedule;
+      }, 'STRICT_ANALYSIS_PUBLIC_LINEAGE_MISSING');
+      await runCase((checkpoint) => {
+        readRecord(readRecord(checkpoint.analysis).factExecutionManifest).manifestHash =
+          sha('tampered-fact-manifest');
+      }, 'STRICT_ANALYSIS_FACT_MANIFEST_LINEAGE_INVALID');
+      await runCase((checkpoint) => {
+        const route = readRecord(
+          readRecord(readRecord(checkpoint.finalization).preparedPublicRoute).route
+        );
+        route.expansionLedgerHeadHash = sha('tampered-finalization-lineage');
+      }, 'STRICT_FINALIZATION_CHECKPOINT_DIVERGENCE');
     } finally {
       fixture.database.close();
     }
@@ -859,6 +1009,7 @@ describe('RecipePipelineFacade strict production integration', () => {
       await expect(
         fsp.stat(path.join(publicationRoot, 'snapshots', originalSnapshotId))
       ).resolves.toBeDefined();
+      await persistRequestedEvidence(operationRoot, fixture.dataRoot);
     } finally {
       fixture.database.close();
     }

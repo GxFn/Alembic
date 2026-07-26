@@ -27,7 +27,10 @@ import {
 } from '../../../project-facts/CertifiedProjectFactsRuntime.js';
 import type { ProjectScopeAnalysisContext } from '../../../project-scope/ProjectScopeAnalysis.js';
 import { commitPreparedPublicRoute, inspectPublicRoute } from './PublicRouteCas.js';
-import { executeStrictAnalysisAndProduction } from './StrictAnalysisRuntime.js';
+import {
+  executeStrictAnalysisAndProduction,
+  resolveStrictAnalysisPublicLineageV1,
+} from './StrictAnalysisRuntime.js';
 import { confinedPath, loadStrictProductionAuthorization } from './StrictAuthorization.js';
 import {
   getStrictExternalSetupSession,
@@ -300,11 +303,18 @@ async function verifyFinalizedReplay(input: {
   if (
     !checkpoint.publicServingData ||
     !checkpoint.finalization ||
+    !checkpoint.analysis ||
+    !checkpoint.planning ||
     !checkpoint.privateCorpus ||
     !checkpoint.publicServingBundle
   ) {
     throw new Error('STRICT_FINALIZED_PUBLIC_BUNDLE_CHECKPOINT_MISSING');
   }
+  const analysisLineage = resolveStrictAnalysisPublicLineageV1({
+    analysis: checkpoint.analysis,
+    baselineScheduleHash: checkpoint.planning.compiledPlan.schedule.baselineScheduleHash,
+  });
+  assertStrictFinalizationPublicLineage(checkpoint.finalization, analysisLineage);
   await verifyStrictPublicationMarker({
     dataRoot,
     projectIdentityHash: authorization.privateCorpus.projectIdentityHash,
@@ -318,6 +328,11 @@ async function verifyFinalizedReplay(input: {
     receipt: checkpoint.publicServingBundle,
   });
   const report = (await readJson(path.join(operationRoot, RUNTIME_REPORT_FILE))) as {
+    analysisHandle?: {
+      expansionLedgerHeadHash?: unknown;
+      finalCodeFactGenerationManifestHash?: unknown;
+      finalExpandedScheduleHash?: unknown;
+    };
     publicHandle?: { routeHash?: unknown };
     runtimeLoad?: {
       artifactReceipt?: { receiptHash?: unknown };
@@ -329,6 +344,15 @@ async function verifyFinalizedReplay(input: {
     report.runtimeLoad?.configReceipt?.receiptHash !== runtimeConfigReceipt.receiptHash
   ) {
     throw new Error('STRICT_RUNTIME_LOAD_RECEIPT_RESUME_MISMATCH');
+  }
+  if (
+    report.analysisHandle?.expansionLedgerHeadHash !== analysisLineage.expansionLedgerHeadHash ||
+    report.analysisHandle?.finalExpandedScheduleHash !==
+      analysisLineage.finalExpandedScheduleHash ||
+    report.analysisHandle?.finalCodeFactGenerationManifestHash !==
+      analysisLineage.finalCodeFactGenerationManifestHash
+  ) {
+    throw new Error('STRICT_RUNTIME_REPORT_RESUME_MISMATCH');
   }
   const currentRoute = await inspectPublicRoute(publicRoutePath);
   if (
@@ -571,6 +595,10 @@ async function ensureAnalysis(
     context.checkpoint.analysis = analysis;
     await writeCheckpoint(context.operationRoot, context.checkpoint);
   }
+  resolveStrictAnalysisPublicLineageV1({
+    analysis,
+    baselineScheduleHash: planning.compiledPlan.schedule.baselineScheduleHash,
+  });
   await advanceAnalysisJournal(context.journal, analysis);
   return analysis;
 }
@@ -867,6 +895,26 @@ async function resolveStrictFinalization(
   return reconstructed;
 }
 
+function assertStrictFinalizationPublicLineage(
+  finalization: StrictFinalizationStage,
+  lineage: ReturnType<typeof resolveStrictAnalysisPublicLineageV1>
+): void {
+  const validation = finalization.servingSnapshotValidation;
+  const route = finalization.preparedPublicRoute.route;
+  if (
+    validation.expansionLedgerHeadHash !== lineage.expansionLedgerHeadHash ||
+    validation.finalExpandedScheduleHash !== lineage.finalExpandedScheduleHash ||
+    validation.finalCodeFactGenerationManifestHash !==
+      lineage.finalCodeFactGenerationManifestHash ||
+    route.expansionLedgerHeadHash !== lineage.expansionLedgerHeadHash ||
+    route.finalExpandedScheduleHash !== lineage.finalExpandedScheduleHash ||
+    route.finalCodeFactGenerationManifestHash !== lineage.finalCodeFactGenerationManifestHash ||
+    finalization.servingManifest.servingSnapshotValidationHash !== validation.receiptHash
+  ) {
+    throw new Error('STRICT_FINALIZATION_PUBLIC_LINEAGE_DIVERGENCE');
+  }
+}
+
 function requireRuntimeArtifactManifestPath(): string {
   const manifestPath = process.env.ALEMBIC_RUNTIME_ARTIFACT_MANIFEST_PATH?.trim();
   if (!manifestPath || !path.isAbsolute(manifestPath)) {
@@ -1022,6 +1070,10 @@ function buildRuntimeReport(
       derivedFactCount: analysis.facts.filter((fact) => fact.kind === 'derived').length,
       expressionSetCount: analysis.expressionSets.length,
       analysisFixpointHash: analysis.fixpoint.fixpointHash,
+      expansionLedgerHeadHash: finalization.servingSnapshotValidation.expansionLedgerHeadHash,
+      finalExpandedScheduleHash: finalization.servingSnapshotValidation.finalExpandedScheduleHash,
+      finalCodeFactGenerationManifestHash:
+        finalization.servingSnapshotValidation.finalCodeFactGenerationManifestHash,
     },
     provenance: {
       certifiedProjectFactsHash: facts.carrier.certificationBindingHash,

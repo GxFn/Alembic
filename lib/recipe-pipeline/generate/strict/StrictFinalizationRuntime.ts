@@ -29,7 +29,10 @@ import {
   copyAndCheckpointStrictPublicDatabase,
   verifyStrictPublicDatabaseServingSet,
 } from '../../../infrastructure/database/StrictResetDatabaseAdapter.js';
-import type { StrictAnalysisExecutionResultV1 } from './StrictAnalysisRuntime.js';
+import {
+  resolveStrictAnalysisPublicLineageV1,
+  type StrictAnalysisExecutionResultV1,
+} from './StrictAnalysisRuntime.js';
 import {
   assertNoSymlinkTraversal,
   confinedPath,
@@ -345,13 +348,13 @@ export function finalizeStrictCandidate(input: {
       finalRecipeFingerprints: cell.contentReadyRecipeFingerprints,
     })),
   });
-  const expansionLedgerHeadHash = hashCanonicalJson([]);
   const hypothesisExpressionSetManifestHash = hashCanonicalJson(
     input.expressionSets.map((set) => set.setHash)
   );
-  const finalCodeFactGenerationManifestHash = hashCanonicalJson(
-    input.analysis.facts.map((fact) => fact.factId)
-  );
+  const analysisLineage = resolveStrictAnalysisPublicLineageV1({
+    analysis: input.analysis,
+    baselineScheduleHash: input.compiledPlan.schedule.baselineScheduleHash,
+  });
   const lineage: ServingSnapshotValidationLineageV1 = {
     certifiedProjectFactsHash: input.certifiedProjectFactsHash,
     sourceRevisionVectorHash: input.compiledPlan.execution.sourceRevisionVectorHash,
@@ -360,11 +363,11 @@ export function finalizeStrictCandidate(input: {
     factQueryCatalogHash: input.compiledPlan.factQueryCatalog.catalogHash,
     requiredApplicabilityUniverseHash: input.compiledPlan.requiredFactApplicability.universeHash,
     baselineScheduleHash: input.compiledPlan.schedule.baselineScheduleHash,
-    expansionLedgerHeadHash,
-    finalExpandedScheduleHash: input.analysis.fixpoint.finalExpandedScheduleHash,
+    expansionLedgerHeadHash: analysisLineage.expansionLedgerHeadHash,
+    finalExpandedScheduleHash: analysisLineage.finalExpandedScheduleHash,
     analysisFixpointHash: input.analysis.fixpoint.fixpointHash,
     hypothesisExpressionSetManifestHash,
-    finalCodeFactGenerationManifestHash,
+    finalCodeFactGenerationManifestHash: analysisLineage.finalCodeFactGenerationManifestHash,
   };
   const servingSnapshotValidation = createServingSnapshotValidationReceiptV1({
     runId: input.runId,
@@ -997,6 +1000,10 @@ function buildStrictPublicMetadata(
     ),
     vectorGenerationId: privateCorpus.vectorGenerationId,
     vectorManifestHash: privateCorpus.vectorManifestHash,
+    expansionLedgerHeadHash: finalization.servingSnapshotValidation.expansionLedgerHeadHash,
+    finalExpandedScheduleHash: finalization.servingSnapshotValidation.finalExpandedScheduleHash,
+    finalCodeFactGenerationManifestHash:
+      finalization.servingSnapshotValidation.finalCodeFactGenerationManifestHash,
   });
   return Object.freeze([
     [CANDIDATE_COVERAGE_FILE, finalization.candidateCoverage],

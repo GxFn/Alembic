@@ -10,25 +10,74 @@ type LoadedPackageRoots = Readonly<{
   main: string;
 }>;
 
+type EmbeddedPackageRoots = Readonly<
+  Partial<Record<'mainAgent' | 'mainCore' | 'pluginCore', string>>
+>;
+
+type LoadedPackageFixture = Readonly<{
+  key: keyof LoadedPackageRoots;
+  packageRoot: string;
+  name: string;
+  version: string;
+  entrypoint: string;
+  entry: Buffer;
+  distFiles: ReadonlyMap<string, Buffer>;
+}>;
+
 interface RuntimeArtifactFixtureManifest extends Record<string, unknown> {
   manifestHash: string;
   compatibilityMatrix: Array<Record<string, unknown>>;
 }
 
+const SYNTHETIC_EVIDENCE_BOUNDARY = Object.freeze({
+  classification: 'synthetic-runtime-load-fixture',
+  exactPluginArtifact: false,
+  crossRepositoryAcceptance: 'forbidden',
+} as const);
+
 export async function createRuntimeArtifactManifestFixture(input: {
   readonly root: string;
   readonly loadedPackageRoots: LoadedPackageRoots;
-  readonly embeddedPackageRoots?: Readonly<
-    Partial<Record<'mainAgent' | 'mainCore' | 'pluginCore', string>>
-  >;
+  readonly embeddedPackageRoots?: EmbeddedPackageRoots;
 }) {
   const { embeddedPackageRoots = {}, loadedPackageRoots, root } = input;
-  const stateRoot = path.join(root, '.wakeflow-active/current/demand');
-  const evidenceRoot = path.join(stateRoot, 'evidence/controller-runtime-artifact-manifest');
+  const evidenceRoot = path.join(
+    root,
+    '.wakeflow-active/current/demand/evidence/controller-runtime-artifact-manifest'
+  );
   const artifactsRoot = path.join(evidenceRoot, 'artifacts');
   await fs.mkdir(artifactsRoot, { recursive: true });
+  const loaded = await loadPackageFixtures(loadedPackageRoots);
+  const byKey = new Map(loaded.map((row) => [row.key, row] as const));
+  const embeddedDistFiles = await loadEmbeddedPackageFixtures(embeddedPackageRoots);
+  const { coreArtifactPath, packageRows } = await writeRuntimePackageArtifacts({
+    artifactsRoot,
+    byKey,
+    embeddedDistFiles,
+  });
+  const evidence = await writeRuntimeEvidenceReceipts(root, evidenceRoot);
+  const manifest = createRuntimeArtifactFixtureManifest(packageRows, evidence);
+  manifest.manifestHash = semanticHash(manifest, 'manifestHash');
+  const manifestPath = path.join(evidenceRoot, 'runtime-artifact-manifest.json');
+  const manifestBytes = Buffer.from(`${JSON.stringify(manifest)}\n`);
+  await fs.writeFile(manifestPath, manifestBytes);
+  return {
+    coreArtifactPath,
+    // 该 helper 只证明 Main 的隔离 runtime-load/fail-closed 行为；其中 plugin-entry
+    // 是合成占位，严禁作为 AlembicPlugin 发布包或跨仓 PC-F 验收证据。
+    evidenceBoundary: SYNTHETIC_EVIDENCE_BOUNDARY,
+    loadedPackageRoots,
+    manifest,
+    manifestContentHash: `sha256:${hashBytes(manifestBytes)}`,
+    manifestPath,
+    root,
+  };
+}
 
-  const loaded = await Promise.all(
+async function loadPackageFixtures(
+  loadedPackageRoots: LoadedPackageRoots
+): Promise<LoadedPackageFixture[]> {
+  return Promise.all(
     (Object.entries(loadedPackageRoots) as Array<[keyof LoadedPackageRoots, string]>).map(
       async ([key, packageRoot]) => {
         const pkg = JSON.parse(
@@ -50,8 +99,12 @@ export async function createRuntimeArtifactManifestFixture(input: {
       }
     )
   );
-  const byKey = new Map(loaded.map((row) => [row.key, row] as const));
-  const embeddedDistFiles = new Map(
+}
+
+async function loadEmbeddedPackageFixtures(
+  embeddedPackageRoots: EmbeddedPackageRoots
+): Promise<Map<'mainAgent' | 'mainCore' | 'pluginCore', Map<string, Buffer>>> {
+  return new Map(
     await Promise.all(
       (
         Object.entries(embeddedPackageRoots) as Array<
@@ -63,6 +116,19 @@ export async function createRuntimeArtifactManifestFixture(input: {
       )
     )
   );
+}
+
+async function writeRuntimePackageArtifacts(input: {
+  readonly artifactsRoot: string;
+  readonly byKey: ReadonlyMap<keyof LoadedPackageRoots, LoadedPackageFixture>;
+  readonly embeddedDistFiles: ReadonlyMap<
+    'mainAgent' | 'mainCore' | 'pluginCore',
+    ReadonlyMap<string, Buffer>
+  >;
+}): Promise<{
+  coreArtifactPath: string;
+  packageRows: Array<Record<string, unknown>>;
+}> {
   const packageRows: Array<Record<string, unknown>> = [];
   let coreArtifactPath = '';
   for (const spec of [
@@ -71,7 +137,7 @@ export async function createRuntimeArtifactManifestFixture(input: {
     ['alembic-runtime-release', 'main', 'alembic-ai-0.3.0.tgz'],
   ] as const) {
     const [artifactId, key, file] = spec;
-    const source = byKey.get(key);
+    const source = input.byKey.get(key);
     if (!source) {
       throw new Error(`missing loaded package fixture:${key}`);
     }
@@ -80,11 +146,15 @@ export async function createRuntimeArtifactManifestFixture(input: {
         ? [
             ...prefixedFiles(
               'node_modules/@alembic/core',
-              embeddedDistFiles.get('mainCore') ?? byKey.get('core')?.distFiles ?? new Map()
+              input.embeddedDistFiles.get('mainCore') ??
+                input.byKey.get('core')?.distFiles ??
+                new Map()
             ),
             ...prefixedFiles(
               'node_modules/@alembic/agent',
-              embeddedDistFiles.get('mainAgent') ?? byKey.get('agent')?.distFiles ?? new Map()
+              input.embeddedDistFiles.get('mainAgent') ??
+                input.byKey.get('agent')?.distFiles ??
+                new Map()
             ),
           ]
         : [];
@@ -95,42 +165,57 @@ export async function createRuntimeArtifactManifestFixture(input: {
       source.distFiles,
       embedded
     );
-    const artifactPath = path.join(artifactsRoot, file);
+    const artifactPath = path.join(input.artifactsRoot, file);
     await fs.writeFile(artifactPath, bytes);
     if (artifactId === 'core-package-dist') {
       coreArtifactPath = artifactPath;
     }
-    packageRows.push({
-      artifactId,
-      status: 'required-present',
-      packageName: source.name,
-      packageVersion: source.version,
-      artifactRef: `evidence/controller-runtime-artifact-manifest/artifacts/${file}`,
-      artifactSha256: hashBytes(bytes),
-      byteSize: bytes.byteLength,
-      entrypoint: source.entrypoint,
-      entrypointSha256: hashBytes(source.entry),
-      distContentHash: hashDistContent(source.distFiles),
-      ...(artifactId === 'agent-package-dist'
-        ? {
-            dependencyContract: {
-              package: '@alembic/core',
-              version: byKey.get('core')?.version,
-            },
-          }
-        : {}),
-      ...(artifactId === 'alembic-runtime-release'
-        ? {
-            bundledDependencies: ['@alembic/core@0.3.0', '@alembic/agent@0.3.0'],
-            embeddedCoreDistContentHash: hashDistContent(byKey.get('core')?.distFiles ?? new Map()),
-            embeddedAgentDistContentHash: hashDistContent(
-              byKey.get('agent')?.distFiles ?? new Map()
-            ),
-          }
-        : {}),
-      schemas: { package: source.version },
-    });
+    packageRows.push(createLoadedPackageManifestRow(artifactId, file, source, bytes, input.byKey));
   }
+  packageRows.push(await writeSyntheticPluginArtifact(input));
+  return { coreArtifactPath, packageRows };
+}
+
+function createLoadedPackageManifestRow(
+  artifactId: 'core-package-dist' | 'agent-package-dist' | 'alembic-runtime-release',
+  file: string,
+  source: LoadedPackageFixture,
+  bytes: Buffer,
+  byKey: ReadonlyMap<keyof LoadedPackageRoots, LoadedPackageFixture>
+): Record<string, unknown> {
+  return {
+    artifactId,
+    status: 'required-present',
+    packageName: source.name,
+    packageVersion: source.version,
+    artifactRef: `evidence/controller-runtime-artifact-manifest/artifacts/${file}`,
+    artifactSha256: hashBytes(bytes),
+    byteSize: bytes.byteLength,
+    entrypoint: source.entrypoint,
+    entrypointSha256: hashBytes(source.entry),
+    distContentHash: hashDistContent(source.distFiles),
+    ...(artifactId === 'agent-package-dist'
+      ? { dependencyContract: { package: '@alembic/core', version: byKey.get('core')?.version } }
+      : {}),
+    ...(artifactId === 'alembic-runtime-release'
+      ? {
+          bundledDependencies: ['@alembic/core@0.3.0', '@alembic/agent@0.3.0'],
+          embeddedCoreDistContentHash: hashDistContent(byKey.get('core')?.distFiles ?? new Map()),
+          embeddedAgentDistContentHash: hashDistContent(byKey.get('agent')?.distFiles ?? new Map()),
+        }
+      : {}),
+    schemas: { package: source.version },
+  };
+}
+
+async function writeSyntheticPluginArtifact(input: {
+  readonly artifactsRoot: string;
+  readonly byKey: ReadonlyMap<keyof LoadedPackageRoots, LoadedPackageFixture>;
+  readonly embeddedDistFiles: ReadonlyMap<
+    'mainAgent' | 'mainCore' | 'pluginCore',
+    ReadonlyMap<string, Buffer>
+  >;
+}): Promise<Record<string, unknown>> {
   const pluginDistFiles = new Map([['index.js', Buffer.from('plugin-entry')]]);
   const pluginBytes = createPackageTgz(
     'alembic-runtime',
@@ -140,13 +225,12 @@ export async function createRuntimeArtifactManifestFixture(input: {
     [
       ...prefixedFiles(
         'node_modules/@alembic/core',
-        embeddedDistFiles.get('pluginCore') ?? byKey.get('core')?.distFiles ?? new Map()
+        input.embeddedDistFiles.get('pluginCore') ?? input.byKey.get('core')?.distFiles ?? new Map()
       ),
     ]
   );
-  const pluginPath = path.join(artifactsRoot, 'alembic-runtime-0.3.0.tgz');
-  await fs.writeFile(pluginPath, pluginBytes);
-  packageRows.push({
+  await fs.writeFile(path.join(input.artifactsRoot, 'alembic-runtime-0.3.0.tgz'), pluginBytes);
+  return {
     artifactId: 'plugin-mcp-package-server',
     status: 'required-present',
     packageName: 'alembic-runtime',
@@ -159,10 +243,12 @@ export async function createRuntimeArtifactManifestFixture(input: {
     entrypointSha256: hashBytes(Buffer.from('plugin-entry')),
     distContentHash: hashDistContent(pluginDistFiles),
     bundledDependencies: ['@alembic/core@0.3.0'],
-    embeddedCoreDistContentHash: hashDistContent(byKey.get('core')?.distFiles ?? new Map()),
+    embeddedCoreDistContentHash: hashDistContent(input.byKey.get('core')?.distFiles ?? new Map()),
     schemas: { package: '0.3.0' },
-  });
+  };
+}
 
+async function writeRuntimeEvidenceReceipts(root: string, evidenceRoot: string) {
   const contentSets = [
     'prompt-sop-evaluator-bundle',
     'fact-query-pack-code-fact-backends',
@@ -185,7 +271,6 @@ export async function createRuntimeArtifactManifestFixture(input: {
     path.join(evidenceRoot, 'artifact-content-set-manifest.json'),
     contentSetBytes
   );
-
   const dashboardReceipt = selfHashed('receiptHash', {
     schemaVersion: 1,
     kind: 'DashboardTriggerDecisionReceipt',
@@ -211,8 +296,23 @@ export async function createRuntimeArtifactManifestFixture(input: {
   const baselinePath = path.join(root, 'wakeflow-ledger/AlembicWorkspace/demand/pcf.json');
   await fs.mkdir(path.dirname(baselinePath), { recursive: true });
   await fs.writeFile(baselinePath, baselineBytes);
+  return {
+    baselineBytes,
+    contentSetBytes,
+    contentSetManifest,
+    contentSets,
+    dashboardBytes,
+    dashboardReceipt,
+    regressionBytes,
+    regressionReceipt,
+  };
+}
 
-  const manifest: RuntimeArtifactFixtureManifest = {
+function createRuntimeArtifactFixtureManifest(
+  packageRows: Array<Record<string, unknown>>,
+  evidence: Awaited<ReturnType<typeof writeRuntimeEvidenceReceipts>>
+): RuntimeArtifactFixtureManifest {
+  return {
     schemaVersion: 1,
     kind: 'RuntimeArtifactManifest',
     manifestId: 'runtime-artifact-manifest-fixture',
@@ -221,21 +321,21 @@ export async function createRuntimeArtifactManifestFixture(input: {
     status: 'accepted-for-runtime-load-check',
     pcfLineage: {
       baselineReceiptRef: 'wakeflow-ledger/AlembicWorkspace/demand/pcf.json',
-      baselineReceiptSha256: hashBytes(baselineBytes),
+      baselineReceiptSha256: hashBytes(evidence.baselineBytes),
       finalRegressionReceiptRef:
         'evidence/controller-runtime-artifact-manifest/final-artifact-pcf-regression-receipt.json',
-      finalRegressionReceiptFileSha256: hashBytes(regressionBytes),
-      finalRegressionReceiptHash: regressionReceipt.receiptHash,
+      finalRegressionReceiptFileSha256: hashBytes(evidence.regressionBytes),
+      finalRegressionReceiptHash: evidence.regressionReceipt.receiptHash,
       lineageResult: 'unchanged',
     },
     contentSetManifest: {
       ref: 'evidence/controller-runtime-artifact-manifest/artifact-content-set-manifest.json',
-      fileSha256: hashBytes(contentSetBytes),
-      manifestHash: contentSetManifest.manifestHash,
+      fileSha256: hashBytes(evidence.contentSetBytes),
+      manifestHash: evidence.contentSetManifest.manifestHash,
     },
     artifacts: [
       ...packageRows,
-      ...contentSets.map((row) => ({
+      ...evidence.contentSets.map((row) => ({
         artifactId: row.artifactId,
         status: 'required-present',
         provider: 'source-bound-content-set',
@@ -255,8 +355,8 @@ export async function createRuntimeArtifactManifestFixture(input: {
         startupDecision: 'forbidden',
         triggerDecisionReceiptRef:
           'evidence/controller-runtime-artifact-manifest/dashboard-trigger-decision-receipt.json',
-        triggerDecisionReceiptFileSha256: hashBytes(dashboardBytes),
-        triggerDecisionReceiptHash: dashboardReceipt.receiptHash,
+        triggerDecisionReceiptFileSha256: hashBytes(evidence.dashboardBytes),
+        triggerDecisionReceiptHash: evidence.dashboardReceipt.receiptHash,
       },
     ],
     compatibilityMatrix: [
@@ -277,18 +377,6 @@ export async function createRuntimeArtifactManifestFixture(input: {
       loadReceiptKind: 'RuntimeArtifactLoadReceiptV1',
     },
     manifestHash: '',
-  };
-  manifest.manifestHash = semanticHash(manifest, 'manifestHash');
-  const manifestPath = path.join(evidenceRoot, 'runtime-artifact-manifest.json');
-  const manifestBytes = Buffer.from(`${JSON.stringify(manifest)}\n`);
-  await fs.writeFile(manifestPath, manifestBytes);
-  return {
-    coreArtifactPath,
-    loadedPackageRoots,
-    manifest,
-    manifestContentHash: `sha256:${hashBytes(manifestBytes)}`,
-    manifestPath,
-    root,
   };
 }
 
