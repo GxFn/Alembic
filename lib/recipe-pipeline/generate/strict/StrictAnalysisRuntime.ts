@@ -1,16 +1,18 @@
 import { createHash } from 'node:crypto';
 import {
   createFrozenEvidenceProjection,
-  type IndependentReviewDecisionV1,
-  IndependentValueReviewer,
+  type FrozenEvidenceProjectionV1,
   type ReviewerIdentityV1,
 } from '@alembic/agent/evaluation';
 import {
   createStrictAnalysisContextProjectionV1,
+  createStrictAnalysisEpochSnapshotV1,
   createStrictAnalysisExpansionPortV1,
   createStrictAnalysisFixpointV1,
+  createStrictAnalysisGateOutcomeV1,
   createStrictProducerExpressionSetV1,
   createStrictProducerLineageReceiptV1,
+  type StrictAnalysisEpochSnapshotV1,
   type StrictAnalystEpochInputV1,
   type StrictAnalystEpochV1,
   type StrictProducerExpressionSetV1,
@@ -21,25 +23,38 @@ import {
 import type { AgentService } from '@alembic/agent/service';
 import {
   canonicalizeObservationPopulationV1,
-  createFactRecordV1,
+  createFinalExpandedMiningScheduleReceiptV1,
   type FactRecordV1,
   type ObservationPopulationInputV1,
-  validateFactRecordGraphV1,
 } from '@alembic/core/host-agent-workflows';
-import type { CompiledColdStartPlanV2 } from '@alembic/core/plans';
-import { hashCanonicalJson } from '@alembic/core/project-context-foundation';
+import type { CertifiedPlanningFactsV1, CompiledColdStartPlanV2 } from '@alembic/core/plans';
+import {
+  type CertifiedProjectFactsArtifactV1,
+  hashCanonicalJson,
+} from '@alembic/core/project-context-foundation';
 import type {
   MainCertifiedProjectionPayload,
   MainCertifiedSourceFile,
 } from '../../../project-facts/CertifiedProjectFactsRuntime.js';
-import { qualifyMainCertifiedPath } from '../../../project-facts/CertifiedProjectFactsRuntime.js';
+import {
+  createMainStrictExpandedFactScheduleV1,
+  createMainStrictExpansionRowV1,
+  executeMainStrictFactScheduleV1,
+  type MainStrictAnalysisExpansionRowV1,
+  type MainStrictFactExecutionResultV1,
+} from './StrictFactExecutionRuntime.js';
+
+const STRICT_ANALYSIS_MAX_EPOCHS = 8;
 
 export interface StrictAnalysisExecutionResultV1 {
   readonly facts: readonly FactRecordV1[];
+  readonly factExecutionReceipts: MainStrictFactExecutionResultV1['receipts'];
+  readonly factExecutionManifest: MainStrictFactExecutionResultV1['manifest'];
+  readonly epochs: readonly StrictAnalystEpochV1[];
   readonly epoch: StrictAnalystEpochV1;
   readonly fixpoint: ReturnType<typeof createStrictAnalysisFixpointV1>;
+  readonly evidence: FrozenEvidenceProjectionV1;
   readonly expressionSets: readonly StrictProducerExpressionSetV1[];
-  readonly independentReviews: readonly IndependentReviewDecisionV1[];
   readonly agentRunId: string;
   readonly agentUsage: {
     readonly inputTokens: number;
@@ -51,11 +66,14 @@ export interface StrictAnalysisExecutionResultV1 {
 
 interface StrictAnalysisExecutionInput {
   readonly agentService: Pick<AgentService, 'run'>;
+  readonly artifact: CertifiedProjectFactsArtifactV1;
+  readonly certifiedPlanningFacts: CertifiedPlanningFactsV1;
   readonly compiledPlan: CompiledColdStartPlanV2;
   readonly journalId: string;
   readonly modelHash: string;
   readonly planCognitionHash: string;
   readonly projection: MainCertifiedProjectionPayload;
+  readonly projectRoot: string;
   readonly reviewer: {
     readonly calibrationReceiptHash: string;
     readonly identity: ReviewerIdentityV1;
@@ -65,52 +83,73 @@ interface StrictAnalysisExecutionInput {
 
 interface StrictAnalysisState {
   context: ReturnType<typeof createStrictAnalysisContextProjectionV1>;
+  execution: MainStrictFactExecutionResultV1;
+  schedule: CompiledColdStartPlanV2['schedule'];
+  population: ReturnType<typeof canonicalizeObservationPopulationV1>;
+  populations: ReturnType<typeof canonicalizeObservationPopulationV1>[];
+  snapshot: StrictAnalysisEpochSnapshotV1;
+  epochs: StrictAnalystEpochV1[];
   epoch: StrictAnalystEpochV1 | null;
   fixpoint: ReturnType<typeof createStrictAnalysisFixpointV1> | null;
   lineages: ReturnType<typeof createStrictProducerLineageReceiptV1>[];
   expressionSets: StrictProducerExpressionSetV1[];
   expressionSetByHypothesis: Map<string, StrictProducerExpressionSetV1>;
-  independentReviews: IndependentReviewDecisionV1[];
+  producerReviewed: boolean;
 }
 
-function prepareStrictAnalysis(input: StrictAnalysisExecutionInput) {
+interface StrictAnalystEnvelopeV1 {
+  readonly epoch: StrictAnalystEpochInputV1;
+  readonly expansions: readonly Omit<MainStrictAnalysisExpansionRowV1, 'obligationId'>[];
+}
+
+async function prepareStrictAnalysis(input: StrictAnalysisExecutionInput) {
   const evidenceEntryIds = new Map(
     input.projection.files.map((file, index) => [file, `E-${index + 1}`] as const)
   );
-  const harvested = harvestFrozenFacts(input.compiledPlan, input.projection, evidenceEntryIds);
-  const populationInput = buildPopulation(harvested.facts, input.compiledPlan);
-  const population = canonicalizeObservationPopulationV1(populationInput);
-  const expansion = createStrictAnalysisExpansionPortV1({
-    baselineScheduleHash: input.compiledPlan.schedule.baselineScheduleHash,
-    baselineObligationIds: input.compiledPlan.schedule.factHarvestObligations.map(
-      (row) => row.obligationId
-    ),
-    knownFactFamilies: input.compiledPlan.factQueryCatalog.families,
-    knownSubjectRefs: [
-      ...new Set(
-        input.compiledPlan.schedule.factHarvestObligations.map((row) => row.canonicalSubjectRef)
-      ),
-    ],
-    obligationCap: input.compiledPlan.selection.resourceCaps.factQueryObligationCap,
-  });
-  const finalSchedule = expansion.seal();
   const evidence = createFrozenEvidenceProjection({
     sourceRevisionVectorHash: input.compiledPlan.execution.sourceRevisionVectorHash,
     entries: input.projection.files.map((file) =>
       toEvidenceEntry(file, requireEvidenceEntryId(evidenceEntryIds, file))
     ),
   });
+  const execution = await executeMainStrictFactScheduleV1({
+    artifact: input.artifact,
+    certifiedPlanningFacts: input.certifiedPlanningFacts,
+    projection: input.projection,
+    projectRoot: input.projectRoot,
+    schedule: input.compiledPlan.schedule,
+    catalog: input.compiledPlan.factQueryCatalog,
+    evidenceSessionId: input.runId,
+  });
+  const population = canonicalizeObservationPopulationV1(
+    buildPopulation(execution.facts, input.compiledPlan, 1, null)
+  );
+  const expansionPort = createStrictAnalysisExpansionPortV1({
+    baselineScheduleHash: input.compiledPlan.schedule.baselineScheduleHash,
+    baselineObligationIds: input.compiledPlan.schedule.factHarvestObligations.map(
+      (row) => row.obligationId
+    ),
+    knownFactFamilies: input.compiledPlan.factQueryCatalog.families,
+    knownSubjectRefs: [
+      ...new Set([
+        ...input.certifiedPlanningFacts.modules.map((module) => module.scopeId),
+        ...execution.facts.map((fact) => fact.canonicalSubjectRef),
+      ]),
+    ],
+    obligationCap: input.compiledPlan.selection.resourceCaps.factQueryObligationCap,
+  });
+  const currentSchedule = previewExpandedSchedule(input, expansionPort.receipts);
   const context = createStrictAnalysisContextProjectionV1({
     runId: input.runId,
     journalId: input.journalId,
-    manifestHash: input.compiledPlan.execution.factsBindingHash,
+    manifestHash: execution.manifest.manifestHash,
     planCognitionHash: input.planCognitionHash,
     planHash: input.compiledPlan.canonicalPlanHash,
     requiredUniverseHash: input.compiledPlan.requiredFactApplicability.requiredHash,
     baselineScheduleHash: input.compiledPlan.schedule.baselineScheduleHash,
     expansionHeadHash: null,
-    currentExpandedScheduleHash: finalSchedule.finalExpandedScheduleHash,
-    finalExpandedScheduleHash: finalSchedule.finalExpandedScheduleHash,
+    currentExpandedScheduleHash: currentSchedule.finalExpandedScheduleHash,
+    finalExpandedScheduleHash: null,
     analysisFixpointHash: null,
     privateCorpusRevision: null,
     hypothesisExpressionSetHash: null,
@@ -122,10 +161,10 @@ function prepareStrictAnalysis(input: StrictAnalysisExecutionInput) {
         input.compiledPlan.execution.orderedInvestigationActions.map((row) => row.questionId)
       ),
     ],
-    factQueryObligationIds: finalSchedule.obligationIds,
+    factQueryObligationIds: currentSchedule.obligationIds,
     analysisUnitIds: input.compiledPlan.schedule.lensBindings.map((row) => row.bindingId),
-    factIds: harvested.facts.map((fact) => fact.factId),
-    witnessIds: [...new Set(harvested.facts.flatMap((fact) => fact.witnessIds))],
+    factIds: execution.facts.map((fact) => fact.factId),
+    witnessIds: [...new Set(execution.facts.flatMap((fact) => fact.witnessIds))],
     populationHashes: [population.populationHash],
     clusterSetHashes: [],
     inductionReceiptHashes: [],
@@ -135,10 +174,17 @@ function prepareStrictAnalysis(input: StrictAnalysisExecutionInput) {
     evidenceEntryIds: evidence.entries.map((entry) => entry.evidenceEntryId),
     derivedFindingCount: 0,
   });
-  return { context, evidence, finalSchedule, harvested, population };
+  const snapshot = createStrictAnalysisEpochSnapshotV1({
+    epoch: 1,
+    context,
+    populations: [population],
+    terminalObligationIds: execution.receipts.map((receipt) => receipt.obligationId),
+    outstandingObligationIds: [],
+  });
+  return { evidence, execution, expansionPort, population, snapshot };
 }
 
-type PreparedStrictAnalysis = ReturnType<typeof prepareStrictAnalysis>;
+type PreparedStrictAnalysis = Awaited<ReturnType<typeof prepareStrictAnalysis>>;
 
 function createStrictProductionRuntimePort(
   input: StrictAnalysisExecutionInput,
@@ -150,89 +196,235 @@ function createStrictProductionRuntimePort(
     readonly moduleId: string;
     readonly dimensionId: string;
   }[];
+  readonly eligibleSubjects: readonly string[];
 } {
-  const { evidence, finalSchedule, harvested, population } = prepared;
+  const eligibleCells = strictEligibleCells(input.compiledPlan);
+  const eligibleCellIds = new Set(eligibleCells.map((cell) => cell.cellId));
+  return {
+    enabled: true,
+    analysisLimits: {
+      maxEpochs: STRICT_ANALYSIS_MAX_EPOCHS,
+      maxObligations: input.compiledPlan.selection.resourceCaps.factQueryObligationCap,
+    },
+    expansionPort: prepared.expansionPort,
+    eligibleCells,
+    eligibleSubjects: strictEligibleSubjects(input.compiledPlan),
+    readAnalysisEpoch() {
+      return state.snapshot;
+    },
+    buildProducerInput() {
+      if (!state.epoch || !state.fixpoint) {
+        throw new Error('STRICT_PRODUCER_FIXPOINT_REQUIRED');
+      }
+      const epoch = state.epoch;
+      const analysisFixpoint = state.fixpoint;
+      state.lineages = epoch.producerEligibleHypotheses.map((hypothesis) =>
+        createStrictProducerLineageReceiptV1({
+          context: state.context,
+          epoch,
+          analysisFixpoint,
+          hypothesisId: hypothesis.hypothesisId,
+          evidence: prepared.evidence,
+        })
+      );
+      return Object.freeze({
+        schemaVersion: 1,
+        analysisFixpoint,
+        evidence: prepared.evidence,
+        lineages: state.lineages,
+        cardinalityPolicy: 'zero-one-many-no-floor',
+        semanticRepairLimit: 2,
+      });
+    },
+    async validateAnalystResult(source, observedEpoch) {
+      if (observedEpoch.snapshotHash !== state.snapshot.snapshotHash) {
+        throw new Error('STRICT_ANALYSIS_GATE_EPOCH_MISMATCH');
+      }
+      const candidate = parseAnalystEnvelope(source);
+      const validatedEpoch = validateStrictAnalystEpochV1({
+        ...candidate.epoch,
+        knownFactIds: state.execution.facts.map((fact) => fact.factId),
+        enrolledObligationIds: state.schedule.factHarvestObligations.map((row) => row.obligationId),
+      } as StrictAnalystEpochInputV1);
+      state.epoch = validatedEpoch;
+      state.epochs.push(validatedEpoch);
+      if (candidate.expansions.length > 0) {
+        return executeAnalysisExpansion(
+          input,
+          prepared,
+          state,
+          observedEpoch,
+          candidate.expansions
+        );
+      }
+      return finalizeStrictAnalysisGate(prepared, state, observedEpoch);
+    },
+    reviewProducerResult(source) {
+      return reviewStrictProducerResult(source, input, state, eligibleCellIds);
+    },
+  };
+}
 
-  const eligibleCells = input.compiledPlan.universe.cells
+function strictEligibleCells(plan: CompiledColdStartPlanV2) {
+  return plan.universe.cells
     .filter((cell) => cell.status === 'eligible')
     .map((cell) => ({
       cellId: cell.cellId,
       moduleId: cell.moduleId,
       dimensionId: cell.dimensionId,
     }));
-  const eligibleCellIds = new Set(eligibleCells.map((cell) => cell.cellId));
-  return {
-    enabled: true,
-    eligibleCells,
-    get context() {
-      return state.context;
-    },
-    populations: [population],
-    buildProducerInput() {
-      if (!state.epoch || !state.fixpoint) {
-        throw new Error('STRICT_PRODUCER_FIXPOINT_REQUIRED');
-      }
-      const currentEpoch = state.epoch;
-      const currentFixpoint = state.fixpoint;
-      state.lineages = currentEpoch.producerEligibleHypotheses.map((hypothesis) =>
-        createStrictProducerLineageReceiptV1({
-          context: state.context,
-          epoch: currentEpoch,
-          analysisFixpoint: currentFixpoint,
-          hypothesisId: hypothesis.hypothesisId,
-          evidence,
-        })
-      );
-      return Object.freeze({
-        schemaVersion: 1,
-        analysisFixpoint: currentFixpoint,
-        evidence,
-        lineages: state.lineages,
-        cardinalityPolicy: 'zero-one-many-no-floor',
-        semanticRepairLimit: 2,
-      });
-    },
-    validateAnalystResult(source) {
-      const candidate = parseStageJson(source, 'STRICT_ANALYST_OUTPUT_INVALID') as
-        | StrictAnalystEpochInputV1
-        | { epoch?: StrictAnalystEpochInputV1 };
-      const epochInput = 'epoch' in candidate && candidate.epoch ? candidate.epoch : candidate;
-      state.epoch = validateStrictAnalystEpochV1({
-        ...epochInput,
-        knownFactIds: harvested.facts.map((fact) => fact.factId),
-        enrolledObligationIds: finalSchedule.obligationIds,
-      } as StrictAnalystEpochInputV1);
-      state.fixpoint = createStrictAnalysisFixpointV1({
-        finalExpandedSchedule: finalSchedule,
-        terminalObligations: harvested.terminalObligations,
-        epochs: [state.epoch],
-      });
-      state.context = createStrictAnalysisContextProjectionV1({
-        ...withoutContextIdentity(state.context),
-        analysisFixpointHash: state.fixpoint.fixpointHash,
-        populationHashes: [state.epoch.population.populationHash],
-        clusterSetHashes: [state.epoch.clusterSet.clusterSetHash],
-        inductionReceiptHashes: state.epoch.inductions.map((receipt) => receipt.receiptHash),
-        hypothesisIds: state.epoch.producerEligibleHypotheses.map((row) => row.hypothesisId),
-        falsificationReceiptHashes: state.epoch.falsifications.map(
-          (receipt) => receipt.receiptHash
-        ),
-        dispositionReviewIds: state.epoch.hypothesisDispositions.map(
-          (row) => row.reviewerReceiptId
-        ),
-      });
-      return { pass: true, action: 'continue', artifact: state.fixpoint };
-    },
-    reviewProducerResult(source) {
-      return reviewStrictProducerResult(source, input, prepared, state, eligibleCellIds);
-    },
-  };
 }
 
-async function reviewStrictProducerResult(
-  source: unknown,
+function strictEligibleSubjects(plan: CompiledColdStartPlanV2): string[] {
+  return [
+    ...new Set(
+      plan.schedule.factHarvestObligations.map((obligation) => obligation.canonicalSubjectRef)
+    ),
+  ];
+}
+
+function finalizeStrictAnalysisGate(
+  prepared: PreparedStrictAnalysis,
+  state: StrictAnalysisState,
+  observedEpoch: StrictAnalysisEpochSnapshotV1
+) {
+  const finalSchedule = prepared.expansionPort.seal();
+  state.fixpoint = createStrictAnalysisFixpointV1({
+    finalExpandedSchedule: finalSchedule,
+    terminalObligations: state.execution.terminalObligations,
+    epochs: state.epochs,
+  });
+  state.context = createStrictAnalysisContextProjectionV1({
+    ...withoutContextIdentity(state.context),
+    currentExpandedScheduleHash: finalSchedule.finalExpandedScheduleHash,
+    finalExpandedScheduleHash: finalSchedule.finalExpandedScheduleHash,
+    analysisFixpointHash: state.fixpoint.fixpointHash,
+    populationHashes: state.populations.map((population) => population.populationHash),
+    clusterSetHashes: state.epochs.map((epoch) => epoch.clusterSet.clusterSetHash),
+    inductionReceiptHashes: state.epochs.flatMap((epoch) =>
+      epoch.inductions.map((receipt) => receipt.receiptHash)
+    ),
+    hypothesisIds: [
+      ...new Set(
+        state.epochs.flatMap((epoch) =>
+          epoch.producerEligibleHypotheses.map((row) => row.hypothesisId)
+        )
+      ),
+    ],
+    // Context 是跨 epoch 的身份集合；epoch 本身仍完整保留重复出现的审查事实，
+    // 但投影不能把同一 receipt/reviewer id 当成两个独立身份交给 Agent。
+    falsificationReceiptHashes: [
+      ...new Set(
+        state.epochs.flatMap((epoch) => epoch.falsifications.map((receipt) => receipt.receiptHash))
+      ),
+    ],
+    dispositionReviewIds: [
+      ...new Set(
+        state.epochs.flatMap((epoch) =>
+          epoch.hypothesisDispositions.map((row) => row.reviewerReceiptId)
+        )
+      ),
+    ],
+  });
+  state.snapshot = createStrictAnalysisEpochSnapshotV1({
+    epoch: observedEpoch.epoch,
+    context: state.context,
+    populations: state.populations,
+    terminalObligationIds: state.execution.receipts.map((receipt) => receipt.obligationId),
+    outstandingObligationIds: [],
+  });
+  return createStrictAnalysisGateOutcomeV1({
+    action: 'pass',
+    reasonCode: 'stable-analysis-fixpoint',
+    observedEpochHash: observedEpoch.snapshotHash,
+    artifact: state.fixpoint,
+  });
+}
+
+async function executeAnalysisExpansion(
   input: StrictAnalysisExecutionInput,
   prepared: PreparedStrictAnalysis,
+  state: StrictAnalysisState,
+  observedEpoch: StrictAnalysisEpochSnapshotV1,
+  requested: readonly Omit<MainStrictAnalysisExpansionRowV1, 'obligationId'>[]
+) {
+  if (observedEpoch.epoch >= STRICT_ANALYSIS_MAX_EPOCHS) {
+    throw new Error('STRICT_ANALYSIS_EPOCH_LIMIT_REACHED');
+  }
+  const rows = requested.map((row) => createMainStrictExpansionRowV1(row));
+  for (const row of rows) {
+    prepared.expansionPort.enroll(row);
+    prepared.expansionPort.assertExecutionAllowed(row.obligationId);
+  }
+  const allExpansionRows = prepared.expansionPort.receipts.flatMap((receipt) => receipt.rows);
+  const schedule = createMainStrictExpandedFactScheduleV1(
+    input.compiledPlan.schedule,
+    allExpansionRows
+  );
+  const execution = await executeMainStrictFactScheduleV1({
+    artifact: input.artifact,
+    certifiedPlanningFacts: input.certifiedPlanningFacts,
+    projection: input.projection,
+    projectRoot: input.projectRoot,
+    schedule,
+    catalog: input.compiledPlan.factQueryCatalog,
+    evidenceSessionId: input.runId,
+  });
+  const population = canonicalizeObservationPopulationV1(
+    buildPopulation(
+      execution.facts,
+      input.compiledPlan,
+      observedEpoch.epoch + 1,
+      state.population.populationHash
+    )
+  );
+  const currentSchedule = previewExpandedSchedule(input, prepared.expansionPort.receipts);
+  state.execution = execution;
+  state.schedule = schedule;
+  state.population = population;
+  state.populations.push(population);
+  state.context = createStrictAnalysisContextProjectionV1({
+    ...withoutContextIdentity(state.context),
+    expansionHeadHash: prepared.expansionPort.receipts.at(-1)?.receiptHash ?? null,
+    currentExpandedScheduleHash: currentSchedule.finalExpandedScheduleHash,
+    factQueryObligationIds: schedule.factHarvestObligations.map((row) => row.obligationId),
+    factIds: execution.facts.map((fact) => fact.factId),
+    witnessIds: [...new Set(execution.facts.flatMap((fact) => fact.witnessIds))],
+    populationHashes: state.populations.map((row) => row.populationHash),
+  });
+  state.snapshot = createStrictAnalysisEpochSnapshotV1({
+    epoch: observedEpoch.epoch + 1,
+    context: state.context,
+    populations: state.populations,
+    terminalObligationIds: execution.receipts.map((receipt) => receipt.obligationId),
+    outstandingObligationIds: [],
+  });
+  return createStrictAnalysisGateOutcomeV1({
+    action: 'analysis_retry',
+    reasonCode: 'enrolled-expansion-executed',
+    observedEpochHash: observedEpoch.snapshotHash,
+    enrolledObligationIds: rows.map((row) => row.obligationId),
+    executedObligationIds: rows.map((row) => row.obligationId),
+    artifact: execution.manifest,
+  });
+}
+
+function previewExpandedSchedule(
+  input: StrictAnalysisExecutionInput,
+  receipts: ReturnType<typeof createStrictAnalysisExpansionPortV1>['receipts']
+) {
+  return createFinalExpandedMiningScheduleReceiptV1({
+    baselineScheduleHash: input.compiledPlan.schedule.baselineScheduleHash,
+    baselineObligationIds: input.compiledPlan.schedule.factHarvestObligations.map(
+      (row) => row.obligationId
+    ),
+    expansionReceipts: receipts,
+  });
+}
+
+function reviewStrictProducerResult(
+  source: unknown,
+  input: StrictAnalysisExecutionInput,
   state: StrictAnalysisState,
   eligibleCellIds: ReadonlySet<string>
 ) {
@@ -265,92 +457,45 @@ async function reviewStrictProducerResult(
   for (const set of state.expressionSets) {
     state.expressionSetByHypothesis.set(set.hypothesis.hypothesisId, set);
   }
-  const reviewer = createStrictIndependentReviewer(input);
-  state.independentReviews = [];
-  for (const set of state.expressionSets) {
-    for (const proposal of set.proposals) {
-      state.independentReviews.push(
-        await reviewer.review({
-          authored: proposal.authored,
-          evidence: prepared.evidence,
-          expectedSourceRevisionVectorHash: prepared.evidence.sourceRevisionVectorHash,
-          producerIdentity: `producer/${input.modelHash}`,
-          admissionReceiptId: hashCanonicalJson({
-            expressionId: proposal.expressionId,
-            kind: 'non-persisting-admission',
-          }),
-          calibrationReceiptHash: input.reviewer.calibrationReceiptHash,
-          repairAttempt: set.version - 1,
-        })
-      );
-    }
-  }
-  if (state.independentReviews.some((review) => review.verdict !== 'pass')) {
-    return {
-      pass: false as const,
-      action: 'reject' as const,
-      reason: 'STRICT_INDEPENDENT_REVIEW_REJECTED',
-    };
-  }
   state.context = createStrictAnalysisContextProjectionV1({
     ...withoutContextIdentity(state.context),
     hypothesisExpressionSetHash: hashCanonicalJson(state.expressionSets.map((set) => set.setHash)),
   });
+  state.producerReviewed = true;
   return {
     pass: true as const,
     action: 'continue' as const,
-    artifact: {
-      expressionSets: state.expressionSets,
-      independentReviews: state.independentReviews,
-    },
+    artifact: { expressionSets: state.expressionSets },
   };
-}
-
-function createStrictIndependentReviewer(input: StrictAnalysisExecutionInput) {
-  return new IndependentValueReviewer({
-    identity: input.reviewer.identity,
-    chat: async (prompt) => {
-      const result = await input.agentService.run({
-        profile: { id: 'plan-selection' },
-        message: {
-          role: 'internal',
-          content: prompt,
-          metadata: { task: 'strict-independent-value-review' },
-        },
-        context: { source: 'system-workflow', runtimeSource: 'system' },
-        execution: { toolChoiceOverride: 'none' },
-        presentation: { responseShape: 'system-task-result' },
-      });
-      if (result.status !== 'success' || result.toolCalls.length > 0) {
-        throw new Error('STRICT_INDEPENDENT_REVIEW_RUN_FAILED');
-      }
-      return result.reply;
-    },
-  });
 }
 
 export async function executeStrictAnalysisAndProduction(
   input: StrictAnalysisExecutionInput
 ): Promise<StrictAnalysisExecutionResultV1> {
-  const prepared = prepareStrictAnalysis(input);
+  const prepared = await prepareStrictAnalysis(input);
   const state: StrictAnalysisState = {
-    context: prepared.context,
+    context: prepared.snapshot.context,
+    execution: prepared.execution,
+    schedule: input.compiledPlan.schedule,
+    population: prepared.population,
+    populations: [prepared.population],
+    snapshot: prepared.snapshot,
+    epochs: [],
     epoch: null,
     fixpoint: null,
     lineages: [],
     expressionSets: [],
     expressionSetByHypothesis: new Map(),
-    independentReviews: [],
+    producerReviewed: false,
   };
   const runtimePort = createStrictProductionRuntimePort(input, prepared, state);
-
   const result = await input.agentService.run({
     profile: { id: 'generate-dimension' },
     params: { dimensionId: 'strict-production' },
     message: {
       role: 'internal',
       content:
-        'Execute the strict Analyst and Producer stages from the supplied immutable runtime port.',
+        'Execute the strict Analyst and Producer stages. Return typed analysis epochs; include expansions when exploration or counterevidence is required.',
       metadata: { task: 'strict-production', runId: input.runId },
     },
     context: {
@@ -362,15 +507,24 @@ export async function executeStrictAnalysisAndProduction(
     presentation: { responseShape: 'system-task-result' },
   });
   const { epoch, fixpoint } = state;
-  if (result.status !== 'success' || result.toolCalls.length > 0 || !epoch || !fixpoint) {
+  if (
+    result.status !== 'success' ||
+    result.toolCalls.length > 0 ||
+    !epoch ||
+    !fixpoint ||
+    !state.producerReviewed
+  ) {
     throw new Error(`STRICT_PRODUCTION_AGENT_FAILED:${result.status}`);
   }
   return Object.freeze({
-    facts: prepared.harvested.facts,
+    facts: state.execution.facts,
+    factExecutionReceipts: state.execution.receipts,
+    factExecutionManifest: state.execution.manifest,
+    epochs: state.epochs,
     epoch,
     fixpoint,
+    evidence: prepared.evidence,
     expressionSets: state.expressionSets,
-    independentReviews: state.independentReviews,
     agentRunId: result.runId,
     agentUsage: result.usage,
   });
@@ -398,117 +552,11 @@ function assertProducerEligibleCellScopes(
   }
 }
 
-function harvestFrozenFacts(
-  plan: CompiledColdStartPlanV2,
-  projection: MainCertifiedProjectionPayload,
-  evidenceEntryIds: ReadonlyMap<MainCertifiedSourceFile, string>
-): {
-  facts: FactRecordV1[];
-  terminalObligations: Array<{
-    obligationId: string;
-    disposition: 'matched' | 'inspected-no-pattern';
-    terminalReceiptId: string;
-  }>;
-} {
-  const moduleByScope = new Map(
-    projection.modules.map((module) => [`repo:${module.repoId}:module:${module.moduleId}`, module])
-  );
-  const fileByPath = new Map(
-    projection.files.map((file) => [qualifyMainCertifiedPath(file), file])
-  );
-  const factsById = new Map<string, FactRecordV1>();
-  const terminalObligations: Array<{
-    obligationId: string;
-    disposition: 'matched' | 'inspected-no-pattern';
-    terminalReceiptId: string;
-  }> = [];
-  for (const obligation of plan.schedule.factHarvestObligations) {
-    const module = moduleByScope.get(obligation.canonicalSubjectRef);
-    if (!module) {
-      throw new Error(`STRICT_FACT_SUBJECT_UNAVAILABLE:${obligation.obligationId}`);
-    }
-    const files = module.ownedFiles
-      .map((file) => fileByPath.get(file))
-      .filter(Boolean) as MainCertifiedSourceFile[];
-    if (files.length !== module.ownedFiles.length || files.length === 0) {
-      throw new Error(`STRICT_FACT_DENOMINATOR_INCOMPLETE:${obligation.obligationId}`);
-    }
-    const primary = files[0];
-    if (!primary) {
-      throw new Error(`STRICT_FACT_DENOMINATOR_INCOMPLETE:${obligation.obligationId}`);
-    }
-    const scan = scanFrozenFamily(obligation.factFamilyId, files);
-    const content = Buffer.from(primary.contentBase64, 'base64').toString('utf8');
-    const fact = createFactRecordV1({
-      factFamilyId: obligation.factFamilyId,
-      canonicalSubjectRef: obligation.canonicalSubjectRef,
-      primaryScale: obligation.analysisScale,
-      sourceRevisionVectorHash: plan.execution.sourceRevisionVectorHash,
-      value: {
-        denominator: files.map((file) => ({ path: file.relativePath, blobHash: file.blobHash })),
-        matchedAnchors: scan,
-      },
-      witnesses: [
-        {
-          kind: 'direct',
-          evidenceEntryId: requireEvidenceEntryId(evidenceEntryIds, primary),
-          evidenceSessionId: plan.execution.factsBindingHash,
-          evidenceContentHash: hashText(content),
-          sourceRevisionVectorHash: plan.execution.sourceRevisionVectorHash,
-          projectContextRefId: obligation.obligationId,
-          canonicalSubjectRef: obligation.canonicalSubjectRef,
-          anchor: {
-            relativePath: primary.relativePath,
-            blobHash: primary.blobHash,
-            range: { startLine: 1, endLine: Math.max(1, content.split('\n').length) },
-          },
-        },
-      ],
-    });
-    factsById.set(fact.factId, fact);
-    terminalObligations.push({
-      obligationId: obligation.obligationId,
-      disposition: scan.length > 0 ? 'matched' : 'inspected-no-pattern',
-      terminalReceiptId: fact.factId,
-    });
-  }
-  const directFacts = [...factsById.values()];
-  const directBySubject = new Map<string, FactRecordV1[]>();
-  for (const fact of directFacts) {
-    const rows = directBySubject.get(fact.canonicalSubjectRef) ?? [];
-    rows.push(fact);
-    directBySubject.set(fact.canonicalSubjectRef, rows);
-  }
-  for (const [canonicalSubjectRef, premises] of directBySubject) {
-    const premiseFactIds = premises.map((fact) => fact.factId).sort();
-    const derived = createFactRecordV1({
-      factFamilyId: 'synthesis-cross-cutting',
-      canonicalSubjectRef,
-      primaryScale: 'module',
-      sourceRevisionVectorHash: plan.execution.sourceRevisionVectorHash,
-      value: {
-        kind: 'strict-cross-family-derived-summary',
-        premiseFactIds,
-      },
-      witnesses: [
-        {
-          kind: 'derived',
-          derivationRuleId: 'strict-cross-family-summary-v1',
-          orderedPremiseFactIds: premiseFactIds,
-          sourceRevisionVectorHash: plan.execution.sourceRevisionVectorHash,
-        },
-      ],
-    });
-    factsById.set(derived.factId, derived);
-  }
-  const facts = [...factsById.values()];
-  validateFactRecordGraphV1(facts);
-  return { facts, terminalObligations };
-}
-
 function buildPopulation(
   facts: readonly FactRecordV1[],
-  plan: CompiledColdStartPlanV2
+  plan: CompiledColdStartPlanV2,
+  revision: number,
+  parentPopulationHash: string | null
 ): ObservationPopulationInputV1 {
   const observations = facts.map((fact) => ({
     observationId: `observation:${fact.factId.slice(-32)}`,
@@ -518,8 +566,8 @@ function buildPopulation(
   }));
   return {
     populationId: `population:${plan.schedule.baselineScheduleHash.slice(-32)}`,
-    revision: 1,
-    parentPopulationHash: null,
+    revision,
+    parentPopulationHash,
     sourceRevisionVectorHash: plan.execution.sourceRevisionVectorHash,
     denominator: {
       kind: 'frozen-complete-subjects',
@@ -530,32 +578,6 @@ function buildPopulation(
     excludedObservations: [],
     errorObservations: [],
   };
-}
-
-function scanFrozenFamily(familyId: string, files: readonly MainCertifiedSourceFile[]) {
-  const patterns: Record<string, RegExp> = {
-    'syntax-idiom': /\b(import|export|class|interface|function|const|let|async|await)\b/gu,
-    'architecture-dependency': /\b(import|export|require|adapter|gateway|facade|repository)\b/giu,
-    'api-protocol': /\b(route|handler|request|response|public|export|command|tool)\b/giu,
-    'lifecycle-error-invariant':
-      /\b(try|catch|finally|throw|transaction|lock|state|status|resume)\b/giu,
-    'config-build-test-migration': /\b(config|build|test|migration|schema|environment)\b/giu,
-    'history-fix-pattern': /\b(fix|compat|legacy|deprecated|migration|version|rework)\b/giu,
-    'synthesis-cross-cutting': /\b(logging|security|error|cache|event|signal|auth|trace)\b/giu,
-  };
-  const pattern = patterns[familyId];
-  if (!pattern) {
-    throw new Error(`STRICT_FACT_QUERY_FAMILY_UNIMPLEMENTED:${familyId}`);
-  }
-  return files.flatMap((file) => {
-    const content = Buffer.from(file.contentBase64, 'base64').toString('utf8');
-    return [...content.matchAll(pattern)].slice(0, 256).map((match) => ({
-      relativePath: file.relativePath,
-      token: match[0],
-      offset: match.index,
-      blobHash: file.blobHash,
-    }));
-  });
 }
 
 function toEvidenceEntry(file: MainCertifiedSourceFile, evidenceEntryId: string) {
@@ -586,6 +608,39 @@ function hashText(value: string): string {
   return createHash('sha256').update(value).digest('hex');
 }
 
+function parseAnalystEnvelope(source: unknown): StrictAnalystEnvelopeV1 {
+  const value = parseStageJson(source, 'STRICT_ANALYST_OUTPUT_INVALID');
+  const epoch =
+    value.epoch && typeof value.epoch === 'object'
+      ? (value.epoch as StrictAnalystEpochInputV1)
+      : (value as unknown as StrictAnalystEpochInputV1);
+  const expansions = Array.isArray(value.expansions) ? value.expansions.map(parseExpansion) : [];
+  return { epoch, expansions };
+}
+
+function parseExpansion(value: unknown): Omit<MainStrictAnalysisExpansionRowV1, 'obligationId'> {
+  const row = asRecord(value, 'STRICT_ANALYSIS_EXPANSION_INVALID');
+  if (
+    !['exploration', 'counterexample'].includes(String(row.purpose)) ||
+    !['source-range', 'symbol', 'file', 'module', 'package', 'repository', 'project'].includes(
+      String(row.analysisScale)
+    ) ||
+    !['factFamilyId', 'capabilityId', 'canonicalSubjectRef', 'reasonCode'].every(
+      (field) => typeof row[field] === 'string' && String(row[field]).trim().length > 0
+    )
+  ) {
+    throw new Error('STRICT_ANALYSIS_EXPANSION_INVALID');
+  }
+  return {
+    purpose: row.purpose as 'exploration' | 'counterexample',
+    factFamilyId: String(row.factFamilyId),
+    capabilityId: String(row.capabilityId),
+    canonicalSubjectRef: String(row.canonicalSubjectRef),
+    analysisScale: row.analysisScale as MainStrictAnalysisExpansionRowV1['analysisScale'],
+    reasonCode: String(row.reasonCode),
+  };
+}
+
 function parseStageJson(value: unknown, code: string): Record<string, unknown> {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     return value as Record<string, unknown>;
@@ -612,7 +667,7 @@ function parseProducerOutput(source: unknown): Array<{
   const value = parseStageJson(source, 'STRICT_PRODUCER_OUTPUT_INVALID');
   const rows = Array.isArray(value.expressionSets) ? value.expressionSets : [];
   return rows.map((raw) => {
-    const row = raw as Record<string, unknown>;
+    const row = asRecord(raw, 'STRICT_PRODUCER_OUTPUT_INVALID');
     if (typeof row.hypothesisId !== 'string' || !Array.isArray(row.proposals)) {
       throw new Error('STRICT_PRODUCER_OUTPUT_INVALID');
     }
@@ -625,6 +680,13 @@ function parseProducerOutput(source: unknown): Array<{
           : null,
     };
   });
+}
+
+function asRecord(value: unknown, code: string): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(code);
+  }
+  return value as Record<string, unknown>;
 }
 
 function withoutContextIdentity(

@@ -3,7 +3,10 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import type { AgentService } from '@alembic/agent/service';
 import { baseDimensions } from '@alembic/core/host-agent-workflows';
-import { hashCanonicalJson } from '@alembic/core/project-context-foundation';
+import {
+  type CertifiedProjectFactsArtifactV1,
+  hashCanonicalJson,
+} from '@alembic/core/project-context-foundation';
 import type {
   PrivateCorpusRevisionInitReceiptV1,
   WorkspaceResolver,
@@ -18,6 +21,7 @@ import {
   MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS,
   type MainCertifiedProjectFactsState,
   type MainCertifiedProjectionPayload,
+  openMainCertifiedProjectFactsArtifact,
   reopenMainCertifiedProjectFactsConsumer,
   resolveMainCertifiedProjectScopeHash,
 } from '../../../project-facts/CertifiedProjectFactsRuntime.js';
@@ -99,6 +103,7 @@ interface StrictColdStartProductionInput {
 }
 
 type StrictFactsStage = NonNullable<StrictProductionCheckpointV1['facts']> & {
+  artifact: CertifiedProjectFactsArtifactV1;
   projection: MainCertifiedProjectionPayload;
 };
 type StrictPlanningStage = NonNullable<StrictProductionCheckpointV1['planning']>;
@@ -510,8 +515,12 @@ async function ensureFactsAndPlanning(
     checkpoint.planning = planning;
     await writeCheckpoint(operationRoot, checkpoint);
   }
+  const artifact = await openMainCertifiedProjectFactsArtifact({
+    carrier: facts.carrier,
+    dataRoot,
+  });
   await advancePlanningJournal(journal, planning);
-  return { facts: { carrier: facts.carrier, projection }, planning };
+  return { facts: { artifact, carrier: facts.carrier, projection }, planning };
 }
 
 async function advancePlanningJournal(
@@ -548,11 +557,14 @@ async function ensureAnalysis(
     }
     analysis = await executeStrictAnalysisAndProduction({
       agentService: context.input.container.get('agentService') as Pick<AgentService, 'run'>,
+      artifact: facts.artifact,
+      certifiedPlanningFacts: planning.certifiedPlanningFacts,
       compiledPlan: planning.compiledPlan,
       journalId,
       modelHash: context.authorization.planning.modelHash,
       planCognitionHash: planning.planCognitionHash,
       projection: facts.projection,
+      projectRoot: context.projectRoot,
       reviewer: context.authorization.planning.reviewer,
       runId: context.input.request.runId,
     });
@@ -610,17 +622,20 @@ async function ensurePrivateCorpus(
     content = await persistStrictPrivateCorpusContent({
       acceptedMigrationBundleSemanticHash:
         context.authorization.privateCorpus.acceptedMigrationBundleSemanticHash,
+      agentService: context.input.container.get('agentService') as Pick<AgentService, 'run'>,
       analysisFixpointHash: analysis.fixpoint.fixpointHash,
       baseResolver: resolver,
       configReceiptHash: planning.configReceipt.loadHash,
       credentialLocationSymbol: context.authorization.privateCorpus.credentialLocationSymbol,
+      evidence: analysis.evidence,
       expressionSets: analysis.expressionSets,
-      independentReviews: analysis.independentReviews,
       journal: context.journal,
       manifestHash: facts.carrier.certificationBindingHash,
       planHash: planning.compiledPlan.canonicalPlanHash,
+      producerModelHash: context.authorization.planning.modelHash,
       recoveryRoot: path.join(context.operationRoot, 'prepared-rows'),
       runId: context.input.request.runId,
+      reviewer: context.authorization.planning.reviewer,
       ...(initReceipt
         ? { resumeInitReceipt: initReceipt as PrivateCorpusRevisionInitReceiptV1 }
         : {}),

@@ -9,6 +9,7 @@ import {
   createFinalCoverageBindingReceiptV1,
   createServingSnapshotManifestV1,
   createStrictPublicationMarkerV1,
+  createStrictPublicationSnapshotIdV1,
   type FinalCoverageBindingReceiptV1,
   type PreparedPublicKnowledgeRouteV1,
   parseKnowledgeMarkdown,
@@ -529,9 +530,8 @@ export async function materializeStrictPublicServingData(input: {
     });
     await writeAppendOnlyJson(path.join(stagingDataRoot, CANDIDATE_DATA_MANIFEST_FILE), manifest);
     await sealDataTree(stagingDataRoot);
-    const baseSnapshotId = `snapshot-${manifest.manifestHash.slice('sha256:'.length)}`;
     const snapshotId = await publishSealedDataDirectory({
-      baseSnapshotId,
+      candidateDataManifestHash: manifest.manifestHash,
       dataRoot: input.dataRoot,
       excludedSnapshotId: input.excludedSnapshotId,
       manifest,
@@ -920,14 +920,16 @@ async function verifyStrictPublicVectorSet(
 }
 
 async function publishSealedDataDirectory(input: {
-  readonly baseSnapshotId: string;
+  readonly candidateDataManifestHash: string;
   readonly dataRoot: string;
   readonly excludedSnapshotId?: string;
   readonly manifest: StrictPublicCandidateDataManifestV1;
   readonly paths: ReturnType<typeof strictPublicationPaths>;
   readonly stagingRoot: string;
 }): Promise<string> {
-  let snapshotId = assertSnapshotId(input.baseSnapshotId);
+  let snapshotId = assertSnapshotId(
+    createStrictPublicationSnapshotIdV1(input.candidateDataManifestHash)
+  );
   let snapshotRoot = requiredSnapshotRoot(input.dataRoot, snapshotId);
   if (await pathExists(snapshotRoot)) {
     if (
@@ -937,7 +939,9 @@ async function publishSealedDataDirectory(input: {
       await fsp.rm(input.stagingRoot, { force: true, recursive: true });
       return snapshotId;
     }
-    snapshotId = assertSnapshotId(`${input.baseSnapshotId}-${randomUUID()}`);
+    snapshotId = assertSnapshotId(
+      createStrictPublicationSnapshotIdV1(input.candidateDataManifestHash, randomUUID())
+    );
     snapshotRoot = requiredSnapshotRoot(input.dataRoot, snapshotId);
   }
   try {
@@ -950,7 +954,9 @@ async function publishSealedDataDirectory(input: {
       await fsp.rm(input.stagingRoot, { force: true, recursive: true });
       return snapshotId;
     }
-    snapshotId = assertSnapshotId(`${input.baseSnapshotId}-${randomUUID()}`);
+    snapshotId = assertSnapshotId(
+      createStrictPublicationSnapshotIdV1(input.candidateDataManifestHash, randomUUID())
+    );
     snapshotRoot = requiredSnapshotRoot(input.dataRoot, snapshotId);
     await fsp.rename(input.stagingRoot, snapshotRoot);
   }
@@ -1511,28 +1517,42 @@ function assertFinalCoverage(input: ServingSnapshotValidationInputV1): void {
 }
 
 function collectServingRecipes(input: ServingSnapshotValidationInputV1): ServingRecipeIdentityV1[] {
-  return input.finalCoverage.cells
-    .flatMap((cell) =>
+  return uniqueRecipeIdentities(
+    input.finalCoverage.cells.flatMap((cell) =>
       cell.finalRecipeIds.map((recipeId, index) => ({
         recipeId,
         authoredFingerprint: cell.finalRecipeFingerprints[index] ?? '',
       }))
     )
-    .sort((left, right) => left.recipeId.localeCompare(right.recipeId));
+  );
 }
 
 function collectCandidateRecipes(
   input: ServingSnapshotValidationInputV1
 ): CandidateRecipeIdentityV1[] {
-  return input.candidateCoverage.cells
-    .flatMap((cell) =>
+  return uniqueRecipeIdentities(
+    input.candidateCoverage.cells.flatMap((cell) =>
       cell.contentReadyRecipeIds.map((recipeId, index) => ({
         recipeId,
         authoredFingerprint: cell.contentReadyRecipeFingerprints[index] ?? '',
         bindingHash: cell.productionBindingHashes[index] ?? '',
       }))
     )
-    .sort((left, right) => left.recipeId.localeCompare(right.recipeId));
+  );
+}
+
+function uniqueRecipeIdentities<
+  T extends { readonly recipeId: string; readonly authoredFingerprint: string },
+>(rows: readonly T[]): T[] {
+  const byRecipe = new Map<string, T>();
+  for (const row of rows) {
+    const existing = byRecipe.get(row.recipeId);
+    if (existing && hashCanonicalJson(existing) !== hashCanonicalJson(row)) {
+      failServingSnapshotValidation('ready-member-conservation');
+    }
+    byRecipe.set(row.recipeId, row);
+  }
+  return [...byRecipe.values()].sort((left, right) => left.recipeId.localeCompare(right.recipeId));
 }
 
 function assertReadyMemberConservation(
@@ -1700,19 +1720,61 @@ function freezeDeep<T>(value: T): T {
   return value;
 }
 
-export function buildStrictCandidateCoverage(input: {
+interface StrictCandidateCoverageInputV1 {
   readonly analysis: StrictAnalysisExecutionResultV1;
   readonly compiledPlan: CompiledColdStartPlanV2;
   readonly expressionSets: readonly StrictProducerExpressionSetV1[];
   readonly privateCorpus: StrictPrivateCorpusContentResultV1;
   readonly reviewerIdentity: ReviewerIdentityV1;
-}): CandidateCoverageReceiptV1 {
+}
+
+interface StrictG3ResidueV1 {
+  readonly unresolvedHypothesisIds: readonly string[];
+  readonly suppressedExpressionIds: readonly string[];
+}
+
+interface StrictCandidateCoverageBuildContextV1 extends StrictG3ResidueV1 {
+  readonly bindingByCell: ReadonlyMap<
+    string,
+    StrictPrivateCorpusContentResultV1['bindings'][number][]
+  >;
+  readonly bindingByRecipe: ReadonlyMap<
+    string,
+    StrictPrivateCorpusContentResultV1['bindings'][number]
+  >;
+  readonly reviewer: InvestigatedEmptyReviewer;
+  readonly setsByCell: ReadonlyMap<string, StrictProducerExpressionSetV1[]>;
+  readonly terminalByExpression: ReadonlyMap<
+    string,
+    StrictPrivateCorpusContentResultV1['expressionTerminalRows'][number]
+  >;
+}
+
+export function buildStrictCandidateCoverage(
+  input: StrictCandidateCoverageInputV1
+): CandidateCoverageReceiptV1 {
   const bindingByCell = groupBy(input.privateCorpus.bindings, (binding) => binding.cellId);
+  const bindingByRecipe = new Map(
+    input.privateCorpus.bindings.map((binding) => [binding.recipeId, binding])
+  );
+  const terminalByExpression = new Map(
+    input.privateCorpus.expressionTerminalRows.map((row) => [row.expressionId, row])
+  );
   const setsByCell = expressionSetsByCell(input.expressionSets);
+  assertStrictG3TerminalConservation(input, terminalByExpression);
+  const residue = resolveStrictG3Residue(input, terminalByExpression);
   const requiredCells = input.compiledPlan.universe.cells
     .filter((cell) => cell.status === 'eligible')
     .sort((left, right) => left.cellId.localeCompare(right.cellId));
   const reviewer = new InvestigatedEmptyReviewer({ identity: input.reviewerIdentity });
+  const buildContext: StrictCandidateCoverageBuildContextV1 = {
+    bindingByCell,
+    bindingByRecipe,
+    reviewer,
+    setsByCell,
+    terminalByExpression,
+    ...residue,
+  };
   return createCandidateCoverageReceiptV1({
     planBaselineHash: input.compiledPlan.schedule.baselineScheduleHash,
     finalExpandedScheduleHash: input.analysis.fixpoint.finalExpandedScheduleHash,
@@ -1725,68 +1787,165 @@ export function buildStrictCandidateCoverage(input: {
       input.privateCorpus.bindings.map((binding) => binding.bindingHash)
     ),
     requiredCellIds: requiredCells.map((cell) => cell.cellId),
-    cells: requiredCells.map((cell) => {
-      const cellId = cell.cellId;
-      const bindings = bindingByCell.get(cellId) ?? [];
-      const sets = setsByCell.get(cellId) ?? [];
-      const lensBindingIds = input.compiledPlan.schedule.lensBindings
-        .filter((binding) => binding.cellId === cellId)
-        .map((binding) => binding.bindingId);
-      if (bindings.length === 0) {
-        const familyIds = new Set(
-          input.compiledPlan.schedule.lensBindings
-            .filter((binding) => binding.cellId === cellId)
-            .flatMap((binding) => binding.factFamilyIds)
-        );
-        const obligations = input.compiledPlan.schedule.factHarvestObligations.filter(
-          (obligation) =>
-            obligation.canonicalSubjectRef === cell.scopeId &&
-            familyIds.has(obligation.factFamilyId)
-        );
-        const obligationIds = obligations.map((obligation) => obligation.obligationId);
-        const terminal = input.analysis.fixpoint.terminalObligations.filter((row) =>
-          obligationIds.includes(row.obligationId)
-        );
-        const emptyDecision = reviewer.review({
-          sourceRevisionVectorHash: input.compiledPlan.execution.sourceRevisionVectorHash,
-          finalExpandedScheduleHash: input.analysis.fixpoint.finalExpandedScheduleHash,
-          expectedObligationIds: obligationIds,
-          terminalObligations: terminal.map((row) => ({
-            obligationId: row.obligationId,
-            disposition: row.disposition === 'matched' ? 'matched' : 'inspected-no-pattern',
-            terminalReceiptId: row.terminalReceiptId,
-          })),
-          unresolvedHypothesisIds: [],
-          suppressedExpressionIds: [],
-          evidenceEntryIds: input.analysis.facts.flatMap((fact) => fact.witnessIds),
-        });
-        if (emptyDecision.verdict !== 'pass') {
-          throw new Error(
-            `STRICT_INVESTIGATED_EMPTY_REJECTED:${cellId}:${emptyDecision.reasonCode}`
-          );
-        }
-        return {
-          cellId,
-          candidateDisposition: 'investigated-empty' as const,
-          contentReadyRecipeIds: [],
-          contentReadyRecipeFingerprints: [],
-          productionBindingHashes: [],
-          lensBindingIds,
-          expressionSetReceiptIds: [],
-          investigatedEmptyDecisionHash: emptyDecision.decisionHash,
-        };
-      }
-      return {
-        cellId,
-        candidateDisposition: 'covered-by-content-ready-candidate' as const,
-        contentReadyRecipeIds: bindings.map((binding) => binding.recipeId),
-        contentReadyRecipeFingerprints: bindings.map((binding) => binding.authoredFingerprint),
-        productionBindingHashes: bindings.map((binding) => binding.bindingHash),
-        lensBindingIds,
-        expressionSetReceiptIds: sets.map((set) => set.setId),
-      };
-    }),
+    cells: requiredCells.map((cell) => buildStrictCandidateCoverageCell(input, buildContext, cell)),
   });
+}
+
+function resolveStrictG3Residue(
+  input: StrictCandidateCoverageInputV1,
+  terminalByExpression: StrictCandidateCoverageBuildContextV1['terminalByExpression']
+): StrictG3ResidueV1 {
+  const unresolvedHypothesisIds = [
+    ...new Set(
+      input.analysis.epochs.flatMap((epoch) =>
+        epoch.hypothesisDispositions
+          .filter((row) => row.status === 'unknown')
+          .map((row) => row.hypothesisId)
+      )
+    ),
+  ].sort();
+  const suppressedExpressionIds = input.expressionSets
+    .flatMap((set) => set.proposals)
+    .map((proposal) => proposal.expressionId)
+    .filter((expressionId) => {
+      const fate = terminalByExpression.get(expressionId)?.terminalFate;
+      return !fate || fate === 'rejected';
+    })
+    .sort();
+  if (unresolvedHypothesisIds.length > 0 || suppressedExpressionIds.length > 0) {
+    throw new Error(
+      `STRICT_G3_RESIDUE_REJECTED:${JSON.stringify({
+        unresolvedHypothesisIds,
+        suppressedExpressionIds,
+      })}`
+    );
+  }
+  return { unresolvedHypothesisIds, suppressedExpressionIds };
+}
+
+function buildStrictCandidateCoverageCell(
+  input: StrictCandidateCoverageInputV1,
+  context: StrictCandidateCoverageBuildContextV1,
+  cell: CompiledColdStartPlanV2['universe']['cells'][number]
+): CandidateCoverageReceiptV1['cells'][number] {
+  const cellId = cell.cellId;
+  const sets = context.setsByCell.get(cellId) ?? [];
+  const representativeBindings = sets
+    .flatMap((set) => set.proposals)
+    .map((proposal) => context.terminalByExpression.get(proposal.expressionId))
+    .filter(
+      (
+        row
+      ): row is StrictPrivateCorpusContentResultV1['expressionTerminalRows'][number] & {
+        readonly recipeId: string;
+      } =>
+        Boolean(
+          row?.recipeId &&
+            (row.terminalFate === 'reviewed-merge' || row.terminalFate === 'reviewed-duplicate')
+        )
+    )
+    .flatMap((row) => {
+      const binding = context.bindingByRecipe.get(row.recipeId);
+      return binding ? [binding] : [];
+    });
+  const bindings = [
+    ...new Map(
+      [...(context.bindingByCell.get(cellId) ?? []), ...representativeBindings].map((binding) => [
+        binding.recipeId,
+        binding,
+      ])
+    ).values(),
+  ];
+  const lensBindingIds = input.compiledPlan.schedule.lensBindings
+    .filter((binding) => binding.cellId === cellId)
+    .map((binding) => binding.bindingId);
+  if (bindings.length > 0) {
+    return {
+      cellId,
+      candidateDisposition: 'covered-by-content-ready-candidate',
+      contentReadyRecipeIds: bindings.map((binding) => binding.recipeId),
+      contentReadyRecipeFingerprints: bindings.map((binding) => binding.authoredFingerprint),
+      productionBindingHashes: bindings.map((binding) => binding.bindingHash),
+      lensBindingIds,
+      expressionSetReceiptIds: sets.map((set) => set.setId),
+    };
+  }
+  const familyIds = new Set(
+    input.compiledPlan.schedule.lensBindings
+      .filter((binding) => binding.cellId === cellId)
+      .flatMap((binding) => binding.factFamilyIds)
+  );
+  const obligationIds = input.analysis.factExecutionReceipts
+    .filter(
+      (obligation) =>
+        obligation.canonicalSubjectRef === cell.scopeId && familyIds.has(obligation.factFamilyId)
+    )
+    .map((obligation) => obligation.obligationId);
+  const emptyDecision = context.reviewer.review({
+    sourceRevisionVectorHash: input.compiledPlan.execution.sourceRevisionVectorHash,
+    finalExpandedScheduleHash: input.analysis.fixpoint.finalExpandedScheduleHash,
+    expectedObligationIds: obligationIds,
+    terminalObligations: input.analysis.fixpoint.terminalObligations
+      .filter((row) => obligationIds.includes(row.obligationId))
+      .map((row) => ({
+        obligationId: row.obligationId,
+        disposition: row.disposition === 'matched' ? 'matched' : 'inspected-no-pattern',
+        terminalReceiptId: row.terminalReceiptId,
+      })),
+    unresolvedHypothesisIds: context.unresolvedHypothesisIds,
+    suppressedExpressionIds: context.suppressedExpressionIds,
+    evidenceEntryIds: input.analysis.evidence.entries.map((entry) => entry.evidenceEntryId),
+  });
+  if (emptyDecision.verdict !== 'pass') {
+    throw new Error(`STRICT_INVESTIGATED_EMPTY_REJECTED:${cellId}:${emptyDecision.reasonCode}`);
+  }
+  return {
+    cellId,
+    candidateDisposition: 'investigated-empty',
+    contentReadyRecipeIds: [],
+    contentReadyRecipeFingerprints: [],
+    productionBindingHashes: [],
+    lensBindingIds,
+    expressionSetReceiptIds: sets.map((set) => set.setId),
+    investigatedEmptyDecisionHash: emptyDecision.decisionHash,
+  };
+}
+
+function assertStrictG3TerminalConservation(
+  input: StrictCandidateCoverageInputV1,
+  terminalByExpression: ReadonlyMap<
+    string,
+    StrictPrivateCorpusContentResultV1['expressionTerminalRows'][number]
+  >
+): void {
+  const expectedIds = input.expressionSets.flatMap((set) => [
+    ...set.proposals.map((proposal) => proposal.expressionId),
+    ...(set.zeroDisposition ? [`zero:${set.setId}`] : []),
+  ]);
+  if (
+    new Set(expectedIds).size !== expectedIds.length ||
+    terminalByExpression.size !== input.privateCorpus.expressionTerminalRows.length ||
+    expectedIds.some((expressionId) => !terminalByExpression.has(expressionId)) ||
+    [...terminalByExpression.keys()].some((expressionId) => !expectedIds.includes(expressionId))
+  ) {
+    throw new Error('STRICT_G3_TERMINAL_LEDGER_DIVERGENCE');
+  }
+  const readyIds = new Set(input.privateCorpus.readyMembers.map((member) => member.recipeId));
+  for (const terminal of terminalByExpression.values()) {
+    if (
+      terminal.terminalFate === 'content-ready' &&
+      (!terminal.recipeId || !readyIds.has(terminal.recipeId))
+    ) {
+      throw new Error(`STRICT_G3_CONTENT_TARGET_NOT_READY:${terminal.expressionId}`);
+    }
+    if (
+      (terminal.terminalFate === 'reviewed-merge' ||
+        terminal.terminalFate === 'reviewed-duplicate') &&
+      (!terminal.recipeId || !readyIds.has(terminal.recipeId))
+    ) {
+      throw new Error(`STRICT_G3_DISPOSITION_TARGET_NOT_READY:${terminal.expressionId}`);
+    }
+  }
 }
 
 function groupBy<T, K>(values: readonly T[], key: (value: T) => K): Map<K, T[]> {
@@ -1802,9 +1961,13 @@ function groupBy<T, K>(values: readonly T[], key: (value: T) => K): Map<K, T[]> 
 function expressionSetsByCell(sets: readonly StrictProducerExpressionSetV1[]) {
   const result = new Map<string, StrictProducerExpressionSetV1[]>();
   for (const set of sets) {
-    for (const proposal of set.proposals) {
-      for (const moduleId of proposal.authored.scope.moduleIds) {
-        for (const dimensionId of proposal.authored.scope.dimensionIds) {
+    const authoredRows = [
+      ...set.proposals.map((proposal) => proposal.authored),
+      ...(set.zeroDisposition ? [set.zeroDisposition.authored] : []),
+    ];
+    for (const authored of authoredRows) {
+      for (const moduleId of authored.scope.moduleIds) {
+        for (const dimensionId of authored.scope.dimensionIds) {
           const cellId = `${moduleId}::${dimensionId}`;
           const rows = result.get(cellId) ?? [];
           if (!rows.includes(set)) {

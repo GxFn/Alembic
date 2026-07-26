@@ -178,6 +178,24 @@ export interface MainCertifiedProjectFactsConsumerResult {
   receipt: ProjectContextConsumerProjectionReceiptV2;
 }
 
+/**
+ * strict fact executor 需要 Core 冻结 artifact 本体，而 checkpoint 只保存轻量 carrier。
+ * 该入口仅回读并复核既有 artifact，不创建第二份事实存储，也不把大对象写回 checkpoint。
+ */
+export async function openMainCertifiedProjectFactsArtifact(input: {
+  carrier: MainCertifiedProjectFactsCarrier;
+  dataRoot: string;
+}): Promise<CertifiedProjectFactsArtifactV1> {
+  assertMainCertifiedProjectFactsCarrier(input.carrier);
+  const store = new FileCertifiedProjectFactsStore(mainCertifiedStoreRoot(input.dataRoot));
+  const artifact = await store.open(
+    input.carrier.artifactId,
+    input.carrier.certificationBindingHash
+  );
+  assertSameCertifiedCarrierBase(input.carrier, artifact);
+  return artifact;
+}
+
 export interface MainCertifiedProjectFactsSessionPort {
   id: string;
   projectRoot: string;

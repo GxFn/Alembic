@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createProjectDescriptor } from '@alembic/core';
 import { readAlembicMigrationBundleManifest } from '@alembic/core/database';
-import { ANATOMY_LENS_IDS, type FactQueryFamilyV1 } from '@alembic/core/plans';
+import { ANATOMY_LENS_IDS } from '@alembic/core/plans';
 import { hashCanonicalJson } from '@alembic/core/project-context-foundation';
 import { WorkspaceResolver } from '@alembic/core/workspace';
 import Database from 'better-sqlite3';
@@ -12,6 +12,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ServiceContainer } from '../../lib/injection/ServiceContainer.js';
 import { resolveMainCertifiedProjectScopeHash } from '../../lib/project-facts/CertifiedProjectFactsRuntime.js';
 import { resolveProjectScopeAnalysisContext } from '../../lib/project-scope/ProjectScopeAnalysis.js';
+import { createMainStrictFactQueryFamiliesV1 } from '../../lib/recipe-pipeline/generate/strict/StrictFactExecutionRuntime.js';
+import { buildStrictCandidateCoverage } from '../../lib/recipe-pipeline/generate/strict/StrictFinalizationRuntime.js';
 import {
   STRICT_PRODUCTION_STATES_V1,
   StrictProductionJournal,
@@ -89,7 +91,7 @@ describe('RecipePipelineFacade strict production integration', () => {
         status: 'FINALIZED',
         analysisHandle: {
           directFactCount: expect.any(Number),
-          derivedFactCount: 1,
+          derivedFactCount: expect.any(Number),
           expressionSetCount: 1,
         },
         compatibility: {
@@ -99,6 +101,12 @@ describe('RecipePipelineFacade strict production integration', () => {
           privateHooks: 'not-installed',
         },
       });
+      expect(
+        (report.analysisHandle as { directFactCount: number }).directFactCount
+      ).toBeGreaterThan(0);
+      expect(
+        (report.analysisHandle as { derivedFactCount: number }).derivedFactCount
+      ).toBeGreaterThan(0);
       expect(report).not.toHaveProperty('candidateHandle');
       expect(report).toHaveProperty('privateCorpusEvidence.servingSnapshotValidationHash');
       expect(JSON.stringify(report)).not.toContain(fixture.runtimeArtifactManifestPath);
@@ -150,14 +158,165 @@ describe('RecipePipelineFacade strict production integration', () => {
         await fsp.readFile(path.join(operationRoot, 'strict-production.checkpoint.json'), 'utf8')
       ) as {
         schemaVersion?: number;
+        analysis?: {
+          epochs: Array<{ population: { populationHash: string } }>;
+          evidence: { entries: Array<{ relativePath: string }> };
+          factExecutionManifest: {
+            verdict: string;
+            failedObligationIds: string[];
+            unknownObligationIds: string[];
+          };
+          factExecutionReceipts: Array<{
+            factFamilyId: string;
+            fileExecutions: Array<{
+              relativePath: string;
+              status: string;
+              truncated: boolean;
+              continuation: unknown;
+            }>;
+          }>;
+          fixpoint: { terminalObligations: unknown[] };
+        };
+        privateCorpusContent?: {
+          expressionTerminalRows: Array<{
+            recipeId: string | null;
+            terminalFate: string;
+          }>;
+          readyMembers: Array<{ recipeId: string }>;
+        };
+        candidateCoverage?: {
+          cells: Array<{
+            candidateDisposition: string;
+            contentReadyRecipeIds: string[];
+          }>;
+        };
         finalization?: {
           servingSnapshotValidation?: { receiptHash?: string };
-          servingManifest?: { servingSnapshotValidationHash?: string };
+          servingManifest?: {
+            servingSnapshotValidationHash?: string;
+            snapshotId?: string;
+          };
+          preparedPublicRoute?: { route: { snapshotId: string } };
         };
       };
       expect(checkpoint.schemaVersion).toBe(2);
+      expect(checkpoint.analysis?.evidence.entries.map((entry) => entry.relativePath)).toEqual([
+        'src/adapter.ts',
+        'src/index.ts',
+      ]);
+      expect(checkpoint.analysis?.epochs).toHaveLength(2);
+      expect(
+        new Set(checkpoint.analysis?.epochs.map((epoch) => epoch.population.populationHash)).size
+      ).toBe(2);
+      expect(checkpoint.analysis?.factExecutionManifest).toMatchObject({
+        verdict: 'passed',
+        failedObligationIds: [],
+        unknownObligationIds: [],
+      });
+      expect(
+        checkpoint.analysis?.factExecutionReceipts.filter(
+          (receipt) => receipt.factFamilyId === 'strict-counterexample'
+        )
+      ).toHaveLength(1);
+      const fileExecutions =
+        checkpoint.analysis?.factExecutionReceipts.flatMap((receipt) => receipt.fileExecutions) ??
+        [];
+      expect([...new Set(fileExecutions.map((execution) => execution.relativePath))]).toEqual([
+        'src/adapter.ts',
+        'src/index.ts',
+      ]);
+      expect(fileExecutions.every((execution) => execution.status === 'complete')).toBe(true);
+      expect(fileExecutions.every((execution) => execution.truncated === false)).toBe(true);
+      expect(fileExecutions.every((execution) => execution.continuation === null)).toBe(true);
+      expect(checkpoint.analysis?.fixpoint.terminalObligations).toHaveLength(
+        checkpoint.analysis?.factExecutionReceipts.length
+      );
+      const readyRecipeIds = new Set(
+        checkpoint.privateCorpusContent?.readyMembers.map((member) => member.recipeId)
+      );
+      expect(checkpoint.privateCorpusContent?.expressionTerminalRows).toHaveLength(6);
+      expect(
+        checkpoint.privateCorpusContent?.expressionTerminalRows.every(
+          (row) =>
+            row.terminalFate === 'content-ready' ||
+            ((row.terminalFate === 'reviewed-merge' || row.terminalFate === 'reviewed-duplicate') &&
+              row.recipeId !== null &&
+              readyRecipeIds.has(row.recipeId))
+        )
+      ).toBe(true);
+      expect(
+        checkpoint.candidateCoverage?.cells.every(
+          (cell) =>
+            cell.candidateDisposition === 'covered-by-content-ready-candidate' &&
+            cell.contentReadyRecipeIds.every((recipeId) => readyRecipeIds.has(recipeId))
+        )
+      ).toBe(true);
+      expect(fixture.agentService.admissionNoWriteObserved).toBe(true);
+      const coverageStages = checkpoint as unknown as {
+        analysis: Parameters<typeof buildStrictCandidateCoverage>[0]['analysis'];
+        planning: {
+          compiledPlan: Parameters<typeof buildStrictCandidateCoverage>[0]['compiledPlan'];
+        };
+        privateCorpusContent: Parameters<typeof buildStrictCandidateCoverage>[0]['privateCorpus'];
+      };
+      const residueCorpus = structuredClone(coverageStages.privateCorpusContent);
+      const residueTerminal = residueCorpus.expressionTerminalRows[0];
+      if (!residueTerminal) {
+        throw new Error('fixture terminal row missing');
+      }
+      residueCorpus.expressionTerminalRows[0] = {
+        ...residueTerminal,
+        recipeId: null,
+        terminalFate: 'rejected',
+      };
+      expect(() =>
+        buildStrictCandidateCoverage({
+          analysis: coverageStages.analysis,
+          compiledPlan: coverageStages.planning.compiledPlan,
+          expressionSets: coverageStages.analysis.expressionSets,
+          privateCorpus: residueCorpus,
+          reviewerIdentity: {
+            provider: 'fixture',
+            model: 'fixture-reviewer',
+            method: 'frozen-evidence',
+          },
+        })
+      ).toThrow('STRICT_G3_RESIDUE_REJECTED');
+      const unreadyRepresentativeCorpus = structuredClone(coverageStages.privateCorpusContent);
+      unreadyRepresentativeCorpus.readyMembers = [];
+      expect(() =>
+        buildStrictCandidateCoverage({
+          analysis: coverageStages.analysis,
+          compiledPlan: coverageStages.planning.compiledPlan,
+          expressionSets: coverageStages.analysis.expressionSets,
+          privateCorpus: unreadyRepresentativeCorpus,
+          reviewerIdentity: {
+            provider: 'fixture',
+            model: 'fixture-reviewer',
+            method: 'frozen-evidence',
+          },
+        })
+      ).toThrow('STRICT_G3_CONTENT_TARGET_NOT_READY');
+      const preparedRows = await fsp.readdir(path.join(operationRoot, 'prepared-rows'));
+      expect(preparedRows).toHaveLength(1);
+      const preparedRowName = preparedRows[0];
+      if (!preparedRowName) {
+        throw new Error('fixture prepared-row checkpoint missing');
+      }
+      const preparedRow = await readJson(
+        path.join(operationRoot, 'prepared-rows', preparedRowName)
+      );
+      expect(preparedRow).toMatchObject({
+        g1ReceiptHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+        admissionReceiptHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+        g2ReceiptHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+        checkpointHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+      });
       expect(checkpoint.finalization?.servingManifest?.servingSnapshotValidationHash).toBe(
         checkpoint.finalization?.servingSnapshotValidation?.receiptHash
+      );
+      expect(checkpoint.finalization?.preparedPublicRoute?.route.snapshotId).toMatch(
+        /^snapshot-[a-f0-9]{64}$/u
       );
       const publicationRoot = path.join(fixture.dataRoot, '.asd/context/recipe-publications');
       await expect(fsp.stat(path.join(publicationRoot, 'marker.json'))).resolves.toMatchObject({
@@ -415,6 +574,196 @@ describe('RecipePipelineFacade strict production integration', () => {
     }
   }, 30_000);
 
+  it('conserves an explicit zero expression and rejects unsupported investigated-empty G3', async () => {
+    const fixture = await createFixture({ producerMode: 'zero' });
+    try {
+      await expect(executeFixture(fixture)).rejects.toThrow('STRICT_INVESTIGATED_EMPTY_REJECTED');
+      const operationRoot = path.join(
+        fixture.dataRoot,
+        'strict-production/operations/strict-integration-run'
+      );
+      const checkpoint = await readJson(
+        path.join(operationRoot, 'strict-production.checkpoint.json')
+      );
+      const content = readRecord(checkpoint.privateCorpusContent);
+      const terminalRows = content.expressionTerminalRows as Array<Record<string, unknown>>;
+      expect(terminalRows).toHaveLength(1);
+      expect(terminalRows[0]).toMatchObject({
+        expressionId: expect.stringMatching(/^zero:/u),
+        recipeId: null,
+        terminalFate: 'reviewed-zero',
+        terminalReceiptId: 'fixture-zero-disposition-review',
+      });
+      expect(content.g1Receipts).toEqual([]);
+      expect(content.readyMembers).toEqual([]);
+      expect(checkpoint).not.toHaveProperty('candidateCoverage');
+      await expect(
+        fsp.stat(path.join(fixture.dataRoot, '.asd/context/recipe-publications/active.json'))
+      ).rejects.toMatchObject({ code: 'ENOENT' });
+    } finally {
+      fixture.database.close();
+    }
+  }, 30_000);
+
+  it('accepts an explicitly reviewed empty Producer set when Analyst has no eligible hypothesis', async () => {
+    const fixture = await createFixture({ producerMode: 'no-hypothesis' });
+    try {
+      await expect(executeFixture(fixture)).rejects.toThrow('STRICT_INVESTIGATED_EMPTY_REJECTED');
+      const checkpoint = await readJson(
+        path.join(
+          fixture.dataRoot,
+          'strict-production/operations/strict-integration-run',
+          'strict-production.checkpoint.json'
+        )
+      );
+      const analysis = readRecord(checkpoint.analysis);
+      expect(analysis.expressionSets).toEqual([]);
+      expect(readRecord(checkpoint.privateCorpusContent).expressionTerminalRows).toEqual([]);
+      expect(checkpoint).not.toHaveProperty('candidateCoverage');
+    } finally {
+      fixture.database.close();
+    }
+  }, 30_000);
+
+  it('records every G2 rejection as a terminal without writing private corpus content', async () => {
+    const fixture = await createFixture({ reviewerMode: 'reject' });
+    try {
+      await expect(executeFixture(fixture)).rejects.toThrow('STRICT_G3_RESIDUE_REJECTED');
+      const checkpoint = await readJson(
+        path.join(
+          fixture.dataRoot,
+          'strict-production/operations/strict-integration-run',
+          'strict-production.checkpoint.json'
+        )
+      );
+      const content = readRecord(checkpoint.privateCorpusContent);
+      const terminalRows = content.expressionTerminalRows as Array<Record<string, unknown>>;
+      expect(terminalRows).toHaveLength(6);
+      expect(
+        terminalRows.every(
+          (row) =>
+            row.recipeId === null &&
+            row.terminalFate === 'rejected' &&
+            /^sha256:[a-f0-9]{64}$/u.test(String(row.terminalReceiptId))
+        )
+      ).toBe(true);
+      expect(content.readyMembers).toEqual([]);
+      expect(fixture.agentService.admissionNoWriteObserved).toBe(true);
+      const initReceipt = await readJson(
+        path.join(
+          fixture.dataRoot,
+          'strict-production/operations/strict-integration-run',
+          'strict-private-revision-init-receipt.json'
+        )
+      );
+      const corpusDatabase = new Database(
+        path.join(
+          fixture.dataRoot,
+          '.asd/context/recipe-runs/strict-integration-run/corpora',
+          String(initReceipt.revisionId),
+          '.asd/alembic.db'
+        ),
+        { readonly: true, fileMustExist: true }
+      );
+      try {
+        expect(
+          (
+            corpusDatabase.prepare('SELECT COUNT(*) AS count FROM knowledge_entries').get() as {
+              count: number;
+            }
+          ).count
+        ).toBe(0);
+      } finally {
+        corpusDatabase.close();
+      }
+    } finally {
+      fixture.database.close();
+    }
+  }, 30_000);
+
+  it('fails closed when a prepared-row admission receipt changes during recovery', async () => {
+    const fixture = await createFixture();
+    try {
+      await executeFixture(fixture);
+      const operationRoot = path.join(
+        fixture.dataRoot,
+        'strict-production/operations/strict-integration-run'
+      );
+      const checkpointPath = path.join(operationRoot, 'strict-production.checkpoint.json');
+      const checkpoint = await readJson(checkpointPath);
+      for (const key of [
+        'privateCorpusContent',
+        'candidateCoverage',
+        'privateCorpus',
+        'publicServingData',
+        'finalization',
+        'publicServingBundle',
+        'rejectedPublicSnapshotIds',
+      ]) {
+        delete checkpoint[key];
+      }
+      await fsp.writeFile(checkpointPath, `${JSON.stringify(checkpoint)}\n`);
+
+      const journalPath = path.join(operationRoot, 'strict-production.journal.jsonl');
+      const journalRows = (await fsp.readFile(journalPath, 'utf8'))
+        .trim()
+        .split('\n')
+        .map((row) => JSON.parse(row) as { state: string });
+      const expressionClosedIndex = journalRows.findIndex(
+        (row) => row.state === 'HYPOTHESIS_EXPRESSION_SETS_CLOSED'
+      );
+      if (expressionClosedIndex < 0) {
+        throw new Error('fixture expression-set journal row missing');
+      }
+      await fsp.writeFile(
+        journalPath,
+        `${journalRows
+          .slice(0, expressionClosedIndex + 1)
+          .map((row) => JSON.stringify(row))
+          .join('\n')}\n`
+      );
+
+      const preparedRowsRoot = path.join(operationRoot, 'prepared-rows');
+      const preparedRowNames = await fsp.readdir(preparedRowsRoot);
+      const preparedRowName = preparedRowNames[0];
+      if (!preparedRowName) {
+        throw new Error('fixture prepared-row checkpoint missing');
+      }
+      const preparedRowPath = path.join(preparedRowsRoot, preparedRowName);
+      const preparedRow = await readJson(preparedRowPath);
+      preparedRow.admissionReceiptHash = sha('tampered-admission-receipt');
+      preparedRow.checkpointHash = hashCanonicalJson(withoutKey(preparedRow, 'checkpointHash'));
+      await fsp.writeFile(preparedRowPath, `${JSON.stringify(preparedRow)}\n`);
+
+      const initReceipt = await readJson(
+        path.join(operationRoot, 'strict-private-revision-init-receipt.json')
+      );
+      const privateCorpusDatabase = new Database(
+        path.join(
+          fixture.dataRoot,
+          '.asd/context/recipe-runs/strict-integration-run/corpora',
+          String(initReceipt.revisionId),
+          '.asd/alembic.db'
+        )
+      );
+      try {
+        privateCorpusDatabase.exec(
+          'DELETE FROM recipe_source_refs; DELETE FROM knowledge_entries;'
+        );
+      } finally {
+        privateCorpusDatabase.close();
+      }
+      await fsp.rm(path.join(fixture.dataRoot, '.asd/context/recipe-publications/active.json'), {
+        force: true,
+      });
+      await expect(executeFixture(fixture)).rejects.toThrow(
+        'STRICT_PREPARED_ROW_CHECKPOINT_DIVERGENCE'
+      );
+    } finally {
+      fixture.database.close();
+    }
+  }, 30_000);
+
   it('keeps route null across sealed bundle tamper classes and allocates a new snapshot', async () => {
     const fixture = await createFixture();
     try {
@@ -492,6 +841,21 @@ describe('RecipePipelineFacade strict production integration', () => {
       const repairedRoute = await readJson(activePath);
       expect(repairedRoute.snapshotId).not.toBe(originalSnapshotId);
       expect(repairedRoute.snapshotId).toMatch(/^snapshot-[a-f0-9]{64}-[a-f0-9-]{36}$/u);
+      const repairedSnapshotRoot = path.join(
+        publicationRoot,
+        'snapshots',
+        String(repairedRoute.snapshotId)
+      );
+      await expect(
+        readJson(path.join(repairedSnapshotRoot, 'manifest.json'))
+      ).resolves.toMatchObject({
+        manifestHash: repairedRoute.servingSnapshotManifestHash,
+      });
+      await expect(
+        readJson(path.join(repairedSnapshotRoot, 'data/candidate-data-manifest.json'))
+      ).resolves.toMatchObject({
+        schemaVersion: 1,
+      });
       await expect(
         fsp.stat(path.join(publicationRoot, 'snapshots', originalSnapshotId))
       ).resolves.toBeDefined();
@@ -626,6 +990,9 @@ async function persistRequestedEvidence(operationRoot: string, dataRoot: string)
       path.join(operationRoot, 'strict-production.checkpoint.json'),
       path.join(evidenceRoot, 'checkpoint.json')
     ),
+    fsp.cp(path.join(operationRoot, 'prepared-rows'), path.join(evidenceRoot, 'prepared-rows'), {
+      recursive: true,
+    }),
     fsp.copyFile(
       path.join(publicationRoot, 'active.json'),
       path.join(evidenceRoot, 'public-route.json')
@@ -687,28 +1054,14 @@ async function removeEvidenceRoot(evidenceRoot: string): Promise<void> {
   await fsp.rm(evidenceRoot, { force: true, recursive: true });
 }
 
-async function createFixture(options: { authorizationProjectIdentityHash?: string } = {}) {
-  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'alembic-strict-facade-'));
-  roots.push(root);
-  const projectRoot = path.join(root, 'project');
-  const dataRoot = path.join(root, 'data');
-  await fsp.mkdir(path.join(projectRoot, 'src'), { recursive: true });
-  await fsp.mkdir(path.join(dataRoot, '.asd'), { recursive: true });
-  const sourceConfigBytes = `${JSON.stringify({
-    provider: 'fixture',
-    model: 'fixture-embedding-v1',
-    credentialLocationSymbol: 'env:STRICT_FIXTURE_ONLY',
-  })}\n`;
-  await fsp.writeFile(path.join(dataRoot, '.asd/config.json'), sourceConfigBytes);
-  await fsp.writeFile(
-    path.join(projectRoot, 'src/index.ts'),
-    [
-      'export interface Result<T> { value: T; }',
-      'export async function load(): Promise<Result<string>> {',
-      "  try { return { value: 'strict' }; } catch (error) { throw error; }",
-      '}',
-    ].join('\n')
-  );
+interface StrictFixtureOptions {
+  readonly authorizationProjectIdentityHash?: string;
+  readonly producerMode?: 'proposals' | 'zero' | 'no-hypothesis';
+  readonly reviewerMode?: 'pass' | 'reject';
+}
+
+async function createFixture(options: StrictFixtureOptions = {}) {
+  const { root, projectRoot, dataRoot, sourceConfigBytes } = await createStrictFixtureProject();
   const folderId = 'folder-strict-main';
   const projectScope = createProjectDescriptor({
     controlRoot: root,
@@ -732,7 +1085,7 @@ async function createFixture(options: { authorizationProjectIdentityHash?: strin
     },
   });
   const database = new Database(path.join(dataRoot, 'main.sqlite'));
-  const agentService = new DeterministicStrictAgentService();
+  const agentService = createStrictFixtureAgentService(options, dataRoot);
   const embedProvider = createFixtureEmbedProvider();
   const services = new Map<string, unknown>([
     ['database', database],
@@ -814,6 +1167,81 @@ async function createFixture(options: { authorizationProjectIdentityHash?: strin
   };
 }
 
+async function createStrictFixtureProject() {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'alembic-strict-facade-'));
+  roots.push(root);
+  const projectRoot = path.join(root, 'project');
+  const dataRoot = path.join(root, 'data');
+  await fsp.mkdir(path.join(projectRoot, 'src'), { recursive: true });
+  await fsp.mkdir(path.join(dataRoot, '.asd'), { recursive: true });
+  const sourceConfigBytes = `${JSON.stringify({
+    provider: 'fixture',
+    model: 'fixture-embedding-v1',
+    credentialLocationSymbol: 'env:STRICT_FIXTURE_ONLY',
+  })}\n`;
+  await fsp.writeFile(path.join(dataRoot, '.asd/config.json'), sourceConfigBytes);
+  await fsp.writeFile(
+    path.join(projectRoot, 'src/index.ts'),
+    [
+      'export interface Result<T> { value: T; }',
+      'export async function load(): Promise<Result<string>> {',
+      "  try { return { value: 'strict' }; } catch (error) { throw error; }",
+      '}',
+    ].join('\n')
+  );
+  await fsp.writeFile(
+    path.join(projectRoot, 'src/adapter.ts'),
+    [
+      "import type { Result } from './index.js';",
+      'export class StrictAdapter {',
+      '  convert(value: string): Result<string> { return { value }; }',
+      '}',
+    ].join('\n')
+  );
+  return { root, projectRoot, dataRoot, sourceConfigBytes };
+}
+
+function createStrictFixtureAgentService(
+  options: StrictFixtureOptions,
+  dataRoot: string
+): DeterministicStrictAgentService {
+  return new DeterministicStrictAgentService(
+    options.producerMode ?? 'proposals',
+    options.reviewerMode ?? 'pass',
+    async () => {
+      const initReceipt = await readJson(
+        path.join(
+          dataRoot,
+          'strict-production/operations/strict-integration-run',
+          'strict-private-revision-init-receipt.json'
+        )
+      );
+      const corpusDatabase = new Database(
+        path.join(
+          dataRoot,
+          '.asd/context/recipe-runs/strict-integration-run/corpora',
+          String(initReceipt.revisionId),
+          '.asd/alembic.db'
+        ),
+        {
+          readonly: true,
+          fileMustExist: true,
+        }
+      );
+      try {
+        const row = corpusDatabase
+          .prepare('SELECT COUNT(*) AS count FROM knowledge_entries')
+          .get() as { count: number };
+        if (row.count !== 0) {
+          throw new Error(`fixture admission performed an early write:${row.count}`);
+        }
+      } finally {
+        corpusDatabase.close();
+      }
+    }
+  );
+}
+
 function createFixtureEmbedProvider() {
   return {
     describeCapabilities() {
@@ -842,6 +1270,13 @@ function createFixtureEmbedProvider() {
 
 class DeterministicStrictAgentService {
   networkRequestCount = 0;
+  admissionNoWriteObserved = false;
+
+  constructor(
+    private readonly producerMode: 'proposals' | 'zero' | 'no-hypothesis',
+    private readonly reviewerMode: 'pass' | 'reject',
+    private readonly assertAdmissionNoWrite: () => Promise<void>
+  ) {}
 
   async run(input: Record<string, unknown>) {
     const metadata = readRecord(readRecord(input.message).metadata);
@@ -864,7 +1299,9 @@ class DeterministicStrictAgentService {
     return agentResult(JSON.stringify(planIntent(strictContext)), 'plan-selection');
   }
 
-  private runIndependentValueReview(input: Record<string, unknown>) {
+  private async runIndependentValueReview(input: Record<string, unknown>) {
+    await this.assertAdmissionNoWrite();
+    this.admissionNoWriteObserved = true;
     const prompt = String(readRecord(input.message).content ?? '');
     const slice = /--- (E-\d+) (.+?):(\d+)-(\d+) blob=/u.exec(prompt);
     if (!slice) {
@@ -886,7 +1323,7 @@ class DeterministicStrictAgentService {
           reasonCode: 'frozen-source-entails-projection',
           evidenceEntryIds: [slice[1]],
         })),
-        noveltyDecision: 'novel-project-specific',
+        noveltyDecision: this.reviewerMode === 'pass' ? 'novel-project-specific' : 'known-general',
         duplicateDecision: 'no-match',
         citedLines: [`${slice[2]}:${slice[3]}`],
       }),
@@ -897,104 +1334,191 @@ class DeterministicStrictAgentService {
   private async runStrictProduction(input: Record<string, unknown>) {
     const port = readRecord(readRecord(input.context).strategyContext)
       .strictProduction as StrictRuntimeFixturePort;
-    const population = port.populations[0];
-    if (!population) {
+    const baselineEpoch = port.readAnalysisEpoch();
+    const baselinePopulation = baselineEpoch.populations.at(-1);
+    if (!baselinePopulation) {
       throw new Error('fixture strict population missing');
     }
-    const observations = population.observations;
-    const first = observations[0];
+    const first = baselinePopulation.observations[0];
     if (!first) {
       throw new Error('fixture strict observation missing');
     }
-    const clusters = new Map<string, Array<(typeof observations)[number]>>();
-    for (const observation of observations) {
-      const rows = clusters.get(observation.mechanismKey) ?? [];
-      rows.push(observation);
-      clusters.set(observation.mechanismKey, rows);
+    const canonicalSubjectRef = port.eligibleSubjects[0];
+    if (!canonicalSubjectRef) {
+      throw new Error('fixture strict subject missing');
     }
-    port.validateAnalystResult({
-      epoch: {
-        population,
-        clusterInputs: [...clusters.entries()].map(([mechanismKey, rows]) => ({
-          mechanismKey,
-          observationIds: rows.map((observation) => observation.observationId),
-          anatomyLensIds: ['error-recovery-concurrency'],
-        })),
-        nonClusteredDispositions: [],
-        inductionInputs: [...clusters.entries()].map(([mechanismKey, rows], index) => ({
-          mechanismKey,
-          mode: rows.length === 1 ? 'bounded-singleton' : 'recurring',
-          hypotheses:
-            index === 0
-              ? [
-                  {
-                    hypothesisId: 'hypothesis-strict-main',
-                    statement: 'The project preserves a typed result boundary.',
-                    premiseFactIds: [first.factIds[0]],
-                  },
-                ]
-              : [],
-          ...(index === 0
-            ? {}
-            : {
-                zeroHypothesisReason: 'insufficient-evidence',
-                zeroHypothesisReviewReceiptId: `zero-review-${index}`,
-              }),
-        })),
-        falsificationInputs: [
+    const retry = await port.validateAnalystResult(
+      {
+        epoch: buildFixtureAnalystEpoch(baselinePopulation, this.producerMode !== 'no-hypothesis'),
+        expansions: [
           {
-            hypothesisId: 'hypothesis-strict-main',
-            enrolledCounterqueryIds: [],
-            executions: [],
-            counterqueryApplicability: {
-              status: 'not-required',
-              reasonCode: 'bounded-project-contract',
-              reviewerReceiptId: 'counterquery-review',
-            },
-          },
-        ],
-        hypothesisDispositions: [
-          {
-            hypothesisId: 'hypothesis-strict-main',
-            status: 'survived',
-            reviewerReceiptId: 'hypothesis-review',
+            purpose: 'counterexample',
+            factFamilyId: 'strict-counterexample',
+            capabilityId: 'tree-sitter-query',
+            canonicalSubjectRef,
+            analysisScale: 'file',
+            reasonCode: 'fixture-second-file-counterexample',
           },
         ],
       },
-    });
+      baselineEpoch
+    );
+    if (readRecord(retry).action !== 'analysis_retry') {
+      throw new Error('fixture strict retry missing');
+    }
+    const expandedEpoch = port.readAnalysisEpoch();
+    const expandedPopulation = expandedEpoch.populations.at(-1);
+    if (!expandedPopulation || expandedEpoch.epoch !== 2) {
+      throw new Error('fixture strict expanded population missing');
+    }
+    const settled = await port.validateAnalystResult(
+      {
+        epoch: buildFixtureAnalystEpoch(expandedPopulation, this.producerMode !== 'no-hypothesis'),
+      },
+      expandedEpoch
+    );
+    if (readRecord(settled).action !== 'pass') {
+      throw new Error('fixture strict fixpoint missing');
+    }
     const producer = port.buildProducerInput();
     const evidenceEntryId = producer.evidence.entries[0]?.evidenceEntryId;
     if (!evidenceEntryId) {
       throw new Error('fixture producer evidence missing');
     }
+    const firstCell = port.eligibleCells[0];
+    if (!firstCell) {
+      throw new Error('fixture eligible cell missing');
+    }
     await port.reviewProducerResult({
-      expressionSets: [
-        {
-          hypothesisId: 'hypothesis-strict-main',
-          proposals: port.eligibleCells.map((cell) => ({
-            expressionId: `expression-${cell.moduleId}-${cell.dimensionId}`,
-            kind: 'draft',
-            authored: authoredProjection(cell.moduleId, cell.dimensionId, evidenceEntryId),
-          })),
-          zeroDisposition: null,
-        },
-      ],
+      expressionSets:
+        this.producerMode === 'no-hypothesis'
+          ? []
+          : [
+              {
+                hypothesisId: 'hypothesis-strict-main',
+                proposals:
+                  this.producerMode === 'proposals'
+                    ? port.eligibleCells.map((cell) => ({
+                        expressionId: `expression-${cell.moduleId}-${cell.dimensionId}`,
+                        kind: 'draft' as const,
+                        authored: authoredProjection(
+                          cell.moduleId,
+                          cell.dimensionId,
+                          evidenceEntryId
+                        ),
+                      }))
+                    : [],
+                zeroDisposition:
+                  this.producerMode === 'zero'
+                    ? {
+                        reasonCode: 'complete-investigation-found-no-durable-pattern',
+                        authored: authoredProjection(
+                          firstCell.moduleId,
+                          firstCell.dimensionId,
+                          evidenceEntryId
+                        ),
+                        reviewerReceiptId: 'fixture-zero-disposition-review',
+                      }
+                    : null,
+              },
+            ],
     });
     return agentResult('{"strictProduction":"completed"}', 'generate-dimension');
   }
 }
 
+function buildFixtureAnalystEpoch(
+  population: StrictRuntimeFixturePort['readAnalysisEpoch'] extends () => infer Snapshot
+    ? Snapshot extends { populations: Array<infer Population> }
+      ? Population
+      : never
+    : never,
+  includeHypothesis = true
+) {
+  const observations = population.observations;
+  const first = observations[0];
+  if (!first?.factIds[0]) {
+    throw new Error('fixture strict observation fact missing');
+  }
+  const clusters = new Map<string, Array<(typeof observations)[number]>>();
+  for (const observation of observations) {
+    const rows = clusters.get(observation.mechanismKey) ?? [];
+    rows.push(observation);
+    clusters.set(observation.mechanismKey, rows);
+  }
+  return {
+    population,
+    clusterInputs: [...clusters.entries()].map(([mechanismKey, rows]) => ({
+      mechanismKey,
+      observationIds: rows.map((observation) => observation.observationId),
+      anatomyLensIds: ['error-recovery-concurrency'],
+    })),
+    nonClusteredDispositions: [],
+    inductionInputs: [...clusters.entries()].map(([mechanismKey, rows], index) => ({
+      mechanismKey,
+      mode: rows.length === 1 ? ('bounded-singleton' as const) : ('recurring' as const),
+      hypotheses:
+        index === 0 && includeHypothesis
+          ? [
+              {
+                hypothesisId: 'hypothesis-strict-main',
+                statement: 'The project preserves a typed result boundary.',
+                premiseFactIds: [first.factIds[0]],
+              },
+            ]
+          : [],
+      ...(index === 0 && includeHypothesis
+        ? {}
+        : {
+            zeroHypothesisReason: 'insufficient-evidence' as const,
+            zeroHypothesisReviewReceiptId: `zero-review-${index}`,
+          }),
+    })),
+    falsificationInputs: includeHypothesis
+      ? [
+          {
+            hypothesisId: 'hypothesis-strict-main',
+            enrolledCounterqueryIds: [],
+            executions: [],
+            counterqueryApplicability: {
+              status: 'not-required' as const,
+              reasonCode: 'bounded-project-contract',
+              reviewerReceiptId: 'counterquery-review',
+            },
+          },
+        ]
+      : [],
+    hypothesisDispositions: includeHypothesis
+      ? [
+          {
+            hypothesisId: 'hypothesis-strict-main',
+            status: 'survived' as const,
+            reviewerReceiptId: 'hypothesis-review',
+          },
+        ]
+      : [],
+  };
+}
+
 interface StrictRuntimeFixturePort {
   eligibleCells: Array<{ cellId: string; moduleId: string; dimensionId: string }>;
-  populations: Array<{
-    observations: Array<{
-      observationId: string;
-      factIds: string[];
-      mechanismKey: string;
-      canonicalSubjectRefs: string[];
+  eligibleSubjects: string[];
+  readAnalysisEpoch(): {
+    epoch: number;
+    snapshotHash: string;
+    populations: Array<{
+      observations: Array<{
+        observationId: string;
+        factIds: string[];
+        mechanismKey: string;
+        canonicalSubjectRefs: string[];
+      }>;
     }>;
-  }>;
-  validateAnalystResult(source: unknown): unknown;
+  };
+  validateAnalystResult(
+    source: unknown,
+    observedEpoch: { epoch: number; snapshotHash: string }
+  ): Promise<unknown>;
   buildProducerInput(): {
     evidence: { entries: Array<{ evidenceEntryId: string }> };
     lineages: Array<{ hypothesis: { hypothesisId: string } }>;
@@ -1010,7 +1534,7 @@ function planIntent(context: Record<string, unknown>) {
   const subjectRefs = modules.map(
     (module) => `repo:${String(module.repoId)}:module:${String(module.moduleId)}`
   );
-  const families = factFamilies();
+  const families = factFamilies().filter((family) => family.id !== 'strict-counterexample');
   const question = {
     questionId: 'q-strict-main',
     subquestionIds: [],
@@ -1090,12 +1614,26 @@ function planIntent(context: Record<string, unknown>) {
 
 function authoredProjection(moduleId: string, dimensionId: string, evidenceEntryId: string) {
   const exclusion = 'Do not bypass the strict result boundary.';
+  const markdown = [
+    `The ${dimensionId} path preserves the typed Result boundary across the owned module.`,
+    'Use the returned discriminant before reading success data so failure information remains explicit and testable.',
+    'Keep the same contract at adapters, retries, and persistence boundaries; do not translate a failure into an empty success.',
+    '',
+    '```ts',
+    'export function unwrapStrictResult<T>(result: { ok: true; value: T } | { ok: false; error: Error }): T {',
+    '  if (!result.ok) {',
+    '    throw result.error;',
+    '  }',
+    '  return result.value;',
+    '}',
+    '```',
+  ].join('\n');
   return {
     title: `Strict ${dimensionId} result boundary`,
     kind: 'rule',
     doClause: 'Preserve the typed Result boundary and frozen evidence lineage.',
     dontClause: exclusion,
-    markdown: `The ${dimensionId} path preserves the typed Result boundary.`,
+    markdown,
     usageGuide: `Apply this rule to ${dimensionId} changes in the owned module.`,
     retrievalProfile: {
       intents: [`strict ${dimensionId} result boundary`],
@@ -1141,53 +1679,8 @@ function strictConfig() {
   };
 }
 
-function factFamilies(): FactQueryFamilyV1[] {
-  return [
-    family('syntax-idiom', 'tree-sitter-query', ['source-range', 'symbol', 'file']),
-    family('architecture-dependency', 'certified-project-context', [
-      'module',
-      'package',
-      'repository',
-      'project',
-    ]),
-    family('api-protocol', 'accepted-semantic-relations', [
-      'source-range',
-      'symbol',
-      'module',
-      'repository',
-    ]),
-    family('lifecycle-error-invariant', 'accepted-static-invariants', [
-      'source-range',
-      'symbol',
-      'module',
-      'project',
-    ]),
-    family('config-build-test-migration', 'frozen-config-parsers', ['file', 'module', 'project']),
-    family('history-fix-pattern', 'accepted-frozen-history', ['symbol', 'repository']),
-    family('synthesis-cross-cutting', 'accepted-observation-aggregation', [
-      'module',
-      'repository',
-      'project',
-    ]),
-  ];
-}
-
-function family(
-  id: string,
-  capabilityId: string,
-  supportedScales: FactQueryFamilyV1['supportedScales']
-): FactQueryFamilyV1 {
-  return {
-    id,
-    capabilityId,
-    supportedScales,
-    loadedProducer: `loaded:fixture:${id}`,
-    producerManifestHash: sha(`${id}:manifest`),
-    loadReceiptHash: sha(`${id}:load`),
-    positiveFixtureHash: sha(`${id}:positive`),
-    negativeFixtureHash: sha(`${id}:negative`),
-    edgeFixtureHash: sha(`${id}:edge`),
-  };
+function factFamilies() {
+  return createMainStrictFactQueryFamiliesV1();
 }
 
 function readRecord(value: unknown): Record<string, unknown> {

@@ -1,16 +1,25 @@
 import { createHash, randomUUID } from 'node:crypto';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
-import type { IndependentReviewDecisionV1 } from '@alembic/agent/evaluation';
+import {
+  type FrozenEvidenceProjectionV1,
+  type IndependentReviewDecisionV1,
+  IndependentValueReviewer,
+  type ReviewerIdentityV1,
+} from '@alembic/agent/evaluation';
 import type { StrictProducerExpressionSetV1 } from '@alembic/agent/production';
+import type { AgentService } from '@alembic/agent/service';
 import { WriteZone } from '@alembic/core/io';
 import {
   type CreateRecipeItem,
   createRecipeCandidateFingerprintProjectionV1,
   createRecipeProductionBindingV1,
   createRefReconciliationReceiptV1,
+  createStrictAcceptedCorpusInspectionV1,
   createStrictG1ReceiptV1,
+  createStrictG2ReceiptV1,
   createStrictPersistenceReceiptV1,
+  createStrictRecipePersistedPayloadV1,
   KnowledgeFileWriter,
   KnowledgeGraphService,
   KnowledgeService,
@@ -20,11 +29,15 @@ import {
   RecipeProductionGateway,
   type RefReconciliationReceiptV1,
   STRICT_G1_HARD_AXES_V1,
+  type StrictAcceptedCorpusEntryV1,
+  type StrictAdmissionReceiptV1,
   type StrictG1ReceiptV1,
+  type StrictG2ReceiptV1,
   type StrictPersistenceReceiptV1,
 } from '@alembic/core/knowledge';
 import { hashCanonicalJson } from '@alembic/core/project-context-foundation';
 import { createAlembicRepositories } from '@alembic/core/repositories';
+import { ConsolidationAdvisor } from '@alembic/core/sustain';
 import {
   createLocalVectorStore,
   createLocalVectorStoreSync,
@@ -53,7 +66,12 @@ export interface StrictPrivateCorpusContentResultV1 {
   readonly expressionTerminalRows: readonly {
     readonly expressionId: string;
     readonly recipeId: string | null;
-    readonly terminalFate: 'content-ready' | 'reviewed-merge' | 'reviewed-duplicate';
+    readonly terminalFate:
+      | 'content-ready'
+      | 'reviewed-merge'
+      | 'reviewed-duplicate'
+      | 'reviewed-zero'
+      | 'rejected';
     readonly terminalReceiptId: string;
   }[];
   readonly activeRecipes: readonly {
@@ -111,6 +129,8 @@ interface StrictPreparedRowCheckpointV1 {
   readonly schemaVersion: 1;
   readonly preparedHash: string;
   readonly g1ReceiptHash: string;
+  readonly admissionReceiptHash: string;
+  readonly g2ReceiptHash: string;
   readonly persistence: StrictPersistenceReceiptV1;
   readonly refs: RefReconciliationReceiptV1;
   readonly binding: RecipeProductionBindingV1;
@@ -119,17 +139,23 @@ interface StrictPreparedRowCheckpointV1 {
 
 interface StrictPrivateCorpusPersistenceInput {
   readonly acceptedMigrationBundleSemanticHash: string;
+  readonly agentService: Pick<AgentService, 'run'>;
   readonly analysisFixpointHash: string;
   readonly baseResolver: WorkspaceResolver;
   readonly configReceiptHash: string;
   readonly credentialLocationSymbol: string;
+  readonly evidence: FrozenEvidenceProjectionV1;
   readonly expressionSets: readonly StrictProducerExpressionSetV1[];
-  readonly independentReviews: readonly IndependentReviewDecisionV1[];
   readonly journal: StrictProductionJournal;
   readonly manifestHash: string;
   readonly planHash: string;
+  readonly producerModelHash: string;
   readonly recoveryRoot: string;
   readonly runId: string;
+  readonly reviewer: {
+    readonly calibrationReceiptHash: string;
+    readonly identity: ReviewerIdentityV1;
+  };
   readonly resumeInitReceipt?: PrivateCorpusRevisionInitReceiptV1;
   readonly onRevisionInitialized?: (
     receipt: PrivateCorpusRevisionInitReceiptV1
@@ -151,7 +177,15 @@ interface StrictPersistenceContext {
   readonly fileWriter: KnowledgeFileWriter;
   readonly reviewedById: Map<string, StrictReviewedProjection>;
   readonly expectedById: Map<string, { dbHash: string; fileHash: string }>;
-  readonly reviews: ReadonlyMap<string, IndependentReviewDecisionV1>;
+  readonly preparedAuthorities: Map<
+    string,
+    {
+      readonly g1: StrictG1ReceiptV1;
+      readonly admission: StrictAdmissionReceiptV1;
+      readonly g2: StrictG2ReceiptV1;
+    }
+  >;
+  readonly acceptedCorpus: StrictAcceptedCorpusEntryV1[];
 }
 
 interface StrictPersistenceAccumulators {
@@ -172,6 +206,8 @@ interface StrictDraftPreparation {
   readonly item: CreateRecipeItem;
   readonly reviewed: StrictReviewedProjection;
   readonly g1: StrictG1ReceiptV1;
+  readonly admission: StrictAdmissionReceiptV1;
+  readonly g2: StrictG2ReceiptV1;
   readonly journalStepHash: string;
   readonly dbHash: string;
   readonly fileHash: string;
@@ -219,51 +255,25 @@ export async function persistStrictPrivateCorpusContent(
     ReturnType<typeof createRecipeCandidateFingerprintProjectionV1>
   >();
   const expectedById = new Map<string, { dbHash: string; fileHash: string }>();
-  const gateway = new RecipeProductionGateway({
-    knowledgeService: knowledgeService as unknown as ConstructorParameters<
-      typeof RecipeProductionGateway
-    >[0]['knowledgeService'],
-    projectRoot: input.baseResolver.projectRoot,
-    authorizePreparedRecipe(journalToken, prepared, reviewedProjection) {
-      return (
-        journalToken === input.journal.entries.at(-1)?.entryHash &&
-        prepared.journalStepHash === journalToken &&
-        reviewedProjection.authoredFingerprint === prepared.authoredFingerprint
-      );
-    },
-    async inspectPreparedRecipe(prepared) {
-      const entry = await repositories.knowledgeRepository.findById(prepared.preparedRecipeId);
-      if (!entry) {
-        return null;
-      }
-      const reviewed = reviewedById.get(prepared.preparedRecipeId);
-      const expected = expectedById.get(prepared.preparedRecipeId);
-      if (!reviewed || !expected) {
-        throw new Error('STRICT_PREPARED_INSPECTION_AUTHORITY_MISSING');
-      }
-      const json = entry.toJSON() as Record<string, unknown>;
-      if (
-        json.title !== reviewed.title ||
-        json.kind !== reviewed.kind ||
-        json.doClause !== reviewed.doText ||
-        json.dontClause !== reviewed.dontText ||
-        !sameMarkdown(json.content, reviewed.markdown)
-      ) {
-        throw new Error('STRICT_PREPARED_PERSISTENCE_DIVERGENCE');
-      }
-      const resolvedFile = fileWriter._resolveFilePath(entry);
-      if (!(await firstExisting([path.join(resolvedFile.dir, resolvedFile.filename)]))) {
-        throw new Error('STRICT_PREPARED_FILE_READBACK_MISSING');
-      }
-      return {
-        id: entry.id,
-        title: entry.title,
-        lifecycle: entry.lifecycle,
-        privateCorpusRevision: revisionId,
-        dbHash: expected.dbHash,
-        fileHash: expected.fileHash,
-      };
-    },
+  const preparedAuthorities = new Map<
+    string,
+    {
+      readonly g1: StrictG1ReceiptV1;
+      readonly admission: StrictAdmissionReceiptV1;
+      readonly g2: StrictG2ReceiptV1;
+    }
+  >();
+  const acceptedCorpus: StrictAcceptedCorpusEntryV1[] = [];
+  const gateway = createStrictPrivateCorpusGateway({
+    input,
+    revisionId,
+    repositories,
+    knowledgeService,
+    fileWriter,
+    reviewedById,
+    expectedById,
+    preparedAuthorities,
+    acceptedCorpus,
   });
   const g1Receipts: StrictG1ReceiptV1[] = [];
   const bindings: RecipeProductionBindingV1[] = [];
@@ -271,9 +281,6 @@ export async function persistStrictPrivateCorpusContent(
     [];
   const activeRecipes: Array<{ id: string; title: string; lifecycle: 'active' }> = [];
   const readyMembers: StrictReadyMemberProofV1[] = [];
-  const reviews = new Map(
-    input.independentReviews.map((review) => [review.admissionReceiptId, review])
-  );
   await persistStrictExpressionSets(
     {
       input,
@@ -283,7 +290,8 @@ export async function persistStrictPrivateCorpusContent(
       fileWriter,
       reviewedById,
       expectedById,
-      reviews,
+      preparedAuthorities,
+      acceptedCorpus,
     },
     { g1Receipts, bindings, expressionTerminalRows, activeRecipes, readyMembers }
   );
@@ -309,108 +317,344 @@ export async function persistStrictPrivateCorpusContent(
   });
 }
 
+function createStrictPrivateCorpusGateway(options: {
+  readonly input: StrictPrivateCorpusPersistenceInput;
+  readonly revisionId: string;
+  readonly repositories: StrictRepositories;
+  readonly knowledgeService: KnowledgeService;
+  readonly fileWriter: KnowledgeFileWriter;
+  readonly reviewedById: StrictPersistenceContext['reviewedById'];
+  readonly expectedById: StrictPersistenceContext['expectedById'];
+  readonly preparedAuthorities: StrictPersistenceContext['preparedAuthorities'];
+  readonly acceptedCorpus: StrictAcceptedCorpusEntryV1[];
+}): RecipeProductionGateway {
+  return new RecipeProductionGateway({
+    knowledgeService: options.knowledgeService as unknown as ConstructorParameters<
+      typeof RecipeProductionGateway
+    >[0]['knowledgeService'],
+    projectRoot: options.input.baseResolver.projectRoot,
+    consolidationAdvisor: new ConsolidationAdvisor(
+      options.repositories.knowledgeRepository
+    ) as unknown as ConstructorParameters<
+      typeof RecipeProductionGateway
+    >[0]['consolidationAdvisor'],
+    inspectAcceptedRecipeCorpus: async (coordinates) =>
+      createStrictAcceptedCorpusInspectionV1({
+        ...coordinates,
+        entries: options.acceptedCorpus,
+      }),
+    authorizePreparedRecipe(journalToken, prepared, reviewedProjection) {
+      return (
+        journalToken === options.input.journal.entries.at(-1)?.entryHash &&
+        prepared.journalStepHash === journalToken &&
+        reviewedProjection.authoredFingerprint === prepared.authoredFingerprint
+      );
+    },
+    async inspectPreparedRecipe(prepared) {
+      const entry = await options.repositories.knowledgeRepository.findById(
+        prepared.preparedRecipeId
+      );
+      if (!entry) {
+        return null;
+      }
+      const reviewed = options.reviewedById.get(prepared.preparedRecipeId);
+      const expected = options.expectedById.get(prepared.preparedRecipeId);
+      const authority = options.preparedAuthorities.get(prepared.preparedRecipeId);
+      if (!reviewed || !expected || !authority) {
+        throw new Error('STRICT_PREPARED_INSPECTION_AUTHORITY_MISSING');
+      }
+      const json = entry.toJSON() as Record<string, unknown>;
+      if (
+        json.title !== reviewed.title ||
+        json.kind !== reviewed.kind ||
+        json.doClause !== reviewed.doText ||
+        json.dontClause !== reviewed.dontText ||
+        !sameMarkdown(json.content, reviewed.markdown)
+      ) {
+        throw new Error('STRICT_PREPARED_PERSISTENCE_DIVERGENCE');
+      }
+      const resolvedFile = options.fileWriter._resolveFilePath(entry);
+      if (!(await firstExisting([path.join(resolvedFile.dir, resolvedFile.filename)]))) {
+        throw new Error('STRICT_PREPARED_FILE_READBACK_MISSING');
+      }
+      return {
+        id: entry.id,
+        title: entry.title,
+        lifecycle: entry.lifecycle,
+        privateCorpusRevision: options.revisionId,
+        preparedHash: prepared.preparedHash,
+        admissionId: authority.admission.admissionId,
+        g1ReceiptHash: authority.g1.receiptHash,
+        admissionReceiptHash: authority.admission.receiptHash,
+        g2ReceiptHash: authority.g2.receiptHash,
+        authoredFingerprint: reviewed.authoredFingerprint,
+        dbHash: expected.dbHash,
+        fileHash: expected.fileHash,
+      };
+    },
+  });
+}
+
 async function persistStrictExpressionSets(
   context: StrictPersistenceContext,
   accumulators: StrictPersistenceAccumulators
 ): Promise<void> {
+  const reviewer = createStrictIndependentReviewer(context.input);
   for (const set of context.input.expressionSets) {
+    persistStrictZeroTerminal(accumulators, set);
     for (const proposal of set.proposals) {
-      const admissionReceiptId = hashCanonicalJson({
-        expressionId: proposal.expressionId,
-        kind: 'non-persisting-admission',
-      });
-      const review = context.reviews.get(admissionReceiptId);
-      if (!review || review.verdict !== 'pass') {
-        throw new Error('STRICT_PRIVATE_CORPUS_G2_REVIEW_MISSING');
-      }
-      if (proposal.kind !== 'draft') {
-        accumulators.expressionTerminalRows.push({
-          expressionId: proposal.expressionId,
-          recipeId: null,
-          terminalFate: proposal.kind === 'merge' ? 'reviewed-merge' : 'reviewed-duplicate',
-          terminalReceiptId: review.decisionHash,
-        });
-        continue;
-      }
-      const moduleId = exactlyOne(
-        proposal.authored.scope.moduleIds,
-        'STRICT_AUTHORED_MODULE_REQUIRED'
-      );
-      const dimensionId = exactlyOne(
-        proposal.authored.scope.dimensionIds,
-        'STRICT_AUTHORED_DIMENSION_REQUIRED'
-      );
-      const draft = await prepareStrictDraftPersistence(
-        context,
-        set,
-        proposal,
-        moduleId,
-        dimensionId
-      );
-      accumulators.g1Receipts.push(draft.g1);
-      const persisted = await context.gateway.persistPreparedReviewedCandidate(
-        draft.item,
-        draft.prepared,
-        {
-          source: 'alembic-agent',
-          userId: 'strict-production',
-          journalToken: draft.journalStepHash,
-          reviewedProjection: draft.reviewed,
-        }
-      );
-      const sourcePaths = reconcileStrictSourceRefs(context, proposal, persisted);
-      const resolved = await resolveStrictPreparedBinding(
-        context,
-        draft,
-        persisted,
-        admissionReceiptId,
-        review.decisionHash,
-        sourcePaths
-      );
-      accumulators.bindings.push(resolved.binding);
-      const active =
-        persisted.recipe.lifecycle === 'active'
-          ? persisted.recipe
-          : await context.gateway.publish(persisted.recipe.id, { userId: 'strict-production' });
-      if (active.lifecycle !== 'active') {
-        throw new Error('STRICT_PRIVATE_CORPUS_G3_ACTIVE_FAILED');
-      }
-      const readyMember = await createStrictReadyMemberProof({
-        active,
-        binding: resolved.binding,
-        fileWriter: context.fileWriter,
-        persistence: resolved.persistence,
-        refRepository: context.repositories.recipeSourceRefRepository,
-        refs: resolved.refs,
-        repository: context.repositories.knowledgeRepository,
-        reviewed: draft.reviewed,
-        sourcePaths,
-      });
-      accumulators.activeRecipes.push({ id: active.id, title: active.title, lifecycle: 'active' });
-      accumulators.readyMembers.push(readyMember);
-      accumulators.expressionTerminalRows.push({
-        expressionId: proposal.expressionId,
-        recipeId: persisted.recipe.id,
-        terminalFate: 'content-ready',
-        terminalReceiptId: resolved.binding.bindingHash,
-      });
+      await persistStrictProposal(context, accumulators, reviewer, set, proposal);
+    }
+  }
+  assertStrictDispositionTargetsReady(accumulators);
+  assertStrictExpressionTerminalConservation(
+    context.input.expressionSets,
+    accumulators.expressionTerminalRows
+  );
+}
+
+function persistStrictZeroTerminal(
+  accumulators: StrictPersistenceAccumulators,
+  set: StrictProducerExpressionSetV1
+): void {
+  if (!set.zeroDisposition) {
+    return;
+  }
+  accumulators.expressionTerminalRows.push({
+    expressionId: `zero:${set.setId}`,
+    recipeId: null,
+    terminalFate: 'reviewed-zero',
+    terminalReceiptId: set.zeroDisposition.reviewerReceiptId,
+  });
+}
+
+async function persistStrictProposal(
+  context: StrictPersistenceContext,
+  accumulators: StrictPersistenceAccumulators,
+  reviewer: IndependentValueReviewer,
+  set: StrictProducerExpressionSetV1,
+  proposal: StrictProposal
+): Promise<void> {
+  const candidate = prepareStrictAdmissionCandidate(context, set, proposal);
+  accumulators.g1Receipts.push(candidate.g1);
+  if (candidate.g1.verdict !== 'pass') {
+    recordStrictRejectedTerminal(accumulators, proposal.expressionId, candidate.g1.receiptHash);
+    return;
+  }
+  const admitted = await context.gateway.admitCandidate(candidate.item, {
+    source: 'alembic-agent',
+    runId: context.input.runId,
+    analysisFixpointHash: context.input.analysisFixpointHash,
+    privateCorpusRevision: context.revisionId,
+    revisionRootManifestHash: currentAcceptedCorpusRoot(context.revisionId, context.acceptedCorpus),
+    g1Receipt: candidate.g1,
+    reviewedProjection: candidate.reviewed,
+  });
+  if (admitted.receipt.disposition !== 'admit') {
+    persistStrictDispositionTerminal(accumulators, proposal, admitted.receipt);
+    return;
+  }
+  if (admitted.receipt.finalAdmittedFingerprint !== candidate.reviewed.authoredFingerprint) {
+    // Core 当前 admission 不返回改写后的 projection；一旦未来出现内容重写，必须停止并让
+    // 新版本重新经过 G1，不能把旧 G1 收据错误绑定到新内容后继续 G2 或持久化。
+    throw new Error(`STRICT_PRIVATE_CORPUS_G1_READMISSION_REQUIRED:${proposal.expressionId}`);
+  }
+  const review = await reviewer.review({
+    authored: proposal.authored,
+    evidence: context.input.evidence,
+    expectedSourceRevisionVectorHash: context.input.evidence.sourceRevisionVectorHash,
+    producerIdentity: `producer/${context.input.producerModelHash}`,
+    admissionReceiptId: admitted.receipt.admissionId,
+    calibrationReceiptHash: context.input.reviewer.calibrationReceiptHash,
+    repairAttempt: set.version - 1,
+  });
+  const g2 = createStrictG2FromIndependentReview(
+    context,
+    set,
+    candidate.g1,
+    admitted.receipt,
+    candidate.reviewed,
+    review
+  );
+  if (g2.verdict !== 'pass') {
+    recordStrictRejectedTerminal(accumulators, proposal.expressionId, g2.receiptHash);
+    return;
+  }
+  await persistStrictContentReadyProposal(
+    context,
+    accumulators,
+    set,
+    proposal,
+    candidate,
+    admitted.receipt,
+    g2
+  );
+}
+
+async function persistStrictContentReadyProposal(
+  context: StrictPersistenceContext,
+  accumulators: StrictPersistenceAccumulators,
+  set: StrictProducerExpressionSetV1,
+  proposal: StrictProposal,
+  candidate: ReturnType<typeof prepareStrictAdmissionCandidate>,
+  admission: StrictAdmissionReceiptV1,
+  g2: StrictG2ReceiptV1
+): Promise<void> {
+  const draft = await prepareStrictDraftPersistence(
+    context,
+    set,
+    proposal,
+    candidate.moduleId,
+    candidate.dimensionId,
+    candidate.item,
+    candidate.reviewed,
+    candidate.g1,
+    admission,
+    g2
+  );
+  const persisted = await context.gateway.persistPreparedReviewedCandidate(
+    draft.item,
+    draft.prepared,
+    {
+      source: 'alembic-agent',
+      userId: 'strict-production',
+      journalToken: draft.journalStepHash,
+      reviewedProjection: draft.reviewed,
+      g1Receipt: draft.g1,
+      admissionReceipt: draft.admission,
+      g2Receipt: draft.g2,
+    }
+  );
+  const sourcePaths = reconcileStrictSourceRefs(context, proposal, persisted);
+  const resolved = await resolveStrictPreparedBinding(context, draft, persisted, sourcePaths);
+  accumulators.bindings.push(resolved.binding);
+  const active =
+    persisted.recipe.lifecycle === 'active'
+      ? persisted.recipe
+      : await context.gateway.publish(persisted.recipe.id, { userId: 'strict-production' });
+  if (active.lifecycle !== 'active') {
+    throw new Error('STRICT_PRIVATE_CORPUS_G3_ACTIVE_FAILED');
+  }
+  const readyMember = await createStrictReadyMemberProof({
+    active,
+    binding: resolved.binding,
+    fileWriter: context.fileWriter,
+    persistence: resolved.persistence,
+    refRepository: context.repositories.recipeSourceRefRepository,
+    refs: resolved.refs,
+    repository: context.repositories.knowledgeRepository,
+    reviewed: draft.reviewed,
+    sourcePaths,
+  });
+  accumulators.activeRecipes.push({ id: active.id, title: active.title, lifecycle: 'active' });
+  accumulators.readyMembers.push(readyMember);
+  accumulators.expressionTerminalRows.push({
+    expressionId: proposal.expressionId,
+    recipeId: persisted.recipe.id,
+    terminalFate: 'content-ready',
+    terminalReceiptId: resolved.binding.bindingHash,
+  });
+  context.acceptedCorpus.push({
+    recipeId: persisted.recipe.id,
+    projection: draft.reviewed,
+    admissionSummary: {
+      title: draft.reviewed.title,
+      category: draft.reviewed.category || null,
+      trigger: draft.reviewed.trigger || null,
+      whenClause: draft.reviewed.whenClause || null,
+      doClause: draft.reviewed.doText || null,
+      dontClause: draft.reviewed.dontText || null,
+      coreCode: draft.reviewed.coreCode || null,
+      guardPattern: draft.reviewed.pattern || null,
+      markdown: draft.reviewed.markdown || null,
+    },
+  });
+}
+
+function recordStrictRejectedTerminal(
+  accumulators: StrictPersistenceAccumulators,
+  expressionId: string,
+  terminalReceiptId: string
+): void {
+  accumulators.expressionTerminalRows.push({
+    expressionId,
+    recipeId: null,
+    terminalFate: 'rejected',
+    terminalReceiptId,
+  });
+}
+
+function assertStrictDispositionTargetsReady(accumulators: StrictPersistenceAccumulators): void {
+  const readyIds = new Set(accumulators.readyMembers.map((member) => member.recipeId));
+  for (const terminal of accumulators.expressionTerminalRows) {
+    if (
+      (terminal.terminalFate === 'reviewed-merge' ||
+        terminal.terminalFate === 'reviewed-duplicate') &&
+      (!terminal.recipeId || !readyIds.has(terminal.recipeId))
+    ) {
+      throw new Error(`STRICT_DISPOSITION_TARGET_NOT_CONTENT_READY:${terminal.expressionId}`);
     }
   }
 }
 
-async function prepareStrictDraftPersistence(
+/**
+ * proposal 与显式 zero disposition 都必须且只能落入一个终态行。这个检查位于串行循环
+ * 末端，因此 merge/duplicate target readiness 与所有写入结果已经稳定，不会把中间态
+ * 误报成闭环。
+ */
+function assertStrictExpressionTerminalConservation(
+  sets: readonly StrictProducerExpressionSetV1[],
+  terminals: readonly StrictPrivateCorpusContentResultV1['expressionTerminalRows'][number][]
+): void {
+  const expectedIds = sets.flatMap((set) => [
+    ...set.proposals.map((proposal) => proposal.expressionId),
+    ...(set.zeroDisposition ? [`zero:${set.setId}`] : []),
+  ]);
+  const actualIds = terminals.map((terminal) => terminal.expressionId);
+  const duplicateActualIds = actualIds.filter(
+    (expressionId, index) => actualIds.indexOf(expressionId) !== index
+  );
+  const actualSet = new Set(actualIds);
+  const missingIds = expectedIds.filter((expressionId) => !actualSet.has(expressionId));
+  const expectedSet = new Set(expectedIds);
+  const unexpectedIds = actualIds.filter((expressionId) => !expectedSet.has(expressionId));
+  if (
+    expectedSet.size !== expectedIds.length ||
+    duplicateActualIds.length > 0 ||
+    missingIds.length > 0 ||
+    unexpectedIds.length > 0
+  ) {
+    throw new Error(
+      `STRICT_EXPRESSION_TERMINAL_CONSERVATION_FAILED:${JSON.stringify({
+        duplicateActualIds: [...new Set(duplicateActualIds)].sort(),
+        missingIds: [...new Set(missingIds)].sort(),
+        unexpectedIds: [...new Set(unexpectedIds)].sort(),
+      })}`
+    );
+  }
+}
+
+function prepareStrictAdmissionCandidate(
   context: StrictPersistenceContext,
   set: StrictProducerExpressionSetV1,
-  proposal: StrictProposal,
-  moduleId: string,
-  dimensionId: string
-): Promise<StrictDraftPreparation> {
-  const item = toRecipeItem(proposal, moduleId, dimensionId);
+  proposal: StrictProposal
+) {
+  const moduleId = exactlyOne(proposal.authored.scope.moduleIds, 'STRICT_AUTHORED_MODULE_REQUIRED');
+  const dimensionId = exactlyOne(
+    proposal.authored.scope.dimensionIds,
+    'STRICT_AUTHORED_DIMENSION_REQUIRED'
+  );
+  const item = toRecipeItem(proposal, moduleId, dimensionId, context.input.evidence);
   const reviewed = createRecipeCandidateFingerprintProjectionV1({
     title: proposal.authored.title,
     kind: proposal.authored.kind,
+    category: item.category ?? '',
+    trigger: item.trigger ?? '',
+    whenClause: item.whenClause ?? '',
     doText: proposal.authored.doClause,
     dontText: proposal.authored.dontClause,
+    coreCode: item.coreCode ?? '',
+    pattern: item.content?.pattern ?? '',
     markdown: proposal.authored.markdown,
     usageGuide: proposal.authored.usageGuide,
     retrievalProfile: item.retrievalProfile,
@@ -418,14 +662,183 @@ async function prepareStrictDraftPersistence(
     scopeId: moduleId,
     moduleId,
     dimensionId,
-    evidenceRefs: proposal.authored.evidenceEntryIds,
+    evidenceRefs: item.sourceRefs ?? [],
     lineageHashes: [set.lineage.lineageHash, set.repairNode.nodeHash],
+    persistedPayload: createStrictRecipePersistedPayloadV1(item, 'alembic-agent'),
   });
   const g1 = createStrictG1ReceiptV1({
     candidateFingerprint: reviewed.authoredFingerprint,
     retrievalReadinessHash: hashCanonicalJson(item.retrievalProfile),
     rows: evaluateStrictG1Axes({ dimensionId, item, moduleId, proposal, reviewed, set }),
   });
+  return { item, reviewed, g1, moduleId, dimensionId };
+}
+
+function persistStrictDispositionTerminal(
+  accumulators: StrictPersistenceAccumulators,
+  proposal: StrictProposal,
+  admission: StrictAdmissionReceiptV1
+): void {
+  const dispositionReviewHash = hashCanonicalJson({
+    schemaVersion: 1,
+    expressionId: proposal.expressionId,
+    admissionReceiptHash: admission.receiptHash,
+    disposition: admission.disposition,
+    targetRecipeId: admission.consolidation.targetRecipeId,
+    complete: admission.complete,
+    truncated: admission.truncated,
+    continuation: admission.continuation,
+  });
+  if (admission.disposition === 'reject') {
+    accumulators.expressionTerminalRows.push({
+      expressionId: proposal.expressionId,
+      recipeId: null,
+      terminalFate: 'rejected',
+      terminalReceiptId: dispositionReviewHash,
+    });
+    return;
+  }
+  const targetRecipeId = admission.consolidation.targetRecipeId;
+  if (
+    !targetRecipeId ||
+    (proposal.matchingRepresentativeId && proposal.matchingRepresentativeId !== targetRecipeId) ||
+    admission.complete !== true ||
+    admission.truncated !== false ||
+    admission.continuation !== null
+  ) {
+    throw new Error(`STRICT_DISPOSITION_REVIEW_MISMATCH:${proposal.expressionId}`);
+  }
+  accumulators.expressionTerminalRows.push({
+    expressionId: proposal.expressionId,
+    recipeId: targetRecipeId,
+    terminalFate: admission.disposition === 'merge' ? 'reviewed-merge' : 'reviewed-duplicate',
+    terminalReceiptId: dispositionReviewHash,
+  });
+}
+
+function createStrictIndependentReviewer(input: StrictPrivateCorpusPersistenceInput) {
+  return new IndependentValueReviewer({
+    identity: input.reviewer.identity,
+    chat: async (prompt) => {
+      const result = await input.agentService.run({
+        profile: { id: 'plan-selection' },
+        message: {
+          role: 'internal',
+          content: prompt,
+          metadata: { task: 'strict-independent-value-review' },
+        },
+        context: { source: 'system-workflow', runtimeSource: 'system' },
+        execution: { toolChoiceOverride: 'none' },
+        presentation: { responseShape: 'system-task-result' },
+      });
+      if (result.status !== 'success' || result.toolCalls.length > 0) {
+        throw new Error('STRICT_INDEPENDENT_REVIEW_RUN_FAILED');
+      }
+      return result.reply;
+    },
+  });
+}
+
+function createStrictG2FromIndependentReview(
+  context: StrictPersistenceContext,
+  set: StrictProducerExpressionSetV1,
+  g1: StrictG1ReceiptV1,
+  admission: StrictAdmissionReceiptV1,
+  reviewed: StrictReviewedProjection,
+  review: IndependentReviewDecisionV1
+): StrictG2ReceiptV1 {
+  const axisNames: Record<
+    IndependentReviewDecisionV1['axes'][number]['axis'],
+    Parameters<typeof createStrictG2ReceiptV1>[0]['rows'][number]['axis']
+  > = {
+    entailment: 'entailment',
+    'contradiction-free': 'contradiction-free',
+    'project-specificity': 'project-specificity-nontriviality',
+    actionability: 'actionability',
+    'scope-correctness': 'scope-generalization-correctness',
+    'retrieval-fitness': 'retrieval-negative-intent-fitness',
+  };
+  return createStrictG2ReceiptV1({
+    g1Receipt: g1,
+    admissionReceipt: admission,
+    reviewedFingerprint: reviewed.authoredFingerprint,
+    producer: {
+      identity: `producer/${context.input.producerModelHash}`,
+      method: 'strict-producer-expression-v1',
+      modelHash: context.input.producerModelHash,
+      promptHash: set.repairNode.reasonHash,
+    },
+    reviewer: {
+      identity: `${review.reviewerIdentity.provider}/${review.reviewerIdentity.model}/${review.reviewerIdentity.method}`,
+      method: review.reviewerIdentity.method,
+      modelHash: hashCanonicalJson(review.reviewerIdentity),
+      promptHash: context.input.reviewer.calibrationReceiptHash,
+    },
+    rows: review.axes.map((row) => ({
+      axis: axisNames[row.axis],
+      axisVerdict:
+        row.verdict === 'pass' ? ('pass' as const) : row.verdict === 'narrow' ? 'revise' : 'fail',
+      score: row.score,
+      reasonCode: row.reasonCode,
+      evidenceRefs: row.evidenceEntryIds,
+      repairable: row.verdict === 'narrow',
+    })),
+    novelty: {
+      decision:
+        review.noveltyDecision === 'novel-project-specific'
+          ? 'novel-project-specific'
+          : review.noveltyDecision === 'known-general'
+            ? 'generic'
+            : 'already-covered',
+      reasonCode: review.reasonCode,
+      evidenceRefs: review.axes.flatMap((row) => row.evidenceEntryIds),
+    },
+    duplicate: {
+      decision: 'no-match',
+      reasonCode: 'core-admission-complete-corpus-no-match',
+      evidenceRefs: review.axes.flatMap((row) => row.evidenceEntryIds),
+      admissionAlgorithmVersion: admission.algorithmVersion,
+      comparedPrivateCorpusRevision: admission.privateCorpusRevision,
+      matchedRecipeIds: [],
+      matchedFingerprints: [],
+      targetRecipeId: null,
+      consolidationFingerprint: null,
+    },
+    repairAttempt: set.version - 1,
+    calibrationReceiptHash: context.input.reviewer.calibrationReceiptHash,
+    ruleVersion: 'alembic-main-independent-value-g2-v1',
+    permittedRepairFields: review.verdict === 'narrow' ? ['authored-projection'] : [],
+  });
+}
+
+function currentAcceptedCorpusRoot(
+  revisionId: string,
+  entries: readonly StrictAcceptedCorpusEntryV1[]
+): string {
+  return hashCanonicalJson({
+    schemaVersion: 1,
+    revisionId,
+    acceptedEntries: entries
+      .map((entry) => ({
+        recipeId: entry.recipeId,
+        authoredFingerprint: entry.projection.authoredFingerprint,
+      }))
+      .sort((left, right) => left.recipeId.localeCompare(right.recipeId)),
+  });
+}
+
+async function prepareStrictDraftPersistence(
+  context: StrictPersistenceContext,
+  set: StrictProducerExpressionSetV1,
+  _proposal: StrictProposal,
+  moduleId: string,
+  dimensionId: string,
+  item: CreateRecipeItem,
+  reviewed: StrictReviewedProjection,
+  g1: StrictG1ReceiptV1,
+  admission: StrictAdmissionReceiptV1,
+  g2: StrictG2ReceiptV1
+): Promise<StrictDraftPreparation> {
   const journalStepHash = context.input.journal.entries.at(-1)?.entryHash;
   if (!journalStepHash) {
     throw new Error('STRICT_PERSISTENCE_JOURNAL_STEP_REQUIRED');
@@ -444,6 +857,7 @@ async function prepareStrictDraftPersistence(
     runId: context.input.runId,
     analysisFixpointHash: context.input.analysisFixpointHash,
     privateCorpusRevision: context.revisionId,
+    admissionId: admission.admissionId,
     cellId: `${moduleId}::${dimensionId}`,
     authoredFingerprint: reviewed.authoredFingerprint,
     causalParentIds: set.repairNode.parentNodeIds,
@@ -453,6 +867,7 @@ async function prepareStrictDraftPersistence(
   });
   context.reviewedById.set(prepared.preparedRecipeId, reviewed);
   context.expectedById.set(prepared.preparedRecipeId, { dbHash, fileHash });
+  context.preparedAuthorities.set(prepared.preparedRecipeId, { g1, admission, g2 });
   const rowCheckpointPath = path.join(
     context.input.recoveryRoot,
     `${prepared.preparedRecipeId}.json`
@@ -462,6 +877,8 @@ async function prepareStrictDraftPersistence(
     item,
     reviewed,
     g1,
+    admission,
+    g2,
     journalStepHash,
     dbHash,
     fileHash,
@@ -477,7 +894,9 @@ function reconcileStrictSourceRefs(
   proposal: StrictProposal,
   persisted: StrictPersistedCandidate
 ): string[] {
-  const sourcePaths = proposal.authored.evidenceEntryIds.map((entryId) => evidencePath(entryId));
+  const sourcePaths = buildStrictSourceRefs(proposal, context.input.evidence).map((sourceRef) =>
+    evidencePath(sourceRef)
+  );
   for (const sourcePath of sourcePaths) {
     context.repositories.recipeSourceRefRepository.upsert({
       recipeId: persisted.recipe.id,
@@ -493,13 +912,13 @@ async function resolveStrictPreparedBinding(
   context: StrictPersistenceContext,
   draft: StrictDraftPreparation,
   persisted: StrictPersistedCandidate,
-  admissionReceiptId: string,
-  g2ReceiptHash: string,
   sourcePaths: readonly string[]
 ): Promise<StrictResolvedPreparedBinding> {
   if (draft.rowCheckpoint) {
     if (
       draft.rowCheckpoint.g1ReceiptHash !== draft.g1.receiptHash ||
+      draft.rowCheckpoint.admissionReceiptHash !== draft.admission.receiptHash ||
+      draft.rowCheckpoint.g2ReceiptHash !== draft.g2.receiptHash ||
       draft.rowCheckpoint.binding.recipeId !== persisted.recipe.id ||
       draft.rowCheckpoint.binding.authoredFingerprint !== draft.reviewed.authoredFingerprint
     ) {
@@ -516,9 +935,9 @@ async function resolveStrictPreparedBinding(
   }
   const persistence = createStrictPersistenceReceiptV1({
     prepared: draft.prepared,
-    g1ReceiptHash: draft.g1.receiptHash,
-    admissionReceiptHash: admissionReceiptId,
-    g2ReceiptHash,
+    g1Receipt: draft.g1,
+    admissionReceipt: draft.admission,
+    g2Receipt: draft.g2,
     actualRecipeId: persisted.recipe.id,
     actualAuthoredFingerprint: draft.reviewed.authoredFingerprint,
     storageHash: hashCanonicalJson({ dbHash: draft.dbHash, fileHash: draft.fileHash }),
@@ -547,6 +966,8 @@ async function resolveStrictPreparedBinding(
   await writePreparedRowCheckpoint(draft.rowCheckpointPath, {
     preparedHash: draft.prepared.preparedHash,
     g1ReceiptHash: draft.g1.receiptHash,
+    admissionReceiptHash: draft.admission.receiptHash,
+    g2ReceiptHash: draft.g2.receiptHash,
     persistence,
     refs,
     binding,
@@ -754,6 +1175,7 @@ function evaluateStrictG1Axes(input: {
   readonly set: StrictProducerExpressionSetV1;
 }) {
   const evidenceRefs = [...input.proposal.authored.evidenceEntryIds];
+  const sourceRefs = [...(input.item.sourceRefs ?? [])];
   const profile = input.item.retrievalProfile;
   const negativeIntents = [...input.proposal.authored.negativeIntent].sort();
   const profileExclusions = [...(profile?.exclusions.map((row) => row.text) ?? [])].sort();
@@ -772,11 +1194,13 @@ function evaluateStrictG1Axes(input: {
       input.item.moduleName === input.moduleId &&
       input.item.dimensionId === input.dimensionId,
     'source-confinement-revision-and-snippet':
-      evidenceRefs.length > 0 && evidenceRefs.every((ref) => /^E-\d+$/u.test(ref)),
+      evidenceRefs.length > 0 &&
+      evidenceRefs.every((ref) => /^E-\d+$/u.test(ref)) &&
+      evidenceRefs.every((ref) => sourceRefs.includes(ref)) &&
+      sourceRefs.some((ref) => /:\d+-\d+$/u.test(ref)),
     'claimed-graph-and-source-ref-integrity':
-      new Set(evidenceRefs).size === evidenceRefs.length &&
-      JSON.stringify([...evidenceRefs].sort()) ===
-        JSON.stringify([...(input.item.sourceRefs ?? [])].sort()),
+      new Set(sourceRefs).size === sourceRefs.length &&
+      evidenceRefs.every((ref) => sourceRefs.includes(ref)),
     'retrieval-usage-negative-intent-provenance':
       Boolean(profile?.summary.primary && profile.summary.technicalEnglish) &&
       JSON.stringify(negativeIntents) === JSON.stringify(profileExclusions) &&
@@ -1229,7 +1653,8 @@ function freezeDeep<T>(value: T): T {
 function toRecipeItem(
   proposal: StrictProducerExpressionSetV1['proposals'][number],
   moduleId: string,
-  dimensionId: string
+  dimensionId: string,
+  evidence: FrozenEvidenceProjectionV1
 ): CreateRecipeItem {
   const exclusions = readExclusionTexts(proposal.authored.retrievalProfile);
   if (
@@ -1238,6 +1663,7 @@ function toRecipeItem(
   ) {
     throw new Error('STRICT_AUTHORED_NEGATIVE_INTENT_MISMATCH');
   }
+  const sourceRefs = buildStrictSourceRefs(proposal, evidence);
   const source: CreateRecipeItem = {
     title: proposal.authored.title,
     description: proposal.authored.doClause,
@@ -1247,8 +1673,13 @@ function toRecipeItem(
     whenClause: proposal.authored.usageGuide,
     doClause: proposal.authored.doClause,
     dontClause: proposal.authored.dontClause,
-    coreCode: '',
-    content: { markdown: proposal.authored.markdown, rationale: proposal.authored.usageGuide },
+    coreCode: extractStrictCoreCode(proposal.authored.markdown),
+    headers: [],
+    content: {
+      markdown: proposal.authored.markdown,
+      pattern: '',
+      rationale: proposal.authored.usageGuide,
+    },
     reasoning: {
       whyStandard: proposal.authored.usageGuide,
       sources: [...proposal.authored.evidenceEntryIds],
@@ -1262,10 +1693,34 @@ function toRecipeItem(
     scope: moduleId,
     moduleName: moduleId,
     dimensionId,
-    sourceRefs: [...proposal.authored.evidenceEntryIds],
+    sourceRefs,
   };
   source.retrievalProfile = buildCoreReadyRetrievalProfile(proposal, source, exclusions);
   return source;
+}
+
+function buildStrictSourceRefs(
+  proposal: StrictProducerExpressionSetV1['proposals'][number],
+  evidence: FrozenEvidenceProjectionV1
+): string[] {
+  const entries = new Map(evidence.entries.map((entry) => [entry.evidenceEntryId, entry]));
+  const bounded = proposal.authored.evidenceEntryIds.map((entryId) => {
+    const entry = entries.get(entryId);
+    if (!entry) {
+      throw new Error(`STRICT_AUTHORED_EVIDENCE_UNKNOWN:${entryId}`);
+    }
+    return `${entry.relativePath}:${entry.startLine}-${entry.endLine}`;
+  });
+  return [...new Set([...proposal.authored.evidenceEntryIds, ...bounded])].sort();
+}
+
+function extractStrictCoreCode(markdown: string): string {
+  const match = /```(?:[a-z0-9_-]+)?\n([\s\S]*?)```/iu.exec(markdown);
+  const code = match?.[1]?.trim() ?? '';
+  if (!code || code.split('\n').length < 3) {
+    throw new Error('STRICT_AUTHORED_CORE_CODE_REQUIRED');
+  }
+  return code;
 }
 
 function buildCoreReadyRetrievalProfile(
@@ -1273,7 +1728,7 @@ function buildCoreReadyRetrievalProfile(
   source: CreateRecipeItem,
   exclusions: readonly string[]
 ): NonNullable<CreateRecipeItem['retrievalProfile']> {
-  const evidenceRefs = [...proposal.authored.evidenceEntryIds];
+  const evidenceRefs = [...(source.sourceRefs ?? [])];
   const intents = readProfileTexts(proposal.authored.retrievalProfile, 'intents');
   if (intents.length === 0 || evidenceRefs.length === 0) {
     throw new Error('STRICT_RETRIEVAL_PROFILE_PROVENANCE_REQUIRED');
