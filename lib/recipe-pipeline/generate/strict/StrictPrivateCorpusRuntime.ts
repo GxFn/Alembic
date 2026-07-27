@@ -39,7 +39,6 @@ import {
   type StrictPersistenceReceiptV1,
 } from '@alembic/core/knowledge';
 import {
-  createKnowledgeDispositionReviewV1,
   createProductionActorIdentityV1,
   type FactQueryExecutionReceiptV1,
   type FinalExpandedMiningScheduleReceiptV1,
@@ -71,6 +70,7 @@ import {
   FileRecipeVectorGenerationStorage,
   RecipeVectorGenerationRuntime,
 } from '../../../service/vector/RecipeVectorGenerationRuntime.js';
+import { executeStrictDispositionReviewV1 } from './StrictDispositionReviewRuntime.js';
 import type { StrictProductionJournal } from './StrictProductionJournal.js';
 
 export interface StrictPrivateCorpusContentResultV1 {
@@ -221,6 +221,8 @@ interface StrictPersistenceContext {
     }
   >;
   readonly acceptedCorpus: StrictAcceptedCorpusEntryV1[];
+  readonly dispositionReviewInvocationIds: Set<string>;
+  readonly dispositionReviewOutputHashes: Set<string>;
 }
 
 interface StrictPersistenceAccumulators {
@@ -333,6 +335,8 @@ export async function persistStrictPrivateCorpusContent(
       expectedById,
       preparedAuthorities,
       acceptedCorpus,
+      dispositionReviewInvocationIds: new Set(),
+      dispositionReviewOutputHashes: new Set(),
     },
     { g1Receipts, bindings, expressionTerminalRows, activeRecipes, readyMembers }
   );
@@ -536,7 +540,7 @@ async function persistStrictProposal(
     reviewedProjection: candidate.reviewed,
   });
   if (admitted.receipt.disposition !== 'admit') {
-    persistStrictDispositionTerminal(context, accumulators, set, proposal, admitted.receipt);
+    await persistStrictDispositionTerminal(context, accumulators, set, proposal, admitted.receipt);
     return;
   }
   if (admitted.receipt.finalAdmittedFingerprint !== candidate.reviewed.authoredFingerprint) {
@@ -817,13 +821,13 @@ function prepareStrictAdmissionCandidate(
   return { item, reviewed, g1, moduleId, dimensionId };
 }
 
-function persistStrictDispositionTerminal(
+async function persistStrictDispositionTerminal(
   context: StrictPersistenceContext,
   accumulators: StrictPersistenceAccumulators,
   set: StrictProducerExpressionSetV1,
   proposal: StrictProposal,
   admission: StrictAdmissionReceiptV1
-): void {
+): Promise<void> {
   if (admission.disposition === 'reject') {
     recordStrictRejectedTerminal(
       accumulators,
@@ -865,7 +869,18 @@ function persistStrictDispositionTerminal(
     },
     zeroDisposition: null,
   });
-  const dispositionReview = createKnowledgeDispositionReviewV1({
+  const producer = createProductionActorIdentityV1({
+    providerId: 'alembic-agent',
+    modelId: context.input.producerModelHash,
+    modelVersion: 'strict-producer-expression-v1',
+    promptHash: normalizeStrictActorHash(set.repairNode.reasonHash),
+    runId: set.lineage.runId,
+    invocationId: `producer:${set.setId}`,
+    loadReceiptHash: normalizeStrictActorHash(set.repairNode.modelHash),
+    outputHash: normalizeStrictActorHash(set.repairNode.outputHash),
+  });
+  const { dispositionReview } = await executeStrictDispositionReviewV1({
+    agentService: context.input.agentService,
     reviewKind: 'producer-non-draft',
     currentAnalysisFixpointHash: context.input.analysisFixpointHash,
     populationHash: set.lineage.populationHash,
@@ -873,40 +888,24 @@ function persistStrictDispositionTerminal(
     executionReceipts: context.input.executionReceipts,
     finalExpandedSchedule: context.input.finalExpandedSchedule,
     terminalObligations: context.input.terminalObligations,
-    producer: createProductionActorIdentityV1({
-      providerId: 'alembic-agent',
-      modelId: context.input.producerModelHash,
-      modelVersion: 'strict-producer-expression-v1',
-      promptHash: hashCanonicalJson({
-        kind: 'strict-producer-disposition-prompt-v1',
-        reasonHash: set.repairNode.reasonHash,
-      }),
-      runId: context.input.runId,
-      invocationId: `producer:${set.setId}`,
-      loadReceiptHash: context.input.producerModelHash,
-      outputHash: hashCanonicalJson({
-        kind: 'strict-producer-expression-set-v1',
-        setHash: set.setHash,
-      }),
-    }),
-    reviewer: createProductionActorIdentityV1({
-      providerId: context.input.reviewer.identity.provider,
-      modelId: context.input.reviewer.identity.model,
-      modelVersion: context.input.reviewer.identity.method,
-      promptHash: context.input.reviewer.calibrationReceiptHash,
-      runId: context.input.runId,
-      invocationId: `producer-disposition:${admission.admissionId}`,
-      loadReceiptHash: hashCanonicalJson(context.input.reviewer.identity),
-      outputHash: hashCanonicalJson({
-        kind: 'strict-producer-disposition-review-v1',
-        admissionReceiptHash: admission.receiptHash,
-        proposedDispositionHash,
-        targetReadyProofHash: targetReadyMember.proofHash,
-      }),
-    }),
-    calibrationReceiptHash: context.input.reviewer.calibrationReceiptHash,
-    verdict: 'pass',
-    reasonCode: 'complete-corpus-content-ready-representative-reviewed',
+    producer,
+    reviewer: {
+      ...context.input.reviewer,
+      loadReceiptHash: context.input.runtimeReceiptHash,
+    },
+    evidenceEntryIds: proposal.authored.evidenceEntryIds,
+    subject: {
+      schemaVersion: 1,
+      expressionId: proposal.expressionId,
+      authoredFingerprint: proposal.authoredFingerprint,
+      terminalFate,
+      admissionReceiptHash: admission.receiptHash,
+      matchingRepresentativeId: targetRecipeId,
+      matchingContentReadyRecipeId: targetRecipeId,
+      targetReadyProofHash: targetReadyMember.proofHash,
+    },
+    usedInvocationIds: context.dispositionReviewInvocationIds,
+    usedResponseOutputHashes: context.dispositionReviewOutputHashes,
   });
   accumulators.expressionTerminalRows.push({
     expressionId: proposal.expressionId,
@@ -918,6 +917,14 @@ function persistStrictDispositionTerminal(
     matchingRepresentativeId: targetRecipeId,
     matchingContentReadyRecipeId: targetRecipeId,
   });
+}
+
+function normalizeStrictActorHash(value: string): string {
+  return /^sha256:[a-f0-9]{64}$/u.test(value)
+    ? value
+    : /^[a-f0-9]{64}$/u.test(value)
+      ? `sha256:${value}`
+      : hashCanonicalJson(value);
 }
 
 function createStrictIndependentReviewer(input: StrictPrivateCorpusPersistenceInput) {

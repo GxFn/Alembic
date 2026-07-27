@@ -3,6 +3,7 @@ import fsp, { type FileHandle } from 'node:fs/promises';
 import path from 'node:path';
 import { InvestigatedEmptyReviewer, type ReviewerIdentityV1 } from '@alembic/agent/evaluation';
 import type { StrictProducerExpressionSetV1 } from '@alembic/agent/production';
+import type { AgentService } from '@alembic/agent/service';
 import {
   type CandidateCoverageReceiptV1,
   createCandidateCoverageReceiptV1,
@@ -19,7 +20,6 @@ import {
 } from '@alembic/core/knowledge';
 import type { CompiledColdStartPlanV2 } from '@alembic/core/plans';
 import {
-  createKnowledgeDispositionReviewV1,
   createProductionActorIdentityV1,
   hashKnowledgeDispositionProposalV1,
 } from '@alembic/core/production';
@@ -46,6 +46,7 @@ import {
   STRICT_PUBLICATION_MARKER_FILE,
   STRICT_PUBLICATION_ROOT_RELATIVE_PATH,
 } from './StrictAuthorization.js';
+import { executeStrictDispositionReviewV1 } from './StrictDispositionReviewRuntime.js';
 import type {
   StrictPrivateCorpusContentResultV1,
   StrictPrivateCorpusResultV1,
@@ -1746,6 +1747,7 @@ function freezeDeep<T>(value: T): T {
 }
 
 interface StrictCandidateCoverageInputV1 {
+  readonly agentService: Pick<AgentService, 'run'>;
   readonly analysis: StrictAnalysisExecutionResultV1;
   readonly compiledPlan: CompiledColdStartPlanV2;
   readonly expressionSets: readonly StrictProducerExpressionSetV1[];
@@ -1754,6 +1756,7 @@ interface StrictCandidateCoverageInputV1 {
   readonly reviewerCalibrationReceiptHash: string;
   readonly reviewerIdentity: ReviewerIdentityV1;
   readonly runId: string;
+  readonly runtimeReceiptHash: string;
 }
 
 interface StrictG3ResidueV1 {
@@ -1771,6 +1774,8 @@ interface StrictCandidateCoverageBuildContextV1 extends StrictG3ResidueV1 {
     StrictPrivateCorpusContentResultV1['bindings'][number]
   >;
   readonly reviewer: InvestigatedEmptyReviewer;
+  readonly dispositionReviewInvocationIds: Set<string>;
+  readonly dispositionReviewOutputHashes: Set<string>;
   readonly setsByCell: ReadonlyMap<string, StrictProducerExpressionSetV1[]>;
   readonly terminalByExpression: ReadonlyMap<
     string,
@@ -1778,9 +1783,9 @@ interface StrictCandidateCoverageBuildContextV1 extends StrictG3ResidueV1 {
   >;
 }
 
-export function buildStrictCandidateCoverage(
+export async function buildStrictCandidateCoverage(
   input: StrictCandidateCoverageInputV1
-): CandidateCoverageReceiptV1 {
+): Promise<CandidateCoverageReceiptV1> {
   const bindingByCell = groupBy(input.privateCorpus.bindings, (binding) => binding.cellId);
   const bindingByRecipe = new Map(
     input.privateCorpus.bindings.map((binding) => [binding.recipeId, binding])
@@ -1798,11 +1803,17 @@ export function buildStrictCandidateCoverage(
   const buildContext: StrictCandidateCoverageBuildContextV1 = {
     bindingByCell,
     bindingByRecipe,
+    dispositionReviewInvocationIds: new Set(),
+    dispositionReviewOutputHashes: new Set(),
     reviewer,
     setsByCell,
     terminalByExpression,
     ...residue,
   };
+  const cells: CandidateCoverageReceiptV1['cells'][number][] = [];
+  for (const cell of requiredCells) {
+    cells.push(await buildStrictCandidateCoverageCell(input, buildContext, cell));
+  }
   return createCandidateCoverageReceiptV1({
     planBaselineHash: input.compiledPlan.schedule.baselineScheduleHash,
     finalExpandedScheduleHash: input.analysis.fixpoint.finalExpandedScheduleHash,
@@ -1815,7 +1826,7 @@ export function buildStrictCandidateCoverage(
       input.privateCorpus.bindings.map((binding) => binding.bindingHash)
     ),
     requiredCellIds: requiredCells.map((cell) => cell.cellId),
-    cells: requiredCells.map((cell) => buildStrictCandidateCoverageCell(input, buildContext, cell)),
+    cells,
   });
 }
 
@@ -1859,11 +1870,11 @@ function resolveStrictG3Residue(
   return { unresolvedHypothesisIds, suppressedExpressionIds };
 }
 
-function buildStrictCandidateCoverageCell(
+async function buildStrictCandidateCoverageCell(
   input: StrictCandidateCoverageInputV1,
   context: StrictCandidateCoverageBuildContextV1,
   cell: CompiledColdStartPlanV2['universe']['cells'][number]
-): CandidateCoverageReceiptV1['cells'][number] {
+): Promise<CandidateCoverageReceiptV1['cells'][number]> {
   const cellId = cell.cellId;
   const sets = context.setsByCell.get(cellId) ?? [];
   const representativeBindings = sets
@@ -1906,16 +1917,22 @@ function buildStrictCandidateCoverageCell(
       expressionSetReceiptIds: sets.map((set) => `expression-set:${set.setId}`),
     };
   }
-  return buildStrictInvestigatedEmptyCoverageCell(input, context, cellId, sets, lensBindingIds);
+  return await buildStrictInvestigatedEmptyCoverageCell(
+    input,
+    context,
+    cellId,
+    sets,
+    lensBindingIds
+  );
 }
 
-function buildStrictInvestigatedEmptyCoverageCell(
+async function buildStrictInvestigatedEmptyCoverageCell(
   input: StrictCandidateCoverageInputV1,
   context: StrictCandidateCoverageBuildContextV1,
   cellId: string,
   sets: readonly StrictProducerExpressionSetV1[],
   lensBindingIds: readonly string[]
-): CandidateCoverageReceiptV1['cells'][number] {
+): Promise<CandidateCoverageReceiptV1['cells'][number]> {
   // Core 的 investigated-empty 是整个 sealed schedule 的裁决；不能把单 cell 子集伪装成
   // final schedule。cell 只决定 coverage 归属，执行分母始终使用 Main 已封存的全量 receipts。
   const executionReceipts = [...input.analysis.factExecutionReceipts].sort((left, right) =>
@@ -1940,7 +1957,22 @@ function buildStrictInvestigatedEmptyCoverageCell(
     })),
     evidenceEntryIds,
   });
-  const dispositionReview = createKnowledgeDispositionReviewV1({
+  const producer = createProductionActorIdentityV1({
+    providerId: 'alembic-agent',
+    modelId: input.producerModelHash,
+    modelVersion: 'strict-production-v1',
+    promptHash: hashCanonicalJson({
+      kind: 'investigated-empty-producer-prompt-v1',
+      cellId,
+      analysisFixpointHash: input.analysis.fixpoint.fixpointHash,
+    }),
+    runId: input.runId,
+    invocationId: `investigated-empty-producer:${input.analysis.agentRunId}:${cellId}`,
+    loadReceiptHash: input.producerModelHash,
+    outputHash: proposedDispositionHash,
+  });
+  const { dispositionReview } = await executeStrictDispositionReviewV1({
+    agentService: input.agentService,
     reviewKind: 'investigated-empty',
     currentAnalysisFixpointHash: input.analysis.fixpoint.fixpointHash,
     populationHash: input.analysis.epoch.population.populationHash,
@@ -1948,38 +1980,22 @@ function buildStrictInvestigatedEmptyCoverageCell(
     executionReceipts,
     finalExpandedSchedule: input.analysis.finalExpandedSchedule,
     terminalObligations: input.analysis.fixpoint.terminalObligations,
-    producer: createProductionActorIdentityV1({
-      providerId: 'alembic-agent',
-      modelId: input.producerModelHash,
-      modelVersion: 'strict-production-v1',
-      promptHash: hashCanonicalJson({
-        kind: 'investigated-empty-producer-prompt-v1',
-        cellId,
-        analysisFixpointHash: input.analysis.fixpoint.fixpointHash,
-      }),
-      runId: input.runId,
-      invocationId: `investigated-empty-producer:${cellId}`,
-      loadReceiptHash: input.producerModelHash,
-      outputHash: proposedDispositionHash,
-    }),
-    reviewer: createProductionActorIdentityV1({
-      providerId: input.reviewerIdentity.provider,
-      modelId: input.reviewerIdentity.model,
-      modelVersion: input.reviewerIdentity.method,
-      promptHash: input.reviewerCalibrationReceiptHash,
-      runId: input.runId,
-      invocationId: `investigated-empty-reviewer:${cellId}`,
-      loadReceiptHash: hashCanonicalJson(input.reviewerIdentity),
-      outputHash: hashCanonicalJson({
-        kind: 'investigated-empty-independent-review-v1',
-        cellId,
-        proposedDispositionHash,
-        verdict: 'pass',
-      }),
-    }),
-    calibrationReceiptHash: input.reviewerCalibrationReceiptHash,
-    verdict: 'pass',
-    reasonCode: 'complete-denominator-no-content-ready-candidate',
+    producer,
+    reviewer: {
+      calibrationReceiptHash: input.reviewerCalibrationReceiptHash,
+      identity: input.reviewerIdentity,
+      loadReceiptHash: input.runtimeReceiptHash,
+    },
+    evidenceEntryIds,
+    subject: {
+      schemaVersion: 1,
+      cellId,
+      candidateDisposition: 'investigated-empty',
+      expressionSetReceiptIds: sets.map((set) => `expression-set:${set.setId}`),
+      lensBindingIds,
+    },
+    usedInvocationIds: context.dispositionReviewInvocationIds,
+    usedResponseOutputHashes: context.dispositionReviewOutputHashes,
   });
   const emptyDecision = context.reviewer.review({
     sourceRevisionVectorHash: input.compiledPlan.execution.sourceRevisionVectorHash,

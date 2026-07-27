@@ -3,6 +3,7 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import type { AgentService } from '@alembic/agent/service';
 import { baseDimensions } from '@alembic/core/host-agent-workflows';
+import { assertKnowledgeDispositionReviewV1 } from '@alembic/core/production';
 import {
   type CertifiedProjectFactsArtifactV1,
   hashCanonicalJson,
@@ -87,7 +88,7 @@ interface StrictProductionCheckpointV1 {
   planning?: Awaited<ReturnType<typeof compileStrictColdStartPlanning>>;
   analysis?: Awaited<ReturnType<typeof executeStrictAnalysisAndProduction>>;
   privateCorpusContent?: Awaited<ReturnType<typeof persistStrictPrivateCorpusContent>>;
-  candidateCoverage?: ReturnType<typeof buildStrictCandidateCoverage>;
+  candidateCoverage?: Awaited<ReturnType<typeof buildStrictCandidateCoverage>>;
   privateCorpus?: Awaited<ReturnType<typeof indexSealAndVerifyStrictPrivateCorpus>>;
   publicServingData?: StrictPublicServingDataReceiptV1;
   finalization?: ReturnType<typeof finalizeStrictCandidate>;
@@ -112,6 +113,9 @@ type StrictFactsStage = NonNullable<StrictProductionCheckpointV1['facts']> & {
 type StrictPlanningStage = NonNullable<StrictProductionCheckpointV1['planning']>;
 type StrictAnalysisStage = NonNullable<StrictProductionCheckpointV1['analysis']>;
 type StrictCandidateCoverageStage = NonNullable<StrictProductionCheckpointV1['candidateCoverage']>;
+type StrictPrivateCorpusContentStage = NonNullable<
+  StrictProductionCheckpointV1['privateCorpusContent']
+>;
 type StrictPrivateCorpusStage = NonNullable<StrictProductionCheckpointV1['privateCorpus']>;
 type StrictPublicServingDataStage = NonNullable<StrictProductionCheckpointV1['publicServingData']>;
 type StrictFinalizationStage = NonNullable<StrictProductionCheckpointV1['finalization']>;
@@ -674,6 +678,7 @@ async function ensurePrivateCorpus(
     context.checkpoint.privateCorpusContent = content;
     await writeCheckpoint(context.operationRoot, context.checkpoint);
   }
+  assertStrictPrivateCorpusDispositionReviews(content, analysis);
   await advance(context.journal, 'HYPOTHESIS_EXPRESSION_SETS_CLOSED', {
     expressionSetManifestHash: hashCanonicalJson(
       content.hypothesisExpressionSetReceipts.map((receipt) => receipt.receiptHash)
@@ -686,7 +691,8 @@ async function ensurePrivateCorpus(
   });
   let candidateCoverage = context.checkpoint.candidateCoverage;
   if (!candidateCoverage) {
-    candidateCoverage = buildStrictCandidateCoverage({
+    candidateCoverage = await buildStrictCandidateCoverage({
+      agentService: context.input.container.get('agentService') as Pick<AgentService, 'run'>,
       analysis,
       compiledPlan: planning.compiledPlan,
       expressionSets: analysis.expressionSets,
@@ -696,6 +702,7 @@ async function ensurePrivateCorpus(
         context.authorization.planning.reviewer.calibrationReceiptHash,
       reviewerIdentity: context.authorization.planning.reviewer.identity,
       runId: context.input.request.runId,
+      runtimeReceiptHash: context.runtimeArtifactReceipt.receiptHash,
     });
     context.checkpoint.candidateCoverage = candidateCoverage;
     await writeCheckpoint(context.operationRoot, context.checkpoint);
@@ -737,6 +744,59 @@ async function ensurePrivateCorpus(
     rootManifestHash: privateCorpus.rootManifestHash,
   });
   return { candidateCoverage, privateCorpus };
+}
+
+function assertStrictPrivateCorpusDispositionReviews(
+  content: StrictPrivateCorpusContentStage,
+  analysis: StrictAnalysisStage
+): void {
+  const populationByExpressionId = new Map(
+    analysis.expressionSets.flatMap((set) =>
+      set.proposals.map((proposal) => [proposal.expressionId, set.lineage.populationHash] as const)
+    )
+  );
+  const expectedExecutionReceiptHashes = [...analysis.factExecutionReceipts]
+    .sort((left, right) => left.obligationId.localeCompare(right.obligationId))
+    .map((receipt) => receipt.receiptHash);
+  const invocationIds = new Set<string>();
+  const outputHashes = new Set<string>();
+  for (const terminal of content.expressionTerminalRows) {
+    const review = terminal.dispositionReview;
+    const reviewRequired =
+      terminal.terminalFate === 'reviewed-merge' ||
+      terminal.terminalFate === 'reviewed-duplicate' ||
+      terminal.terminalFate === 'reviewed-zero';
+    if (!review) {
+      if (reviewRequired) {
+        throw new Error(`STRICT_PRIVATE_DISPOSITION_REVIEW_MISSING:${terminal.expressionId}`);
+      }
+      continue;
+    }
+    assertKnowledgeDispositionReviewV1(review);
+    if (
+      review.reviewKind !== 'producer-non-draft' ||
+      review.verdict !== 'pass' ||
+      review.currentAnalysisFixpointHash !== analysis.fixpoint.fixpointHash ||
+      review.executionScope.finalExpandedScheduleHash !==
+        analysis.finalExpandedSchedule.finalExpandedScheduleHash ||
+      JSON.stringify(review.executionReceiptHashes) !==
+        JSON.stringify(expectedExecutionReceiptHashes) ||
+      review.reviewReceiptId !== terminal.terminalReceiptId ||
+      review.receiptHash !== terminal.terminalReceiptHash ||
+      (populationByExpressionId.get(terminal.expressionId) &&
+        populationByExpressionId.get(terminal.expressionId) !== review.populationHash)
+    ) {
+      throw new Error(`STRICT_PRIVATE_DISPOSITION_REVIEW_REBOUND:${terminal.expressionId}`);
+    }
+    if (
+      invocationIds.has(review.reviewer.invocationId) ||
+      outputHashes.has(review.reviewer.outputHash)
+    ) {
+      throw new Error(`STRICT_PRIVATE_DISPOSITION_REVIEW_REUSED:${terminal.expressionId}`);
+    }
+    invocationIds.add(review.reviewer.invocationId);
+    outputHashes.add(review.reviewer.outputHash);
+  }
 }
 
 async function finalizeAndPublish(
