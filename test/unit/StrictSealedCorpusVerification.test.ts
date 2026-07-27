@@ -105,6 +105,7 @@ async function fixture(): Promise<{
     revisionId: 'revision-sealed-store-fixture',
     analysisFixpointHash: sha('fixpoint'),
     configReceiptHash: sha('config'),
+    runtimeReceiptHash: sha('runtime'),
     credentialLocationSymbol: 'env:STRICT_TEST_KEY',
     acceptedMigrationBundleSemanticHash,
   });

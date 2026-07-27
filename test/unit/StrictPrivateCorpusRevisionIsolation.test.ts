@@ -34,31 +34,59 @@ describe('strict private corpus semantic re-fixpoint isolation', () => {
     const common = {
       runId: 'strict-bilidili-017',
       configReceiptHash: `sha256:${'c'.repeat(64)}`,
+      runtimeReceiptHash: `sha256:${'d'.repeat(64)}`,
       credentialLocationSymbol: 'env:STRICT_TEST_KEY',
       acceptedMigrationBundleSemanticHash,
     } as const;
-    const first = await initializePrivateCorpusRevisionV1(base, {
-      ...common,
+    const firstExpectedContext = {
+      runId: common.runId,
       revisionId: 'revision-a',
       analysisFixpointHash: `sha256:${'a'.repeat(64)}`,
+      configReceiptHash: common.configReceiptHash,
+      runtimeReceiptHash: common.runtimeReceiptHash,
+    } as const;
+    const first = await initializePrivateCorpusRevisionV1(base, {
+      ...common,
+      ...firstExpectedContext,
     });
     await createRecipe(first.runtime.connection, 'recipe-a', 'Row A before semantic repair');
     const firstReceipt = structuredClone(first.handle.initReceipt);
     const firstRoot = first.handle.resolver.dataRoot;
     first.runtime.sqlite.pragma('wal_checkpoint(TRUNCATE)');
-    const firstDatabaseHash = hashFile(first.handle.resolver.databasePath);
+    const firstDatabaseHash = await hashFile(first.handle.resolver.databasePath);
     first.runtime.close();
 
-    const freshOld = await rehydratePrivateCorpusRevisionV1(base, firstReceipt);
+    for (const staleContext of [
+      { ...firstExpectedContext, runId: 'stale-run' },
+      { ...firstExpectedContext, revisionId: 'stale-revision' },
+      { ...firstExpectedContext, analysisFixpointHash: `sha256:${'e'.repeat(64)}` },
+      { ...firstExpectedContext, configReceiptHash: `sha256:${'f'.repeat(64)}` },
+      { ...firstExpectedContext, runtimeReceiptHash: `sha256:${'0'.repeat(64)}` },
+    ]) {
+      await expect(
+        rehydratePrivateCorpusRevisionV1(base, firstReceipt, staleContext)
+      ).rejects.toThrow('PRIVATE_CORPUS_REVISION_CURRENT_CONTEXT_MISMATCH');
+    }
+    const freshOld = await rehydratePrivateCorpusRevisionV1(
+      base,
+      firstReceipt,
+      firstExpectedContext
+    );
     const oldRows = await createAlembicRepositories(
       freshOld.runtime.connection
     ).knowledgeRepository.findByLifecycle('active', { page: 1, pageSize: 10 });
     expect(oldRows.data.flatMap((entry) => (entry ? [entry.id] : []))).toEqual(['recipe-a']);
 
-    const second = await initializePrivateCorpusRevisionV1(base, {
-      ...common,
+    const secondExpectedContext = {
+      runId: common.runId,
       revisionId: 'revision-b',
       analysisFixpointHash: `sha256:${'b'.repeat(64)}`,
+      configReceiptHash: common.configReceiptHash,
+      runtimeReceiptHash: common.runtimeReceiptHash,
+    } as const;
+    const second = await initializePrivateCorpusRevisionV1(base, {
+      ...common,
+      ...secondExpectedContext,
     });
     expect(second.handle.resolver.dataRoot).not.toBe(firstRoot);
     expect(second.handle.initReceipt.blankState.knowledgeEntries).toBe(0);
@@ -84,7 +112,7 @@ describe('strict private corpus semantic re-fixpoint isolation', () => {
       'recipe-bilidili-017',
     ]);
     second.runtime.sqlite.pragma('wal_checkpoint(TRUNCATE)');
-    const secondDatabaseHash = hashFile(second.handle.resolver.databasePath);
+    const secondDatabaseHash = await hashFile(second.handle.resolver.databasePath);
     expect(secondDatabaseHash).not.toBe(firstDatabaseHash);
 
     PrivateCorpusRevisionHandleV1.replace(
@@ -93,9 +121,9 @@ describe('strict private corpus semantic re-fixpoint isolation', () => {
       `sha256:${firstDatabaseHash}`
     );
     expect(() => freshOld.runtime.sqlite.prepare('SELECT 1').get()).toThrow();
-    await expect(rehydratePrivateCorpusRevisionV1(base, firstReceipt)).rejects.toThrow(
-      'ALEMBIC_DATABASE_ROOT_REVOKED'
-    );
+    await expect(
+      rehydratePrivateCorpusRevisionV1(base, firstReceipt, firstExpectedContext)
+    ).rejects.toThrow('ALEMBIC_DATABASE_ROOT_REVOKED');
     expect(
       second.runtime.sqlite.prepare('SELECT count(*) AS count FROM knowledge_entries').get()
     ).toEqual({ count: 2 });
@@ -141,6 +169,8 @@ function privateScopeResolver(root: string): WorkspaceResolver {
   return new WorkspaceResolver({ projectRoot: root, projectScope, currentFolderId: folderId });
 }
 
-function hashFile(filePath: string): string {
-  return createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
+async function hashFile(filePath: string): Promise<string> {
+  return createHash('sha256')
+    .update(await fs.promises.readFile(filePath))
+    .digest('hex');
 }

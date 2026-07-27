@@ -126,7 +126,7 @@ async function prepareStrictAnalysis(input: StrictAnalysisExecutionInput) {
     evidenceSessionId: input.runId,
   });
   const population = canonicalizeObservationPopulationV1(
-    buildPopulation(execution.facts, input.compiledPlan, 1, null)
+    buildPopulation(execution, input.compiledPlan, 1, null)
   );
   const expansionPort = createStrictAnalysisExpansionPortV1({
     baselineScheduleHash: input.compiledPlan.schedule.baselineScheduleHash,
@@ -201,6 +201,11 @@ function createStrictProductionRuntimePort(
     readonly dimensionId: string;
   }[];
   readonly eligibleSubjects: readonly string[];
+  readonly readAnalystAuthority: () => {
+    readonly executionReceipts: MainStrictFactExecutionResultV1['receipts'];
+    readonly finalExpandedSchedule: FinalExpandedMiningScheduleReceiptV1;
+    readonly terminalObligations: MainStrictFactExecutionResultV1['terminalObligations'];
+  };
 } {
   const eligibleCells = strictEligibleCells(input.compiledPlan);
   const eligibleCellIds = new Set(eligibleCells.map((cell) => cell.cellId));
@@ -213,6 +218,13 @@ function createStrictProductionRuntimePort(
     expansionPort: prepared.expansionPort,
     eligibleCells,
     eligibleSubjects: strictEligibleSubjects(input.compiledPlan),
+    readAnalystAuthority() {
+      return Object.freeze({
+        executionReceipts: state.execution.receipts,
+        finalExpandedSchedule: previewExpandedSchedule(input, prepared.expansionPort.receipts),
+        terminalObligations: state.execution.terminalObligations,
+      });
+    },
     readAnalysisEpoch() {
       return state.snapshot;
     },
@@ -222,9 +234,20 @@ function createStrictProductionRuntimePort(
       }
       const epoch = state.epoch;
       const analysisFixpoint = state.fixpoint;
+      // Retry snapshots 保留 append-only population 历史；Producer lineage 只消费最终 epoch 的
+      // Core authority 集，避免把历史 population 误当成当前 hypothesis 的并列来源。
+      const producerContext = createStrictAnalysisContextProjectionV1({
+        ...withoutContextIdentity(state.context),
+        populationHashes: [epoch.population.populationHash],
+        clusterSetHashes: [epoch.clusterSet.clusterSetHash],
+        inductionReceiptHashes: epoch.inductions.map((receipt) => receipt.receiptHash),
+        hypothesisIds: epoch.producerEligibleHypotheses.map((row) => row.hypothesisId),
+        falsificationReceiptHashes: epoch.falsifications.map((receipt) => receipt.receiptHash),
+        dispositionReviewIds: epoch.dispositionReviews.map((review) => review.reviewReceiptId),
+      });
       state.lineages = epoch.producerEligibleHypotheses.map((hypothesis) =>
         createStrictProducerLineageReceiptV1({
-          context: state.context,
+          context: producerContext,
           epoch,
           analysisFixpoint,
           hypothesisId: hypothesis.hypothesisId,
@@ -247,11 +270,15 @@ function createStrictProductionRuntimePort(
       const candidate = parseAnalystEnvelope(source);
       const validatedEpoch = validateStrictAnalystEpochV1({
         ...candidate.epoch,
+        // population 与执行收据属于 Main/Core 权威，不接受模型回传的同名结构换绑。
+        population: {
+          ...state.population,
+          executionReceipts: state.execution.receipts,
+        },
         knownFactIds: state.execution.facts.map((fact) => fact.factId),
         enrolledObligationIds: state.schedule.factHarvestObligations.map((row) => row.obligationId),
       } as StrictAnalystEpochInputV1);
       state.epoch = validatedEpoch;
-      state.epochs.push(validatedEpoch);
       if (candidate.expansions.length > 0) {
         return executeAnalysisExpansion(
           input,
@@ -261,6 +288,9 @@ function createStrictProductionRuntimePort(
           candidate.expansions
         );
       }
+      // 带 expansion 请求的中间 proposal 不具备最终 review context；只有 sealed schedule 上
+      // 的终态 epoch 才进入 Core fixpoint receipt。
+      state.epochs.push(validatedEpoch);
       return finalizeStrictAnalysisGate(prepared, state, observedEpoch);
     },
     reviewProducerResult(source) {
@@ -325,7 +355,7 @@ function finalizeStrictAnalysisGate(
     dispositionReviewIds: [
       ...new Set(
         state.epochs.flatMap((epoch) =>
-          epoch.hypothesisDispositions.map((row) => row.reviewerReceiptId)
+          epoch.dispositionReviews.map((review) => review.reviewReceiptId)
         )
       ),
     ],
@@ -376,7 +406,7 @@ async function executeAnalysisExpansion(
   });
   const population = canonicalizeObservationPopulationV1(
     buildPopulation(
-      execution.facts,
+      execution,
       input.compiledPlan,
       observedEpoch.epoch + 1,
       state.population.populationHash
@@ -621,17 +651,44 @@ function assertProducerEligibleCellScopes(
 }
 
 function buildPopulation(
-  facts: readonly FactRecordV1[],
+  execution: MainStrictFactExecutionResultV1,
   plan: CompiledColdStartPlanV2,
   revision: number,
   parentPopulationHash: string | null
 ): ObservationPopulationInputV1 {
-  const observations = facts.map((fact) => ({
-    observationId: `observation:${fact.factId.slice(-32)}`,
-    factIds: [fact.factId],
-    mechanismKey: `${fact.factFamilyId}:${fact.canonicalSubjectRef}`,
-    canonicalSubjectRefs: [fact.canonicalSubjectRef],
-  }));
+  const receiptByFactId = new Map(
+    execution.receipts.flatMap((receipt) =>
+      receipt.emittedFactIds.map((factId) => [factId, receipt] as const)
+    )
+  );
+  const observations = execution.facts.map((fact) => {
+    const receipt = receiptByFactId.get(fact.factId);
+    if (!receipt) {
+      throw new Error(`STRICT_POPULATION_FACT_EXECUTION_RECEIPT_MISSING:${fact.factId}`);
+    }
+    return {
+      observationId: `observation:${fact.factId.slice(-32)}`,
+      factIds: [fact.factId],
+      obligationIds: [receipt.obligationId],
+      mechanismKey: `${fact.factFamilyId}:${fact.canonicalSubjectRef}`,
+      canonicalSubjectRefs: [fact.canonicalSubjectRef],
+      parentSubjectRefs: [],
+      variantKeys: [fact.primaryScale],
+      outlierReasonCodes: [],
+      negativeControl: false,
+    };
+  });
+  const inspectedNoPatternObservations = execution.receipts
+    .filter((receipt) => receipt.disposition === 'inspected-no-pattern')
+    .map((receipt) => ({
+      observationId: `observation:no-pattern:${receipt.obligationId.slice(-32)}`,
+      obligationId: receipt.obligationId,
+      canonicalSubjectRef: receipt.canonicalSubjectRef,
+      parentSubjectRefs: [],
+      executionReceiptHash: receipt.receiptHash,
+      outputHash: receipt.outputHash,
+      denominatorHash: receipt.denominatorHash,
+    }));
   return {
     populationId: `population:${plan.schedule.baselineScheduleHash.slice(-32)}`,
     revision,
@@ -639,12 +696,27 @@ function buildPopulation(
     sourceRevisionVectorHash: plan.execution.sourceRevisionVectorHash,
     denominator: {
       kind: 'frozen-complete-subjects',
-      expectedObservationIds: observations.map((row) => row.observationId),
+      expectedObservationIds: [
+        ...observations.map((row) => row.observationId),
+        ...inspectedNoPatternObservations.map((row) => row.observationId),
+      ],
+      expectedObligationIds: execution.receipts.map((receipt) => receipt.obligationId),
+      executionReceiptHashes: [
+        ...new Set(execution.receipts.map((receipt) => receipt.receiptHash)),
+      ],
+      outputHashes: [...new Set(execution.receipts.map((receipt) => receipt.outputHash))],
+      denominatorHashes: [...new Set(execution.receipts.map((receipt) => receipt.denominatorHash))],
+      complete: true,
+      truncated: false,
+      continuation: null,
+      omittedObservationIds: [],
     },
+    executionReceipts: execution.receipts,
     observations,
     duplicateObservations: [],
     excludedObservations: [],
     errorObservations: [],
+    inspectedNoPatternObservations,
   };
 }
 

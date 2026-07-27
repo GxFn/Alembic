@@ -5,6 +5,18 @@ import path from 'node:path';
 import { createProjectDescriptor } from '@alembic/core';
 import { readAlembicMigrationBundleManifest } from '@alembic/core/database';
 import { ANATOMY_LENS_IDS } from '@alembic/core/plans';
+import {
+  canonicalizeKnowledgeClustersV1,
+  createAnalysisReviewContextHashV1,
+  createKnowledgeDispositionReviewV1,
+  createProductionActorIdentityV1,
+  type FactQueryExecutionReceiptV1,
+  type FinalExpandedMiningScheduleReceiptV1,
+  hashKnowledgeClusterV1,
+  hashKnowledgeDispositionProposalV1,
+  type KnowledgeDispositionReviewV1,
+  type ObservationPopulationV1,
+} from '@alembic/core/production';
 import { hashCanonicalJson } from '@alembic/core/project-context-foundation';
 import { WorkspaceResolver } from '@alembic/core/workspace';
 import Database from 'better-sqlite3';
@@ -186,10 +198,38 @@ describe('RecipePipelineFacade strict production integration', () => {
         };
         privateCorpusContent?: {
           expressionTerminalRows: Array<{
+            expressionId: string;
             recipeId: string | null;
             terminalFate: string;
+            terminalReceiptId: string;
+            terminalReceiptHash: string;
+          }>;
+          hypothesisExpressionSetReceipts: Array<{
+            conservation: {
+              authored: number;
+              terminal: number;
+              unresolved: number;
+            };
+            expressions: Array<{
+              expressionId: string;
+              terminalFate: string;
+              terminalReceiptId: string;
+              terminalReceiptHash: string;
+            }>;
+            receiptHash: string;
+            terminalClosure: string;
           }>;
           readyMembers: Array<{ recipeId: string }>;
+          revisionCheckpointReceipt: {
+            runId: string;
+            revisionId: string;
+            analysisFixpointHash: string;
+            configReceiptHash: string;
+            runtimeReceiptHash: string;
+            sqliteIntegrity: string;
+            foreignKeyViolationCount: number;
+            checkpointHash: string;
+          };
         };
         candidateCoverage?: {
           cells: Array<{
@@ -202,6 +242,7 @@ describe('RecipePipelineFacade strict production integration', () => {
             expansionLedgerHeadHash?: string;
             finalCodeFactGenerationManifestHash?: string;
             finalExpandedScheduleHash?: string;
+            hypothesisExpressionSetManifestHash?: string;
             receiptHash?: string;
           };
           servingManifest?: {
@@ -213,6 +254,7 @@ describe('RecipePipelineFacade strict production integration', () => {
               expansionLedgerHeadHash?: string;
               finalCodeFactGenerationManifestHash?: string;
               finalExpandedScheduleHash?: string;
+              hypothesisExpressionSetManifestHash?: string;
               snapshotId: string;
             };
           };
@@ -223,10 +265,29 @@ describe('RecipePipelineFacade strict production integration', () => {
         'src/adapter.ts',
         'src/index.ts',
       ]);
-      expect(checkpoint.analysis?.epochs).toHaveLength(2);
+      expect(checkpoint.analysis?.epochs).toHaveLength(1);
+      expect(checkpoint.analysis?.epoch.currentAnalysisFixpointHash).toBe(
+        checkpoint.analysis?.fixpoint.analysisReviewContextHash
+      );
       expect(
-        new Set(checkpoint.analysis?.epochs.map((epoch) => epoch.population.populationHash)).size
-      ).toBe(2);
+        checkpoint.analysis?.epoch.dispositionReviews.every(
+          (review) =>
+            review.currentAnalysisFixpointHash ===
+            checkpoint.analysis?.fixpoint.analysisReviewContextHash
+        )
+      ).toBe(true);
+      expect(checkpoint.analysis?.epoch.population.denominator.expectedObligationIds).toEqual(
+        checkpoint.analysis?.factExecutionReceipts
+          .map((receipt) => receipt.obligationId)
+          .sort((left, right) => left.localeCompare(right))
+      );
+      expect(checkpoint.analysis?.epoch.population.denominator.executionReceiptHashes).toEqual(
+        [
+          ...new Set(
+            checkpoint.analysis?.factExecutionReceipts.map((receipt) => receipt.receiptHash)
+          ),
+        ].sort((left, right) => left.localeCompare(right))
+      );
       expect(checkpoint.analysis?.factExecutionManifest).toMatchObject({
         verdict: 'passed',
         failedObligationIds: [],
@@ -287,6 +348,53 @@ describe('RecipePipelineFacade strict production integration', () => {
         checkpoint.privateCorpusContent?.readyMembers.map((member) => member.recipeId)
       );
       expect(checkpoint.privateCorpusContent?.expressionTerminalRows).toHaveLength(6);
+      const terminalRows = checkpoint.privateCorpusContent?.expressionTerminalRows ?? [];
+      const expressionSetReceipts =
+        checkpoint.privateCorpusContent?.hypothesisExpressionSetReceipts ?? [];
+      expect(expressionSetReceipts).toHaveLength(1);
+      expect(expressionSetReceipts[0]).toMatchObject({
+        conservation: {
+          authored: 6,
+          terminal: 6,
+          unresolved: 0,
+        },
+        terminalClosure: 'expressed',
+        receiptHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+      });
+      expect(
+        expressionSetReceipts[0]?.expressions.map((expression) => ({
+          expressionId: expression.expressionId,
+          terminalFate: expression.terminalFate,
+          terminalReceiptId: expression.terminalReceiptId,
+          terminalReceiptHash: expression.terminalReceiptHash,
+        }))
+      ).toEqual(
+        terminalRows.map((row) => ({
+          expressionId: row.expressionId,
+          terminalFate: row.terminalFate,
+          terminalReceiptId: row.terminalReceiptId,
+          terminalReceiptHash: row.terminalReceiptHash,
+        }))
+      );
+      expect(checkpoint.privateCorpusContent?.revisionCheckpointReceipt).toMatchObject({
+        runId: 'strict-integration-run',
+        revisionId: checkpoint.privateCorpusContent?.revisionCheckpointReceipt.revisionId,
+        analysisFixpointHash: checkpoint.analysis?.fixpoint.fixpointHash,
+        configReceiptHash: runtimeLoad.configReceipt.receiptHash,
+        runtimeReceiptHash: runtimeLoad.artifactReceipt.receiptHash,
+        sqliteIntegrity: 'ok',
+        foreignKeyViolationCount: 0,
+        checkpointHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+      });
+      const expressionSetManifestHash = hashCanonicalJson(
+        expressionSetReceipts.map((receipt) => receipt.receiptHash)
+      );
+      expect(
+        checkpoint.finalization?.servingSnapshotValidation?.hypothesisExpressionSetManifestHash
+      ).toBe(expressionSetManifestHash);
+      expect(
+        checkpoint.finalization?.preparedPublicRoute?.route.hypothesisExpressionSetManifestHash
+      ).toBe(expressionSetManifestHash);
       expect(
         checkpoint.privateCorpusContent?.expressionTerminalRows.every(
           (row) =>
@@ -319,7 +427,7 @@ describe('RecipePipelineFacade strict production integration', () => {
       residueCorpus.expressionTerminalRows[0] = {
         ...residueTerminal,
         recipeId: null,
-        terminalFate: 'rejected',
+        terminalFate: 'g2-rejected',
       };
       expect(() =>
         buildStrictCandidateCoverage({
@@ -327,11 +435,14 @@ describe('RecipePipelineFacade strict production integration', () => {
           compiledPlan: coverageStages.planning.compiledPlan,
           expressionSets: coverageStages.analysis.expressionSets,
           privateCorpus: residueCorpus,
+          producerModelHash: sha('strict-model'),
+          reviewerCalibrationReceiptHash: sha('fixture-calibration'),
           reviewerIdentity: {
             provider: 'fixture',
             model: 'fixture-reviewer',
             method: 'frozen-evidence',
           },
+          runId: 'strict-integration-run',
         })
       ).toThrow('STRICT_G3_RESIDUE_REJECTED');
       const unreadyRepresentativeCorpus = structuredClone(coverageStages.privateCorpusContent);
@@ -342,11 +453,14 @@ describe('RecipePipelineFacade strict production integration', () => {
           compiledPlan: coverageStages.planning.compiledPlan,
           expressionSets: coverageStages.analysis.expressionSets,
           privateCorpus: unreadyRepresentativeCorpus,
+          producerModelHash: sha('strict-model'),
+          reviewerCalibrationReceiptHash: sha('fixture-calibration'),
           reviewerIdentity: {
             provider: 'fixture',
             model: 'fixture-reviewer',
             method: 'frozen-evidence',
           },
+          runId: 'strict-integration-run',
         })
       ).toThrow('STRICT_G3_CONTENT_TARGET_NOT_READY');
       const preparedRows = await fsp.readdir(path.join(operationRoot, 'prepared-rows'));
@@ -512,6 +626,7 @@ describe('RecipePipelineFacade strict production integration', () => {
           checkpoint.analysis?.finalExpandedSchedule.finalExpandedScheduleHash,
         finalCodeFactGenerationManifestHash:
           checkpoint.analysis?.factExecutionManifest.manifestHash,
+        hypothesisExpressionSetManifestHash: expressionSetManifestHash,
       });
       const publicDatabasePath = path.join(snapshotRoot, 'data/.asd/alembic.db');
       const publicDatabase = new Database(publicDatabasePath, {
@@ -742,7 +857,21 @@ describe('RecipePipelineFacade strict production integration', () => {
         expressionId: expect.stringMatching(/^zero:/u),
         recipeId: null,
         terminalFate: 'reviewed-zero',
-        terminalReceiptId: 'fixture-zero-disposition-review',
+        terminalReceiptId: expect.stringMatching(/^knowledge-review:/u),
+        terminalReceiptHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+      });
+      const expressionSetReceipts = content.hypothesisExpressionSetReceipts as Array<
+        Record<string, unknown>
+      >;
+      expect(expressionSetReceipts).toHaveLength(1);
+      expect(expressionSetReceipts[0]).toMatchObject({
+        conservation: {
+          authored: 0,
+          terminal: 0,
+          unresolved: 0,
+        },
+        terminalClosure: 'reviewed-non-draft',
+        receiptHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
       });
       expect(content.g1Receipts).toEqual([]);
       expect(content.readyMembers).toEqual([]);
@@ -778,7 +907,9 @@ describe('RecipePipelineFacade strict production integration', () => {
   it('records every G2 rejection as a terminal without writing private corpus content', async () => {
     const fixture = await createFixture({ reviewerMode: 'reject' });
     try {
-      await expect(executeFixture(fixture)).rejects.toThrow('STRICT_G3_RESIDUE_REJECTED');
+      await expect(executeFixture(fixture)).rejects.toThrow(
+        'EXPRESSION_SET_TERMINAL_HEAD_NOT_CLOSED'
+      );
       const checkpoint = await readJson(
         path.join(
           fixture.dataRoot,
@@ -786,18 +917,11 @@ describe('RecipePipelineFacade strict production integration', () => {
           'strict-production.checkpoint.json'
         )
       );
-      const content = readRecord(checkpoint.privateCorpusContent);
-      const terminalRows = content.expressionTerminalRows as Array<Record<string, unknown>>;
-      expect(terminalRows).toHaveLength(6);
-      expect(
-        terminalRows.every(
-          (row) =>
-            row.recipeId === null &&
-            row.terminalFate === 'rejected' &&
-            /^sha256:[a-f0-9]{64}$/u.test(String(row.terminalReceiptId))
-        )
-      ).toBe(true);
-      expect(content.readyMembers).toEqual([]);
+      expect(checkpoint).not.toHaveProperty('privateCorpusContent');
+      expect(checkpoint).not.toHaveProperty('candidateCoverage');
+      await expect(
+        fsp.stat(path.join(fixture.dataRoot, '.asd/context/recipe-publications/active.json'))
+      ).rejects.toMatchObject({ code: 'ENOENT' });
       expect(fixture.agentService.admissionNoWriteObserved).toBe(true);
       const initReceipt = await readJson(
         path.join(
@@ -1486,10 +1610,10 @@ class DeterministicStrictAgentService {
     const port = readRecord(readRecord(input.context).strategyContext)
       .strictProduction as StrictRuntimeFixturePort;
     const baselineEpoch = port.readAnalysisEpoch();
-    const baselinePopulation = baselineEpoch.populations.at(-1);
-    if (!baselinePopulation) {
-      throw new Error('fixture strict population missing');
-    }
+    const baselinePopulation = latestFixturePopulation(
+      baselineEpoch,
+      'fixture strict population missing'
+    );
     const first = baselinePopulation.observations[0];
     if (!first) {
       throw new Error('fixture strict observation missing');
@@ -1500,7 +1624,11 @@ class DeterministicStrictAgentService {
     }
     const retry = await port.validateAnalystResult(
       {
-        epoch: buildFixtureAnalystEpoch(baselinePopulation, this.producerMode !== 'no-hypothesis'),
+        epoch: buildFixtureAnalystEpoch(
+          baselinePopulation,
+          port.readAnalystAuthority(),
+          this.producerMode !== 'no-hypothesis'
+        ),
         expansions: [
           {
             purpose: 'counterexample',
@@ -1518,19 +1646,31 @@ class DeterministicStrictAgentService {
       throw new Error('fixture strict retry missing');
     }
     const expandedEpoch = port.readAnalysisEpoch();
-    const expandedPopulation = expandedEpoch.populations.at(-1);
-    if (!expandedPopulation || expandedEpoch.epoch !== 2) {
+    const expandedPopulation = latestFixturePopulation(
+      expandedEpoch,
+      'fixture strict expanded population missing'
+    );
+    if (expandedEpoch.epoch !== 2) {
       throw new Error('fixture strict expanded population missing');
     }
     const settled = await port.validateAnalystResult(
       {
-        epoch: buildFixtureAnalystEpoch(expandedPopulation, this.producerMode !== 'no-hypothesis'),
+        epoch: buildFixtureAnalystEpoch(
+          expandedPopulation,
+          port.readAnalystAuthority(),
+          this.producerMode !== 'no-hypothesis'
+        ),
       },
       expandedEpoch
     );
     if (readRecord(settled).action !== 'pass') {
       throw new Error('fixture strict fixpoint missing');
     }
+    await this.reviewStrictProducer(port);
+    return agentResult('{"strictProduction":"completed"}', 'generate-dimension');
+  }
+
+  private async reviewStrictProducer(port: StrictRuntimeFixturePort): Promise<void> {
     const producer = port.buildProducerInput();
     const evidenceEntryId = producer.evidence.entries[0]?.evidenceEntryId;
     if (!evidenceEntryId) {
@@ -1540,6 +1680,28 @@ class DeterministicStrictAgentService {
     if (!firstCell) {
       throw new Error('fixture eligible cell missing');
     }
+    const producerLineage = producer.lineages[0];
+    const zeroReasonCode = 'complete-investigation-found-no-durable-pattern';
+    const zeroDispositionReview =
+      this.producerMode === 'zero' && producerLineage
+        ? createFixtureDispositionReview({
+            authority: port.readAnalystAuthority(),
+            currentAnalysisFixpointHash: producerLineage.analysisFixpointHash,
+            populationHash: producerLineage.populationHash,
+            proposal: {
+              reviewKind: 'producer-non-draft',
+              populationHash: producerLineage.populationHash,
+              hypothesisId: producerLineage.hypothesis.hypothesisId,
+              expression: null,
+              zeroDisposition: {
+                reasonCode: zeroReasonCode,
+                terminalFate: 'reviewed-non-draft',
+              },
+            },
+            reviewKind: 'producer-non-draft',
+            suffix: 'producer-zero',
+          })
+        : null;
     await port.reviewProducerResult({
       expressionSets:
         this.producerMode === 'no-hypothesis'
@@ -1562,28 +1724,24 @@ class DeterministicStrictAgentService {
                 zeroDisposition:
                   this.producerMode === 'zero'
                     ? {
-                        reasonCode: 'complete-investigation-found-no-durable-pattern',
+                        reasonCode: zeroReasonCode,
                         authored: authoredProjection(
                           firstCell.moduleId,
                           firstCell.dimensionId,
                           evidenceEntryId
                         ),
-                        reviewerReceiptId: 'fixture-zero-disposition-review',
+                        dispositionReview: zeroDispositionReview,
                       }
                     : null,
               },
             ],
     });
-    return agentResult('{"strictProduction":"completed"}', 'generate-dimension');
   }
 }
 
 function buildFixtureAnalystEpoch(
-  population: StrictRuntimeFixturePort['readAnalysisEpoch'] extends () => infer Snapshot
-    ? Snapshot extends { populations: Array<infer Population> }
-      ? Population
-      : never
-    : never,
+  population: StrictFixturePopulation,
+  authority: ReturnType<StrictRuntimeFixturePort['readAnalystAuthority']>,
   includeHypothesis = true
 ) {
   const observations = population.observations;
@@ -1591,64 +1749,171 @@ function buildFixtureAnalystEpoch(
   if (!first?.factIds[0]) {
     throw new Error('fixture strict observation fact missing');
   }
+  const { clusters, clusterInputs } = buildFixtureMechanismClusters(observations);
+  const clusterSet = canonicalizeKnowledgeClustersV1(population, {
+    clusters: clusterInputs,
+    nonClusteredDispositions: [],
+  });
+  const currentAnalysisFixpointHash = createAnalysisReviewContextHashV1({
+    finalExpandedScheduleHash: authority.finalExpandedSchedule.finalExpandedScheduleHash,
+    terminalObligations: authority.terminalObligations,
+    populationHashes: [population.populationHash],
+    clusterSetHashes: [clusterSet.clusterSetHash],
+  });
+  const clusterByMechanism = new Map(
+    clusterSet.clusters.map((cluster) => [cluster.mechanismKey, cluster] as const)
+  );
+  const dispositionReviews: KnowledgeDispositionReviewV1[] = [];
+  const inductionInputs = [...clusters.entries()].map(([mechanismKey, rows], index) => {
+    const cluster = clusterByMechanism.get(mechanismKey);
+    if (!cluster) {
+      throw new Error(`fixture cluster authority missing:${mechanismKey}`);
+    }
+    if (index === 0 && includeHypothesis) {
+      return {
+        mechanismKey,
+        mode: rows.length === 1 ? ('bounded-singleton' as const) : ('recurring' as const),
+        hypotheses: [
+          {
+            hypothesisId: 'hypothesis-strict-main',
+            statement: 'The project preserves a typed result boundary.',
+            premiseFactIds: [first.factIds[0]],
+          },
+        ],
+      };
+    }
+    const zeroHypothesisReason = 'insufficient-evidence' as const;
+    const zeroReview = createFixtureDispositionReview({
+      authority,
+      currentAnalysisFixpointHash,
+      populationHash: population.populationHash,
+      proposal: {
+        reviewKind: 'zero-hypothesis',
+        populationHash: population.populationHash,
+        clusterHash: hashKnowledgeClusterV1(cluster),
+        clusterId: cluster.clusterId,
+        observationIds: cluster.observationIds,
+        mode: rows.length === 1 ? 'bounded-singleton' : 'recurring',
+        zeroHypothesisReason,
+      },
+      reviewKind: 'zero-hypothesis',
+      suffix: `zero-${index}`,
+    });
+    dispositionReviews.push(zeroReview);
+    return {
+      mechanismKey,
+      mode: rows.length === 1 ? ('bounded-singleton' as const) : ('recurring' as const),
+      hypotheses: [],
+      zeroHypothesisReason,
+      zeroHypothesisDispositionReview: zeroReview,
+    };
+  });
+  const falsificationInputs = [];
+  if (includeHypothesis) {
+    const counterqueryApplicability = {
+      status: 'not-required' as const,
+      reasonCode: 'bounded-project-contract',
+    };
+    const falsificationReview = createFixtureDispositionReview({
+      authority,
+      currentAnalysisFixpointHash,
+      populationHash: population.populationHash,
+      proposal: {
+        reviewKind: 'falsification',
+        populationHash: population.populationHash,
+        hypothesisId: 'hypothesis-strict-main',
+        enrolledCounterqueryIds: [],
+        executions: [],
+        counterqueryApplicability,
+      },
+      reviewKind: 'falsification',
+      suffix: 'falsification',
+    });
+    dispositionReviews.push(falsificationReview);
+    falsificationInputs.push({
+      hypothesisId: 'hypothesis-strict-main',
+      enrolledCounterqueryIds: [],
+      executions: [],
+      counterqueryApplicability,
+      dispositionReview: falsificationReview,
+    });
+  }
+  return {
+    currentAnalysisFixpointHash,
+    population,
+    clusterInputs,
+    nonClusteredDispositions: [],
+    inductionInputs,
+    falsificationInputs,
+    hypothesisDispositions: includeHypothesis
+      ? [
+          {
+            hypothesisId: 'hypothesis-strict-main',
+            status: 'survived' as const,
+          },
+        ]
+      : [],
+    dispositionReviews,
+  };
+}
+
+function buildFixtureMechanismClusters(observations: StrictFixturePopulation['observations']) {
   const clusters = new Map<string, Array<(typeof observations)[number]>>();
   for (const observation of observations) {
     const rows = clusters.get(observation.mechanismKey) ?? [];
     rows.push(observation);
     clusters.set(observation.mechanismKey, rows);
   }
-  return {
-    population,
-    clusterInputs: [...clusters.entries()].map(([mechanismKey, rows]) => ({
-      mechanismKey,
-      observationIds: rows.map((observation) => observation.observationId),
-      anatomyLensIds: ['error-recovery-concurrency'],
-    })),
-    nonClusteredDispositions: [],
-    inductionInputs: [...clusters.entries()].map(([mechanismKey, rows], index) => ({
-      mechanismKey,
-      mode: rows.length === 1 ? ('bounded-singleton' as const) : ('recurring' as const),
-      hypotheses:
-        index === 0 && includeHypothesis
-          ? [
-              {
-                hypothesisId: 'hypothesis-strict-main',
-                statement: 'The project preserves a typed result boundary.',
-                premiseFactIds: [first.factIds[0]],
-              },
-            ]
-          : [],
-      ...(index === 0 && includeHypothesis
-        ? {}
-        : {
-            zeroHypothesisReason: 'insufficient-evidence' as const,
-            zeroHypothesisReviewReceiptId: `zero-review-${index}`,
-          }),
-    })),
-    falsificationInputs: includeHypothesis
-      ? [
-          {
-            hypothesisId: 'hypothesis-strict-main',
-            enrolledCounterqueryIds: [],
-            executions: [],
-            counterqueryApplicability: {
-              status: 'not-required' as const,
-              reasonCode: 'bounded-project-contract',
-              reviewerReceiptId: 'counterquery-review',
-            },
-          },
-        ]
-      : [],
-    hypothesisDispositions: includeHypothesis
-      ? [
-          {
-            hypothesisId: 'hypothesis-strict-main',
-            status: 'survived' as const,
-            reviewerReceiptId: 'hypothesis-review',
-          },
-        ]
-      : [],
-  };
+  const clusterInputs = [...clusters.entries()].map(([mechanismKey, rows]) => ({
+    mechanismKey,
+    mechanism: { invariant: mechanismKey },
+    observationIds: rows.map((observation) => observation.observationId),
+    mechanismEvidenceFactIds: rows.flatMap((observation) => observation.factIds),
+    anatomyLensIds: ['error-recovery-concurrency'],
+  }));
+  return { clusters, clusterInputs };
+}
+
+function createFixtureDispositionReview(input: {
+  readonly authority: ReturnType<StrictRuntimeFixturePort['readAnalystAuthority']>;
+  readonly currentAnalysisFixpointHash: string;
+  readonly populationHash: string;
+  readonly proposal: Parameters<typeof hashKnowledgeDispositionProposalV1>[0];
+  readonly reviewKind: Parameters<typeof createKnowledgeDispositionReviewV1>[0]['reviewKind'];
+  readonly suffix: string;
+}) {
+  return createKnowledgeDispositionReviewV1({
+    reviewKind: input.reviewKind,
+    currentAnalysisFixpointHash: input.currentAnalysisFixpointHash,
+    populationHash: input.populationHash,
+    proposedDispositionHash: hashKnowledgeDispositionProposalV1(input.proposal),
+    executionReceipts: input.authority.executionReceipts,
+    finalExpandedSchedule: input.authority.finalExpandedSchedule,
+    terminalObligations: input.authority.terminalObligations,
+    producer: createProductionActorIdentityV1({
+      providerId: 'fixture',
+      modelId: 'fixture-analyst',
+      modelVersion: 'strict-v1',
+      promptHash: sha(`analyst-prompt:${input.suffix}`),
+      runId: 'strict-integration-run',
+      invocationId: `fixture-analyst:${input.suffix}`,
+      loadReceiptHash: sha('fixture-analyst-load'),
+      outputHash: sha(`analyst-output:${input.suffix}`),
+    }),
+    reviewer: createProductionActorIdentityV1({
+      providerId: 'fixture',
+      modelId: 'fixture-reviewer',
+      modelVersion: 'strict-v1',
+      promptHash: sha(`review-prompt:${input.suffix}`),
+      runId: 'strict-integration-run',
+      invocationId: `fixture-reviewer:${input.suffix}`,
+      loadReceiptHash: sha('fixture-reviewer-load'),
+      outputHash: sha(`review-output:${input.suffix}`),
+    }),
+    calibrationReceiptHash: sha('calibration'),
+    verdict: 'pass',
+    reasonCode: `fixture-independent-${input.suffix}`,
+  });
 }
 
 interface StrictRuntimeFixturePort {
@@ -1657,13 +1922,15 @@ interface StrictRuntimeFixturePort {
   readAnalysisEpoch(): {
     epoch: number;
     snapshotHash: string;
-    populations: Array<{
-      observations: Array<{
-        observationId: string;
-        factIds: string[];
-        mechanismKey: string;
-        canonicalSubjectRefs: string[];
-      }>;
+    populations: ObservationPopulationV1[];
+  };
+  readAnalystAuthority(): {
+    executionReceipts: FactQueryExecutionReceiptV1[];
+    finalExpandedSchedule: FinalExpandedMiningScheduleReceiptV1;
+    terminalObligations: Array<{
+      obligationId: string;
+      disposition: 'matched' | 'inspected-no-pattern' | 'failed' | 'unknown';
+      terminalReceiptId: string;
     }>;
   };
   validateAnalystResult(
@@ -1672,9 +1939,27 @@ interface StrictRuntimeFixturePort {
   ): Promise<unknown>;
   buildProducerInput(): {
     evidence: { entries: Array<{ evidenceEntryId: string }> };
-    lineages: Array<{ hypothesis: { hypothesisId: string } }>;
+    lineages: Array<{
+      analysisFixpointHash: string;
+      populationHash: string;
+      hypothesis: { hypothesisId: string };
+    }>;
   };
   reviewProducerResult(source: unknown): Promise<unknown>;
+}
+
+type StrictFixtureAnalysisSnapshot = ReturnType<StrictRuntimeFixturePort['readAnalysisEpoch']>;
+type StrictFixturePopulation = StrictFixtureAnalysisSnapshot['populations'][number];
+
+function latestFixturePopulation(
+  snapshot: StrictFixtureAnalysisSnapshot,
+  missingMessage: string
+): StrictFixturePopulation {
+  const population = snapshot.populations.at(-1);
+  if (!population) {
+    throw new Error(missingMessage);
+  }
+  return population;
 }
 
 function planIntent(context: Record<string, unknown>) {

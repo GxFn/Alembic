@@ -18,9 +18,15 @@ import {
   type StrictPublicationMarkerV1,
 } from '@alembic/core/knowledge';
 import type { CompiledColdStartPlanV2 } from '@alembic/core/plans';
+import {
+  createKnowledgeDispositionReviewV1,
+  createProductionActorIdentityV1,
+  hashKnowledgeDispositionProposalV1,
+} from '@alembic/core/production';
 import { hashCanonicalJson } from '@alembic/core/project-context-foundation';
 import { createLocalVectorStore } from '@alembic/core/vector';
 import {
+  type PrivateCorpusRevisionExpectedContextV1,
   type PrivateCorpusRevisionInitReceiptV1,
   rehydratePrivateCorpusRevisionV1,
   type WorkspaceResolver,
@@ -349,7 +355,7 @@ export function finalizeStrictCandidate(input: {
     })),
   });
   const hypothesisExpressionSetManifestHash = hashCanonicalJson(
-    input.expressionSets.map((set) => set.setHash)
+    input.privateCorpus.hypothesisExpressionSetReceipts.map((receipt) => receipt.receiptHash)
   );
   const analysisLineage = resolveStrictAnalysisPublicLineageV1({
     analysis: input.analysis,
@@ -486,6 +492,7 @@ export async function materializeStrictPublicServingData(input: {
   readonly excludedSnapshotId?: string;
   readonly privateCorpus: StrictPrivateCorpusResultV1;
   readonly revisionInitReceipt: PrivateCorpusRevisionInitReceiptV1;
+  readonly expectedCurrentContext: PrivateCorpusRevisionExpectedContextV1;
   readonly projectIdentityHash: string;
   readonly migrationBundleHash: string;
   readonly servingConfig: {
@@ -502,7 +509,11 @@ export async function materializeStrictPublicServingData(input: {
   const stagingDataRoot = path.join(stagingRoot, 'data');
   await fsp.mkdir(stagingDataRoot, { recursive: true, mode: 0o700 });
   try {
-    const source = await resolveStrictPublicSource(input.baseResolver, input.revisionInitReceipt);
+    const source = await resolveStrictPublicSource(
+      input.baseResolver,
+      input.revisionInitReceipt,
+      input.expectedCurrentContext
+    );
     await assembleStrictPublicData({
       candidateCoverage: input.candidateCoverage,
       source,
@@ -734,9 +745,14 @@ export async function verifyStrictPublicServingBundle(input: {
 
 async function resolveStrictPublicSource(
   baseResolver: WorkspaceResolver,
-  receipt: PrivateCorpusRevisionInitReceiptV1
+  receipt: PrivateCorpusRevisionInitReceiptV1,
+  expectedCurrentContext: PrivateCorpusRevisionExpectedContextV1
 ) {
-  const rehydrated = await rehydratePrivateCorpusRevisionV1(baseResolver, receipt);
+  const rehydrated = await rehydratePrivateCorpusRevisionV1(
+    baseResolver,
+    receipt,
+    expectedCurrentContext
+  );
   try {
     return Object.freeze({
       databasePath: rehydrated.handle.resolver.databasePath,
@@ -1002,6 +1018,8 @@ function buildStrictPublicMetadata(
     vectorManifestHash: privateCorpus.vectorManifestHash,
     expansionLedgerHeadHash: finalization.servingSnapshotValidation.expansionLedgerHeadHash,
     finalExpandedScheduleHash: finalization.servingSnapshotValidation.finalExpandedScheduleHash,
+    hypothesisExpressionSetManifestHash:
+      finalization.servingSnapshotValidation.hypothesisExpressionSetManifestHash,
     finalCodeFactGenerationManifestHash:
       finalization.servingSnapshotValidation.finalCodeFactGenerationManifestHash,
   });
@@ -1732,7 +1750,10 @@ interface StrictCandidateCoverageInputV1 {
   readonly compiledPlan: CompiledColdStartPlanV2;
   readonly expressionSets: readonly StrictProducerExpressionSetV1[];
   readonly privateCorpus: StrictPrivateCorpusContentResultV1;
+  readonly producerModelHash: string;
+  readonly reviewerCalibrationReceiptHash: string;
   readonly reviewerIdentity: ReviewerIdentityV1;
+  readonly runId: string;
 }
 
 interface StrictG3ResidueV1 {
@@ -1816,7 +1837,15 @@ function resolveStrictG3Residue(
     .map((proposal) => proposal.expressionId)
     .filter((expressionId) => {
       const fate = terminalByExpression.get(expressionId)?.terminalFate;
-      return !fate || fate === 'rejected';
+      return (
+        !fate ||
+        fate === 'g1-rejected' ||
+        fate === 'admission-rejected' ||
+        fate === 'g2-rejected' ||
+        fate === 'repair-superseded' ||
+        fate === 'failed' ||
+        fate === 'unknown'
+      );
     })
     .sort();
   if (unresolvedHypothesisIds.length > 0 || suppressedExpressionIds.length > 0) {
@@ -1874,34 +1903,92 @@ function buildStrictCandidateCoverageCell(
       contentReadyRecipeFingerprints: bindings.map((binding) => binding.authoredFingerprint),
       productionBindingHashes: bindings.map((binding) => binding.bindingHash),
       lensBindingIds,
-      expressionSetReceiptIds: sets.map((set) => set.setId),
+      expressionSetReceiptIds: sets.map((set) => `expression-set:${set.setId}`),
     };
   }
-  const familyIds = new Set(
-    input.compiledPlan.schedule.lensBindings
-      .filter((binding) => binding.cellId === cellId)
-      .flatMap((binding) => binding.factFamilyIds)
+  return buildStrictInvestigatedEmptyCoverageCell(input, context, cellId, sets, lensBindingIds);
+}
+
+function buildStrictInvestigatedEmptyCoverageCell(
+  input: StrictCandidateCoverageInputV1,
+  context: StrictCandidateCoverageBuildContextV1,
+  cellId: string,
+  sets: readonly StrictProducerExpressionSetV1[],
+  lensBindingIds: readonly string[]
+): CandidateCoverageReceiptV1['cells'][number] {
+  // Core 的 investigated-empty 是整个 sealed schedule 的裁决；不能把单 cell 子集伪装成
+  // final schedule。cell 只决定 coverage 归属，执行分母始终使用 Main 已封存的全量 receipts。
+  const executionReceipts = [...input.analysis.factExecutionReceipts].sort((left, right) =>
+    left.obligationId.localeCompare(right.obligationId)
   );
-  const obligationIds = input.analysis.factExecutionReceipts
-    .filter(
-      (obligation) =>
-        obligation.canonicalSubjectRef === cell.scopeId && familyIds.has(obligation.factFamilyId)
-    )
-    .map((obligation) => obligation.obligationId);
+  const obligationIds = [...input.analysis.finalExpandedSchedule.obligationIds];
+  const evidenceEntryIds = input.analysis.evidence.entries.map((entry) => entry.evidenceEntryId);
+  const proposedDispositionHash = hashKnowledgeDispositionProposalV1({
+    reviewKind: 'investigated-empty',
+    populationHash: input.analysis.epoch.population.populationHash,
+    sourceRevisionVectorHash: input.compiledPlan.execution.sourceRevisionVectorHash,
+    finalExpandedScheduleHash: input.analysis.finalExpandedSchedule.finalExpandedScheduleHash,
+    currentAnalysisFixpointHash: input.analysis.fixpoint.fixpointHash,
+    expectedObligationIds: obligationIds,
+    executionBindings: executionReceipts.map((receipt) => ({
+      obligationId: receipt.obligationId,
+      executionReceiptHash: receipt.receiptHash,
+      executionOutputHash: receipt.outputHash,
+      denominatorHash: receipt.denominatorHash,
+      disposition: receipt.disposition,
+      terminalReceiptId: receipt.terminalReceiptId,
+    })),
+    evidenceEntryIds,
+  });
+  const dispositionReview = createKnowledgeDispositionReviewV1({
+    reviewKind: 'investigated-empty',
+    currentAnalysisFixpointHash: input.analysis.fixpoint.fixpointHash,
+    populationHash: input.analysis.epoch.population.populationHash,
+    proposedDispositionHash,
+    executionReceipts,
+    finalExpandedSchedule: input.analysis.finalExpandedSchedule,
+    terminalObligations: input.analysis.fixpoint.terminalObligations,
+    producer: createProductionActorIdentityV1({
+      providerId: 'alembic-agent',
+      modelId: input.producerModelHash,
+      modelVersion: 'strict-production-v1',
+      promptHash: hashCanonicalJson({
+        kind: 'investigated-empty-producer-prompt-v1',
+        cellId,
+        analysisFixpointHash: input.analysis.fixpoint.fixpointHash,
+      }),
+      runId: input.runId,
+      invocationId: `investigated-empty-producer:${cellId}`,
+      loadReceiptHash: input.producerModelHash,
+      outputHash: proposedDispositionHash,
+    }),
+    reviewer: createProductionActorIdentityV1({
+      providerId: input.reviewerIdentity.provider,
+      modelId: input.reviewerIdentity.model,
+      modelVersion: input.reviewerIdentity.method,
+      promptHash: input.reviewerCalibrationReceiptHash,
+      runId: input.runId,
+      invocationId: `investigated-empty-reviewer:${cellId}`,
+      loadReceiptHash: hashCanonicalJson(input.reviewerIdentity),
+      outputHash: hashCanonicalJson({
+        kind: 'investigated-empty-independent-review-v1',
+        cellId,
+        proposedDispositionHash,
+        verdict: 'pass',
+      }),
+    }),
+    calibrationReceiptHash: input.reviewerCalibrationReceiptHash,
+    verdict: 'pass',
+    reasonCode: 'complete-denominator-no-content-ready-candidate',
+  });
   const emptyDecision = context.reviewer.review({
     sourceRevisionVectorHash: input.compiledPlan.execution.sourceRevisionVectorHash,
     finalExpandedScheduleHash: input.analysis.fixpoint.finalExpandedScheduleHash,
+    currentAnalysisFixpointHash: input.analysis.fixpoint.fixpointHash,
     expectedObligationIds: obligationIds,
-    terminalObligations: input.analysis.fixpoint.terminalObligations
-      .filter((row) => obligationIds.includes(row.obligationId))
-      .map((row) => ({
-        obligationId: row.obligationId,
-        disposition: row.disposition === 'matched' ? 'matched' : 'inspected-no-pattern',
-        terminalReceiptId: row.terminalReceiptId,
-      })),
-    unresolvedHypothesisIds: context.unresolvedHypothesisIds,
-    suppressedExpressionIds: context.suppressedExpressionIds,
-    evidenceEntryIds: input.analysis.evidence.entries.map((entry) => entry.evidenceEntryId),
+    executionReceipts,
+    dispositionReview,
+    evidenceEntryIds,
   });
   if (emptyDecision.verdict !== 'pass') {
     throw new Error(`STRICT_INVESTIGATED_EMPTY_REJECTED:${cellId}:${emptyDecision.reasonCode}`);
@@ -1913,7 +2000,7 @@ function buildStrictCandidateCoverageCell(
     contentReadyRecipeFingerprints: [],
     productionBindingHashes: [],
     lensBindingIds,
-    expressionSetReceiptIds: sets.map((set) => set.setId),
+    expressionSetReceiptIds: sets.map((set) => `expression-set:${set.setId}`),
     investigatedEmptyDecisionHash: emptyDecision.decisionHash,
   };
 }

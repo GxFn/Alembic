@@ -7,7 +7,10 @@ import {
   IndependentValueReviewer,
   type ReviewerIdentityV1,
 } from '@alembic/agent/evaluation';
-import type { StrictProducerExpressionSetV1 } from '@alembic/agent/production';
+import {
+  createStrictHypothesisExpressionSetReceiptV1,
+  type StrictProducerExpressionSetV1,
+} from '@alembic/agent/production';
 import type { AgentService } from '@alembic/agent/service';
 import { WriteZone } from '@alembic/core/io';
 import {
@@ -35,6 +38,15 @@ import {
   type StrictG2ReceiptV1,
   type StrictPersistenceReceiptV1,
 } from '@alembic/core/knowledge';
+import {
+  createKnowledgeDispositionReviewV1,
+  createProductionActorIdentityV1,
+  type FactQueryExecutionReceiptV1,
+  type FinalExpandedMiningScheduleReceiptV1,
+  type HypothesisExpressionSetReceiptV1,
+  hashKnowledgeDispositionProposalV1,
+  type KnowledgeDispositionReviewV1,
+} from '@alembic/core/production';
 import { hashCanonicalJson } from '@alembic/core/project-context-foundation';
 import { createAlembicRepositories } from '@alembic/core/repositories';
 import { ConsolidationAdvisor } from '@alembic/core/sustain';
@@ -46,9 +58,13 @@ import {
   type RecipeVectorGenerationManifest,
 } from '@alembic/core/vector';
 import {
+  createPrivateCorpusRevisionCheckpointV1,
   initializePrivateCorpusRevisionV1,
+  type PrivateCorpusRevisionCheckpointReceiptV1,
+  type PrivateCorpusRevisionExpectedContextV1,
   type PrivateCorpusRevisionInitReceiptV1,
   rehydratePrivateCorpusRevisionV1,
+  validatePrivateCorpusRevisionCheckpointV1,
   type WorkspaceResolver,
 } from '@alembic/core/workspace';
 import {
@@ -59,9 +75,11 @@ import type { StrictProductionJournal } from './StrictProductionJournal.js';
 
 export interface StrictPrivateCorpusContentResultV1 {
   readonly revisionInitReceipt: PrivateCorpusRevisionInitReceiptV1;
+  readonly revisionCheckpointReceipt: PrivateCorpusRevisionCheckpointReceiptV1;
   readonly revisionId: string;
   readonly rootManifestHash: string;
   readonly g1Receipts: readonly StrictG1ReceiptV1[];
+  readonly hypothesisExpressionSetReceipts: readonly HypothesisExpressionSetReceiptV1[];
   readonly bindings: readonly RecipeProductionBindingV1[];
   readonly expressionTerminalRows: readonly {
     readonly expressionId: string;
@@ -71,8 +89,17 @@ export interface StrictPrivateCorpusContentResultV1 {
       | 'reviewed-merge'
       | 'reviewed-duplicate'
       | 'reviewed-zero'
-      | 'rejected';
+      | 'g1-rejected'
+      | 'admission-rejected'
+      | 'g2-rejected'
+      | 'repair-superseded'
+      | 'failed'
+      | 'unknown';
     readonly terminalReceiptId: string;
+    readonly terminalReceiptHash: string;
+    readonly dispositionReview?: KnowledgeDispositionReviewV1;
+    readonly matchingRepresentativeId?: string;
+    readonly matchingContentReadyRecipeId?: string;
   }[];
   readonly activeRecipes: readonly {
     readonly id: string;
@@ -145,13 +172,21 @@ interface StrictPrivateCorpusPersistenceInput {
   readonly configReceiptHash: string;
   readonly credentialLocationSymbol: string;
   readonly evidence: FrozenEvidenceProjectionV1;
+  readonly executionReceipts: readonly FactQueryExecutionReceiptV1[];
   readonly expressionSets: readonly StrictProducerExpressionSetV1[];
+  readonly finalExpandedSchedule: FinalExpandedMiningScheduleReceiptV1;
   readonly journal: StrictProductionJournal;
   readonly manifestHash: string;
   readonly planHash: string;
   readonly producerModelHash: string;
   readonly recoveryRoot: string;
   readonly runId: string;
+  readonly runtimeReceiptHash: string;
+  readonly terminalObligations: readonly {
+    readonly obligationId: string;
+    readonly disposition: 'matched' | 'inspected-no-pattern' | 'failed' | 'unknown';
+    readonly terminalReceiptId: string;
+  }[];
   readonly reviewer: {
     readonly calibrationReceiptHash: string;
     readonly identity: ReviewerIdentityV1;
@@ -226,13 +261,19 @@ export async function persistStrictPrivateCorpusContent(
   input: StrictPrivateCorpusPersistenceInput
 ): Promise<StrictPrivateCorpusContentResultV1> {
   const revisionId = revisionIdForFixpoint(input.analysisFixpointHash);
+  const expectedCurrentContext = strictPrivateCorpusExpectedContext(input, revisionId);
   const initialized = input.resumeInitReceipt
-    ? await rehydratePrivateCorpusRevisionV1(input.baseResolver, input.resumeInitReceipt)
+    ? await rehydratePrivateCorpusRevisionV1(
+        input.baseResolver,
+        input.resumeInitReceipt,
+        expectedCurrentContext
+      )
     : await initializePrivateCorpusRevisionV1(input.baseResolver, {
         runId: input.runId,
         revisionId,
         analysisFixpointHash: input.analysisFixpointHash,
         configReceiptHash: input.configReceiptHash,
+        runtimeReceiptHash: input.runtimeReceiptHash,
         credentialLocationSymbol: input.credentialLocationSymbol,
         acceptedMigrationBundleSemanticHash: input.acceptedMigrationBundleSemanticHash,
       });
@@ -295,25 +336,61 @@ export async function persistStrictPrivateCorpusContent(
     },
     { g1Receipts, bindings, expressionTerminalRows, activeRecipes, readyMembers }
   );
+  const hypothesisExpressionSetReceipts = createStrictTerminalExpressionSetReceipts(
+    input.expressionSets,
+    expressionTerminalRows,
+    revisionId
+  );
+  const revisionCheckpointReceipt = validatePrivateCorpusRevisionCheckpointV1(
+    createPrivateCorpusRevisionCheckpointV1(
+      initialized.handle,
+      initialized.runtime,
+      expectedCurrentContext
+    ),
+    initReceipt,
+    expectedCurrentContext
+  );
   const rootManifestHash = hashCanonicalJson({
     analysisFixpointHash: input.analysisFixpointHash,
     bindings: bindings.map((binding) => binding.bindingHash),
     expressionTerminalRows,
+    hypothesisExpressionSetReceiptHashes: hypothesisExpressionSetReceipts.map(
+      (receipt) => receipt.receiptHash
+    ),
     revisionId,
+    revisionCheckpointHash: revisionCheckpointReceipt.checkpointHash,
     readyMemberProofs: readyMembers.map((member) => member.proofHash),
   });
   initialized.runtime.close();
   return Object.freeze({
     revisionInitReceipt: initReceipt,
+    revisionCheckpointReceipt,
     revisionId,
     rootManifestHash,
     g1Receipts,
+    hypothesisExpressionSetReceipts,
     bindings,
     expressionTerminalRows,
     activeRecipes: [...activeRecipes].sort((left, right) => left.id.localeCompare(right.id)),
     readyMembers: [...readyMembers].sort((left, right) =>
       left.recipeId.localeCompare(right.recipeId)
     ),
+  });
+}
+
+function strictPrivateCorpusExpectedContext(
+  input: Pick<
+    StrictPrivateCorpusPersistenceInput,
+    'analysisFixpointHash' | 'configReceiptHash' | 'runId' | 'runtimeReceiptHash'
+  >,
+  revisionId: string
+): PrivateCorpusRevisionExpectedContextV1 {
+  return Object.freeze({
+    runId: input.runId,
+    revisionId,
+    analysisFixpointHash: input.analysisFixpointHash,
+    configReceiptHash: input.configReceiptHash,
+    runtimeReceiptHash: input.runtimeReceiptHash,
   });
 }
 
@@ -425,6 +502,8 @@ function persistStrictZeroTerminal(
     recipeId: null,
     terminalFate: 'reviewed-zero',
     terminalReceiptId: set.zeroDisposition.reviewerReceiptId,
+    terminalReceiptHash: set.zeroDisposition.dispositionReview.receiptHash,
+    dispositionReview: set.zeroDisposition.dispositionReview,
   });
 }
 
@@ -438,7 +517,13 @@ async function persistStrictProposal(
   const candidate = prepareStrictAdmissionCandidate(context, set, proposal);
   accumulators.g1Receipts.push(candidate.g1);
   if (candidate.g1.verdict !== 'pass') {
-    recordStrictRejectedTerminal(accumulators, proposal.expressionId, candidate.g1.receiptHash);
+    recordStrictRejectedTerminal(
+      accumulators,
+      proposal.expressionId,
+      'g1-rejected',
+      `strict-g1:${candidate.g1.receiptHash.slice(7, 31)}`,
+      candidate.g1.receiptHash
+    );
     return;
   }
   const admitted = await context.gateway.admitCandidate(candidate.item, {
@@ -451,7 +536,7 @@ async function persistStrictProposal(
     reviewedProjection: candidate.reviewed,
   });
   if (admitted.receipt.disposition !== 'admit') {
-    persistStrictDispositionTerminal(accumulators, proposal, admitted.receipt);
+    persistStrictDispositionTerminal(context, accumulators, set, proposal, admitted.receipt);
     return;
   }
   if (admitted.receipt.finalAdmittedFingerprint !== candidate.reviewed.authoredFingerprint) {
@@ -477,7 +562,13 @@ async function persistStrictProposal(
     review
   );
   if (g2.verdict !== 'pass') {
-    recordStrictRejectedTerminal(accumulators, proposal.expressionId, g2.receiptHash);
+    recordStrictRejectedTerminal(
+      accumulators,
+      proposal.expressionId,
+      'g2-rejected',
+      `strict-g2:${g2.receiptHash.slice(7, 31)}`,
+      g2.receiptHash
+    );
     return;
   }
   await persistStrictContentReadyProposal(
@@ -553,6 +644,7 @@ async function persistStrictContentReadyProposal(
     recipeId: persisted.recipe.id,
     terminalFate: 'content-ready',
     terminalReceiptId: resolved.binding.bindingHash,
+    terminalReceiptHash: resolved.binding.bindingHash,
   });
   context.acceptedCorpus.push({
     recipeId: persisted.recipe.id,
@@ -574,13 +666,16 @@ async function persistStrictContentReadyProposal(
 function recordStrictRejectedTerminal(
   accumulators: StrictPersistenceAccumulators,
   expressionId: string,
-  terminalReceiptId: string
+  terminalFate: 'g1-rejected' | 'admission-rejected' | 'g2-rejected',
+  terminalReceiptId: string,
+  terminalReceiptHash: string
 ): void {
   accumulators.expressionTerminalRows.push({
     expressionId,
     recipeId: null,
-    terminalFate: 'rejected',
+    terminalFate,
     terminalReceiptId,
+    terminalReceiptHash,
   });
 }
 
@@ -634,6 +729,54 @@ function assertStrictExpressionTerminalConservation(
   }
 }
 
+function createStrictTerminalExpressionSetReceipts(
+  sets: readonly StrictProducerExpressionSetV1[],
+  terminals: readonly StrictPrivateCorpusContentResultV1['expressionTerminalRows'][number][],
+  privateCorpusRevision: string
+): HypothesisExpressionSetReceiptV1[] {
+  const terminalByExpression = new Map(
+    terminals.map((terminal) => [terminal.expressionId, terminal] as const)
+  );
+  const receiptById = new Map<string, HypothesisExpressionSetReceiptV1>();
+  const receipts: HypothesisExpressionSetReceiptV1[] = [];
+  for (const set of sets) {
+    const parentReceiptId = set.parentSetId ? `expression-set:${set.parentSetId}` : null;
+    const parentReceipt = parentReceiptId ? receiptById.get(parentReceiptId) : null;
+    if (parentReceiptId && !parentReceipt) {
+      throw new Error(`STRICT_EXPRESSION_PARENT_RECEIPT_MISSING:${set.setId}`);
+    }
+    const terminalResolutions = set.proposals.map((proposal) => {
+      const terminal = terminalByExpression.get(proposal.expressionId);
+      if (!terminal || terminal.terminalFate === 'reviewed-zero') {
+        throw new Error(`STRICT_EXPRESSION_TERMINAL_RESOLUTION_MISSING:${proposal.expressionId}`);
+      }
+      return {
+        expressionId: proposal.expressionId,
+        terminalFate: terminal.terminalFate,
+        terminalReceiptId: terminal.terminalReceiptId,
+        terminalReceiptHash: terminal.terminalReceiptHash,
+        ...(terminal.dispositionReview ? { dispositionReview: terminal.dispositionReview } : {}),
+        ...(terminal.matchingRepresentativeId
+          ? { matchingRepresentativeId: terminal.matchingRepresentativeId }
+          : {}),
+        ...(terminal.matchingContentReadyRecipeId
+          ? { matchingContentReadyRecipeId: terminal.matchingContentReadyRecipeId }
+          : {}),
+      };
+    });
+    const receipt = createStrictHypothesisExpressionSetReceiptV1({
+      expressionSet: set,
+      parentReceipt: parentReceipt ?? null,
+      privateCorpusRevision,
+      terminalHead: true,
+      terminalResolutions,
+    });
+    receiptById.set(receipt.receiptId, receipt);
+    receipts.push(receipt);
+  }
+  return receipts;
+}
+
 function prepareStrictAdmissionCandidate(
   context: StrictPersistenceContext,
   set: StrictProducerExpressionSetV1,
@@ -675,32 +818,29 @@ function prepareStrictAdmissionCandidate(
 }
 
 function persistStrictDispositionTerminal(
+  context: StrictPersistenceContext,
   accumulators: StrictPersistenceAccumulators,
+  set: StrictProducerExpressionSetV1,
   proposal: StrictProposal,
   admission: StrictAdmissionReceiptV1
 ): void {
-  const dispositionReviewHash = hashCanonicalJson({
-    schemaVersion: 1,
-    expressionId: proposal.expressionId,
-    admissionReceiptHash: admission.receiptHash,
-    disposition: admission.disposition,
-    targetRecipeId: admission.consolidation.targetRecipeId,
-    complete: admission.complete,
-    truncated: admission.truncated,
-    continuation: admission.continuation,
-  });
   if (admission.disposition === 'reject') {
-    accumulators.expressionTerminalRows.push({
-      expressionId: proposal.expressionId,
-      recipeId: null,
-      terminalFate: 'rejected',
-      terminalReceiptId: dispositionReviewHash,
-    });
+    recordStrictRejectedTerminal(
+      accumulators,
+      proposal.expressionId,
+      'admission-rejected',
+      admission.admissionId,
+      admission.receiptHash
+    );
     return;
   }
   const targetRecipeId = admission.consolidation.targetRecipeId;
+  const targetReadyMember = accumulators.readyMembers.find(
+    (member) => member.recipeId === targetRecipeId
+  );
   if (
     !targetRecipeId ||
+    !targetReadyMember ||
     (proposal.matchingRepresentativeId && proposal.matchingRepresentativeId !== targetRecipeId) ||
     admission.complete !== true ||
     admission.truncated !== false ||
@@ -708,11 +848,75 @@ function persistStrictDispositionTerminal(
   ) {
     throw new Error(`STRICT_DISPOSITION_REVIEW_MISMATCH:${proposal.expressionId}`);
   }
+  const terminalFate =
+    admission.disposition === 'merge'
+      ? ('reviewed-merge' as const)
+      : ('reviewed-duplicate' as const);
+  const proposedDispositionHash = hashKnowledgeDispositionProposalV1({
+    reviewKind: 'producer-non-draft',
+    populationHash: set.lineage.populationHash,
+    hypothesisId: set.hypothesis.hypothesisId,
+    expression: {
+      expressionId: proposal.expressionId,
+      authoredFingerprint: proposal.authoredFingerprint,
+      terminalFate,
+      matchingRepresentativeId: targetRecipeId,
+      matchingContentReadyRecipeId: targetRecipeId,
+    },
+    zeroDisposition: null,
+  });
+  const dispositionReview = createKnowledgeDispositionReviewV1({
+    reviewKind: 'producer-non-draft',
+    currentAnalysisFixpointHash: context.input.analysisFixpointHash,
+    populationHash: set.lineage.populationHash,
+    proposedDispositionHash,
+    executionReceipts: context.input.executionReceipts,
+    finalExpandedSchedule: context.input.finalExpandedSchedule,
+    terminalObligations: context.input.terminalObligations,
+    producer: createProductionActorIdentityV1({
+      providerId: 'alembic-agent',
+      modelId: context.input.producerModelHash,
+      modelVersion: 'strict-producer-expression-v1',
+      promptHash: hashCanonicalJson({
+        kind: 'strict-producer-disposition-prompt-v1',
+        reasonHash: set.repairNode.reasonHash,
+      }),
+      runId: context.input.runId,
+      invocationId: `producer:${set.setId}`,
+      loadReceiptHash: context.input.producerModelHash,
+      outputHash: hashCanonicalJson({
+        kind: 'strict-producer-expression-set-v1',
+        setHash: set.setHash,
+      }),
+    }),
+    reviewer: createProductionActorIdentityV1({
+      providerId: context.input.reviewer.identity.provider,
+      modelId: context.input.reviewer.identity.model,
+      modelVersion: context.input.reviewer.identity.method,
+      promptHash: context.input.reviewer.calibrationReceiptHash,
+      runId: context.input.runId,
+      invocationId: `producer-disposition:${admission.admissionId}`,
+      loadReceiptHash: hashCanonicalJson(context.input.reviewer.identity),
+      outputHash: hashCanonicalJson({
+        kind: 'strict-producer-disposition-review-v1',
+        admissionReceiptHash: admission.receiptHash,
+        proposedDispositionHash,
+        targetReadyProofHash: targetReadyMember.proofHash,
+      }),
+    }),
+    calibrationReceiptHash: context.input.reviewer.calibrationReceiptHash,
+    verdict: 'pass',
+    reasonCode: 'complete-corpus-content-ready-representative-reviewed',
+  });
   accumulators.expressionTerminalRows.push({
     expressionId: proposal.expressionId,
     recipeId: targetRecipeId,
-    terminalFate: admission.disposition === 'merge' ? 'reviewed-merge' : 'reviewed-duplicate',
-    terminalReceiptId: dispositionReviewHash,
+    terminalFate,
+    terminalReceiptId: dispositionReview.reviewReceiptId,
+    terminalReceiptHash: dispositionReview.receiptHash,
+    dispositionReview,
+    matchingRepresentativeId: targetRecipeId,
+    matchingContentReadyRecipeId: targetRecipeId,
   });
 }
 
@@ -1239,13 +1443,20 @@ function evaluateStrictG1Axes(input: {
 export async function indexSealAndVerifyStrictPrivateCorpus(input: {
   readonly baseResolver: WorkspaceResolver;
   readonly content: StrictPrivateCorpusContentResultV1;
+  readonly expectedCurrentContext: PrivateCorpusRevisionExpectedContextV1;
   readonly embedProvider: ConstructorParameters<
     typeof RecipeVectorGenerationRuntime
   >[0]['embedProvider'];
 }): Promise<StrictPrivateCorpusResultV1> {
+  validatePrivateCorpusRevisionCheckpointV1(
+    input.content.revisionCheckpointReceipt,
+    input.content.revisionInitReceipt,
+    input.expectedCurrentContext
+  );
   const rehydrated = await rehydratePrivateCorpusRevisionV1(
     input.baseResolver,
-    input.content.revisionInitReceipt
+    input.content.revisionInitReceipt,
+    input.expectedCurrentContext
   );
   let vectorGenerationId: string | null = null;
   let vectorManifest: RecipeVectorGenerationManifest | null = null;
@@ -1289,7 +1500,8 @@ export async function indexSealAndVerifyStrictPrivateCorpus(input: {
   }
   const freshProcess = await rehydratePrivateCorpusRevisionV1(
     input.baseResolver,
-    input.content.revisionInitReceipt
+    input.content.revisionInitReceipt,
+    input.expectedCurrentContext
   );
   try {
     if (!vectorGenerationId || !vectorManifest || !vectorInspection) {

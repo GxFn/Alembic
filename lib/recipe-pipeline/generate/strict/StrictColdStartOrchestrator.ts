@@ -622,9 +622,6 @@ async function advanceAnalysisJournal(
   await advance(journal, 'EXPRESSION_BATCH_OPEN', {
     eligibleHypothesisCount: analysis.epoch.producerEligibleHypotheses.length,
   });
-  await advance(journal, 'HYPOTHESIS_EXPRESSION_SETS_CLOSED', {
-    expressionSetManifestHash: hashCanonicalJson(analysis.expressionSets.map((set) => set.setHash)),
-  });
 }
 
 async function ensurePrivateCorpus(
@@ -653,16 +650,20 @@ async function ensurePrivateCorpus(
       agentService: context.input.container.get('agentService') as Pick<AgentService, 'run'>,
       analysisFixpointHash: analysis.fixpoint.fixpointHash,
       baseResolver: resolver,
-      configReceiptHash: planning.configReceipt.loadHash,
+      configReceiptHash: context.runtimeConfigReceipt.receiptHash,
       credentialLocationSymbol: context.authorization.privateCorpus.credentialLocationSymbol,
       evidence: analysis.evidence,
+      executionReceipts: analysis.factExecutionReceipts,
       expressionSets: analysis.expressionSets,
+      finalExpandedSchedule: analysis.finalExpandedSchedule,
       journal: context.journal,
       manifestHash: facts.carrier.certificationBindingHash,
       planHash: planning.compiledPlan.canonicalPlanHash,
       producerModelHash: context.authorization.planning.modelHash,
       recoveryRoot: path.join(context.operationRoot, 'prepared-rows'),
       runId: context.input.request.runId,
+      runtimeReceiptHash: context.runtimeArtifactReceipt.receiptHash,
+      terminalObligations: analysis.fixpoint.terminalObligations,
       reviewer: context.authorization.planning.reviewer,
       ...(initReceipt
         ? { resumeInitReceipt: initReceipt as PrivateCorpusRevisionInitReceiptV1 }
@@ -673,6 +674,11 @@ async function ensurePrivateCorpus(
     context.checkpoint.privateCorpusContent = content;
     await writeCheckpoint(context.operationRoot, context.checkpoint);
   }
+  await advance(context.journal, 'HYPOTHESIS_EXPRESSION_SETS_CLOSED', {
+    expressionSetManifestHash: hashCanonicalJson(
+      content.hypothesisExpressionSetReceipts.map((receipt) => receipt.receiptHash)
+    ),
+  });
   await advance(context.journal, 'CONTENT_READY_CORPUS_SEALED', {
     privateCorpusRevision: content.revisionId,
     rootManifestHash: content.rootManifestHash,
@@ -685,7 +691,11 @@ async function ensurePrivateCorpus(
       compiledPlan: planning.compiledPlan,
       expressionSets: analysis.expressionSets,
       privateCorpus: content,
+      producerModelHash: context.authorization.planning.modelHash,
+      reviewerCalibrationReceiptHash:
+        context.authorization.planning.reviewer.calibrationReceiptHash,
       reviewerIdentity: context.authorization.planning.reviewer.identity,
+      runId: context.input.request.runId,
     });
     context.checkpoint.candidateCoverage = candidateCoverage;
     await writeCheckpoint(context.operationRoot, context.checkpoint);
@@ -705,6 +715,13 @@ async function ensurePrivateCorpus(
     privateCorpus = await indexSealAndVerifyStrictPrivateCorpus({
       baseResolver: resolver,
       content,
+      expectedCurrentContext: {
+        runId: context.input.request.runId,
+        revisionId: content.revisionId,
+        analysisFixpointHash: analysis.fixpoint.fixpointHash,
+        configReceiptHash: context.runtimeConfigReceipt.receiptHash,
+        runtimeReceiptHash: context.runtimeArtifactReceipt.receiptHash,
+      },
       embedProvider: context.input.container.singletons._embedProvider as Parameters<
         typeof indexSealAndVerifyStrictPrivateCorpus
       >[0]['embedProvider'],
@@ -845,6 +862,13 @@ async function resolvePublicServingData(
     baseResolver: resolver,
     candidateCoverage,
     dataRoot: context.dataRoot,
+    expectedCurrentContext: {
+      runId: context.input.request.runId,
+      revisionId: privateCorpus.revisionId,
+      analysisFixpointHash: privateCorpus.revisionInitReceipt.analysisFixpointHash,
+      configReceiptHash: context.runtimeConfigReceipt.receiptHash,
+      runtimeReceiptHash: context.runtimeArtifactReceipt.receiptHash,
+    },
     ...(excludedSnapshotId ? { excludedSnapshotId } : {}),
     privateCorpus,
     revisionInitReceipt: privateCorpus.revisionInitReceipt,
