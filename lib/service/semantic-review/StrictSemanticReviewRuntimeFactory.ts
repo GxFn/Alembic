@@ -21,10 +21,9 @@ import type {
   SemanticDispositionReviewRequestV1,
   SemanticDispositionReviewTrustPolicyV3,
 } from '@alembic/core/production';
-import type { ProjectContextRef } from '@alembic/core/project-context';
+import { createProjectContextFileRef, type ProjectContextRef } from '@alembic/core/project-context';
 import {
   type CertifiedProjectFactsArtifactV1,
-  createProjectContextFileRef,
   hashBytes,
   hashCanonicalJson,
 } from '@alembic/core/project-context-foundation';
