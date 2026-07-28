@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import {
   createFrozenEvidenceProjection,
   type FrozenEvidenceProjectionV1,
@@ -38,6 +37,7 @@ import type {
   MainCertifiedProjectionPayload,
   MainCertifiedSourceFile,
 } from '../../../project-facts/CertifiedProjectFactsRuntime.js';
+import type { StrictSemanticReviewSessionV1 } from '../../../service/semantic-review/StrictSemanticReviewRuntimeFactory.js';
 import {
   createMainStrictExpandedFactScheduleV1,
   createMainStrictExpansionRowV1,
@@ -77,12 +77,12 @@ interface StrictAnalysisExecutionInput {
   readonly modelHash: string;
   readonly planCognitionHash: string;
   readonly projection: MainCertifiedProjectionPayload;
-  readonly projectRoot: string;
   readonly reviewer: {
     readonly calibrationReceiptHash: string;
     readonly identity: ReviewerIdentityV1;
   };
   readonly runId: string;
+  readonly semanticReviewSession: StrictSemanticReviewSessionV1;
 }
 
 interface StrictAnalysisState {
@@ -107,23 +107,27 @@ interface StrictAnalystEnvelopeV1 {
 }
 
 async function prepareStrictAnalysis(input: StrictAnalysisExecutionInput) {
-  const evidenceEntryIds = new Map(
-    input.projection.files.map((file, index) => [file, `E-${index + 1}`] as const)
-  );
+  const evidenceEntries = input.semanticReviewSession.factEvidence.entries;
+  if (evidenceEntries.length !== input.projection.files.length) {
+    throw new Error('STRICT_ANALYSIS_EVIDENCE_LEDGER_COUNT_MISMATCH');
+  }
   const evidence = createFrozenEvidenceProjection({
     sourceRevisionVectorHash: input.compiledPlan.execution.sourceRevisionVectorHash,
-    entries: input.projection.files.map((file) =>
-      toEvidenceEntry(file, requireEvidenceEntryId(evidenceEntryIds, file))
-    ),
+    entries: input.projection.files.map((file, index) => {
+      const evidenceEntry = evidenceEntries[index];
+      if (!evidenceEntry) {
+        throw new Error(`STRICT_ANALYSIS_EVIDENCE_LEDGER_ENTRY_MISSING:${file.relativePath}`);
+      }
+      return toEvidenceEntry(file, evidenceEntry);
+    }),
   });
   const execution = await executeMainStrictFactScheduleV1({
     artifact: input.artifact,
     certifiedPlanningFacts: input.certifiedPlanningFacts,
     projection: input.projection,
-    projectRoot: input.projectRoot,
     schedule: input.compiledPlan.schedule,
     catalog: input.compiledPlan.factQueryCatalog,
-    evidenceSessionId: input.runId,
+    factEvidence: input.semanticReviewSession.factEvidence,
   });
   const population = canonicalizeObservationPopulationV1(
     buildPopulation(execution, input.compiledPlan, 1, null)
@@ -399,10 +403,9 @@ async function executeAnalysisExpansion(
     artifact: input.artifact,
     certifiedPlanningFacts: input.certifiedPlanningFacts,
     projection: input.projection,
-    projectRoot: input.projectRoot,
     schedule,
     catalog: input.compiledPlan.factQueryCatalog,
-    evidenceSessionId: input.runId,
+    factEvidence: input.semanticReviewSession.factEvidence,
   });
   const population = canonicalizeObservationPopulationV1(
     buildPopulation(
@@ -720,28 +723,27 @@ function buildPopulation(
   };
 }
 
-function toEvidenceEntry(file: MainCertifiedSourceFile, evidenceEntryId: string) {
+function toEvidenceEntry(
+  file: MainCertifiedSourceFile,
+  evidenceEntry: StrictSemanticReviewSessionV1['factEvidence']['entries'][number]
+) {
   const content = Buffer.from(file.contentBase64, 'base64').toString('utf8');
+  if (
+    evidenceEntry.file !== file.relativePath ||
+    evidenceEntry.content !== content ||
+    evidenceEntry.contentHash !== `sha256:${hashText(content)}`
+  ) {
+    throw new Error(`STRICT_ANALYSIS_EVIDENCE_LEDGER_REBOUND:${file.relativePath}`);
+  }
   return {
-    evidenceEntryId,
+    evidenceEntryId: evidenceEntry.id,
     relativePath: file.relativePath,
     blobHash: file.blobHash,
-    contentHash: hashText(content),
+    contentHash: evidenceEntry.contentHash.slice(7),
     startLine: 1,
     endLine: Math.max(1, content.split('\n').length),
     content,
   };
-}
-
-function requireEvidenceEntryId(
-  evidenceEntryIds: ReadonlyMap<MainCertifiedSourceFile, string>,
-  file: MainCertifiedSourceFile
-): string {
-  const evidenceEntryId = evidenceEntryIds.get(file);
-  if (!evidenceEntryId) {
-    throw new Error('STRICT_EVIDENCE_ENTRY_ID_MISSING');
-  }
-  return evidenceEntryId;
 }
 
 function hashText(value: string): string {
@@ -835,3 +837,5 @@ function withoutContextIdentity(
   const { schemaVersion: _schemaVersion, contextHash: _contextHash, ...input } = context;
   return input;
 }
+
+import { createHash } from 'node:crypto';

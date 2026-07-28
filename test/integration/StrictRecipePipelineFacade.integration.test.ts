@@ -6,7 +6,9 @@ import { createProjectDescriptor } from '@alembic/core';
 import { readAlembicMigrationBundleManifest } from '@alembic/core/database';
 import { ANATOMY_LENS_IDS } from '@alembic/core/plans';
 import {
+  assertSemanticDispositionReviewDurableAttestationV5,
   canonicalizeKnowledgeClustersV1,
+  consumeMainSemanticDispositionReviewDurableAttestationV5,
   createAnalysisReviewContextHashV1,
   createKnowledgeDispositionReviewV1,
   createProductionActorIdentityV1,
@@ -24,7 +26,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ServiceContainer } from '../../lib/injection/ServiceContainer.js';
 import { resolveMainCertifiedProjectScopeHash } from '../../lib/project-facts/CertifiedProjectFactsRuntime.js';
 import { resolveProjectScopeAnalysisContext } from '../../lib/project-scope/ProjectScopeAnalysis.js';
-import { executeStrictDispositionReviewV1 } from '../../lib/recipe-pipeline/generate/strict/StrictDispositionReviewRuntime.js';
 import { createMainStrictFactQueryFamiliesV1 } from '../../lib/recipe-pipeline/generate/strict/StrictFactExecutionRuntime.js';
 import { buildStrictCandidateCoverage } from '../../lib/recipe-pipeline/generate/strict/StrictFinalizationRuntime.js';
 import {
@@ -32,6 +33,7 @@ import {
   StrictProductionJournal,
 } from '../../lib/recipe-pipeline/generate/strict/StrictProductionJournal.js';
 import { executeRecipePipelineJob } from '../../lib/recipe-pipeline/RecipePipelineFacade.js';
+import { StrictSemanticReviewRuntimeFactory } from '../../lib/service/semantic-review/StrictSemanticReviewRuntimeFactory.js';
 import { PACKAGE_ROOT } from '../../lib/shared/package-assets.js';
 import { createRuntimeArtifactManifestFixture } from '../helpers/RuntimeArtifactManifestFixture.js';
 
@@ -414,6 +416,96 @@ describe('RecipePipelineFacade strict production integration', () => {
       ).toBe(true);
       expect(fixture.agentService.admissionNoWriteObserved).toBe(true);
       expect(fixture.agentService.dispositionReviewInvocations).toHaveLength(5);
+      const semanticReviewCheckpoint = readRecord(readRecord(checkpoint as unknown).semanticReview);
+      const semanticPolicy = readRecord(semanticReviewCheckpoint.policy);
+      const semanticRecords = semanticReviewCheckpoint.records as Array<Record<string, unknown>>;
+      expect(semanticReviewCheckpoint).toMatchObject({
+        schemaVersion: 1,
+        policyHash: semanticPolicy.policyHash,
+        enrollmentHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+        manifestHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+      });
+      expect(semanticPolicy).toMatchObject({
+        schemaVersion: 3,
+        signatureAlgorithm: 'Ed25519',
+        policyHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+      });
+      expect(semanticRecords).toHaveLength(5);
+      expect(report.semanticReviewEvidence).toEqual({
+        policyHash: semanticReviewCheckpoint.policyHash,
+        manifestHash: semanticReviewCheckpoint.manifestHash,
+        consumedRecordCount: 5,
+        v5AttestationCount: 5,
+        ledgerLoadCount: 5,
+        witnessResolveCount: 5,
+        providerInvocationCount: 5,
+      });
+      const expectedReceiptHashes = (
+        checkpoint.analysis?.factExecutionReceipts.map((receipt) => receipt.receiptHash) ?? []
+      ).sort((left, right) => left.localeCompare(right));
+      for (const record of semanticRecords) {
+        expect(record).toMatchObject({
+          schemaVersion: 1,
+          state: 'consumed',
+          requestHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+          attestationHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+          executionHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+          reviewReceiptHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+          recordHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+        });
+        const request = readRecord(record.request);
+        const attestation = readRecord(record.attestation);
+        const evidenceLoadReceipts = attestation.evidenceLoadReceipts as Array<
+          Record<string, unknown>
+        >;
+        expect(attestation).toMatchObject({
+          schemaVersion: 5,
+          trustPolicyHash: semanticPolicy.policyHash,
+          signatureAlgorithm: 'Ed25519',
+          attestationHash: record.attestationHash,
+        });
+        // 真实 producer fixture 每次只选中一个 physical EvidenceEntry；这个 root 必须
+        // 一次 load / witness resolve 承载完整 15 receipt、8 harvest-group universe。
+        expect(evidenceLoadReceipts).toHaveLength(1);
+        const harvestGroups = evidenceLoadReceipts[0]?.harvestGroups as Array<
+          Record<string, unknown>
+        >;
+        expect(harvestGroups).toHaveLength(8);
+        const bindings = harvestGroups.flatMap(
+          (group) => group.executionReceiptBindings as Array<Record<string, unknown>>
+        );
+        expect(bindings).toHaveLength(15);
+        expect(
+          harvestGroups.some(
+            (group) => (group.executionReceiptBindings as Array<Record<string, unknown>>).length > 1
+          )
+        ).toBe(true);
+        expect(
+          bindings
+            .map((binding) => String(binding.executionReceiptHash))
+            .sort((left, right) => left.localeCompare(right))
+        ).toEqual(expectedReceiptHashes);
+        const typedRequest = request as unknown as Parameters<
+          typeof consumeMainSemanticDispositionReviewDurableAttestationV5
+        >[0]['expectedSemanticRequest'];
+        const typedAttestation = attestation as unknown as Parameters<
+          typeof assertSemanticDispositionReviewDurableAttestationV5
+        >[0]['attestation'];
+        const typedPolicy = semanticPolicy as unknown as Parameters<
+          typeof assertSemanticDispositionReviewDurableAttestationV5
+        >[0]['expectedTrustPolicy'];
+        assertSemanticDispositionReviewDurableAttestationV5({
+          attestation: typedAttestation,
+          expectedTrustPolicy: typedPolicy,
+        });
+        expect(
+          consumeMainSemanticDispositionReviewDurableAttestationV5({
+            attestation: typedAttestation,
+            expectedSemanticRequest: typedRequest,
+            expectedTrustPolicy: typedPolicy,
+          }).receiptHash
+        ).toBe(record.reviewReceiptHash);
+      }
       const dispositionRows = terminalRows.filter(
         (row) => row.terminalFate === 'reviewed-merge' || row.terminalFate === 'reviewed-duplicate'
       );
@@ -443,12 +535,12 @@ describe('RecipePipelineFacade strict production integration', () => {
           reviewer: {
             providerId: 'fixture',
             modelId: 'fixture-reviewer',
-            modelVersion: 'frozen-evidence',
-            promptHash: hashCanonicalJson(invocation.prompt),
-            runId: fixture.runId,
-            invocationId: expect.stringContaining(invocation.runId),
-            loadReceiptHash: runtimeLoad.artifactReceipt.receiptHash,
-            outputHash: hashCanonicalJson(invocation.reply),
+            modelVersion: expect.stringContaining('/semantic-disposition-review/frozen-evidence'),
+            promptHash: byteSha(invocation.prompt),
+            runId: `main-semantic-review:${fixture.runId}`,
+            invocationId: expect.stringContaining(`semantic-review:${fixture.runId}:`),
+            loadReceiptHash: semanticPolicy.reviewerModelLoadReceiptHash,
+            outputHash: byteSha(invocation.reply),
           },
         });
       });
@@ -721,8 +813,10 @@ describe('RecipePipelineFacade strict production integration', () => {
           .join('\n')}\n`
       );
       await fsp.rm(path.join(operationRoot, 'strict-production.runtime-report.json'));
+      fixture.restartSemanticReviewFactory();
       const recovered = await executeFixture(fixture);
       expect(recovered).toMatchObject({ mode: 'strict-production', status: 'FINALIZED' });
+      expect(fixture.agentService.dispositionReviewInvocations).toHaveLength(5);
       const recoveredRows = (await fsp.readFile(journalPath, 'utf8'))
         .trim()
         .split('\n')
@@ -732,6 +826,7 @@ describe('RecipePipelineFacade strict production integration', () => {
       ).toBe('recovered');
       const replay = await executeFixture(fixture);
       expect(replay).toMatchObject({ mode: 'strict-production', status: 'FINALIZED' });
+      expect(fixture.agentService.dispositionReviewInvocations).toHaveLength(5);
       const replayJournal = (await fsp.readFile(journalPath, 'utf8')).trim().split('\n');
       expect(replayJournal).toHaveLength(journal.length);
       const activePath = path.join(publicationRoot, 'active.json');
@@ -820,13 +915,13 @@ describe('RecipePipelineFacade strict production integration', () => {
   }, 30_000);
 
   it.each([
-    ['missing', 'STRICT_DISPOSITION_REVIEW_RUN_FAILED:producer-non-draft:success'],
-    ['malformed', 'STRICT_DISPOSITION_REVIEW_OUTPUT_INVALID'],
-    ['tool-calling', 'STRICT_DISPOSITION_REVIEW_TOOL_FORBIDDEN:producer-non-draft'],
-    ['reject', 'STRICT_DISPOSITION_REVIEW_REJECTED:producer-non-draft'],
-    ['stale', 'STRICT_DISPOSITION_REVIEW_OUTPUT_REBOUND:currentAnalysisFixpointHash'],
-    ['rebound', 'STRICT_DISPOSITION_REVIEW_OUTPUT_REBOUND:proposedDispositionHash'],
-    ['reused', 'STRICT_DISPOSITION_REVIEW_OUTPUT_REBOUND:proposedDispositionHash'],
+    ['missing', 'ALEMBIC_AGENT_SEMANTIC_REVIEW_OUTPUT_INVALID'],
+    ['malformed', 'ALEMBIC_AGENT_SEMANTIC_REVIEW_OUTPUT_INVALID'],
+    ['tool-calling', 'ALEMBIC_AGENT_SEMANTIC_REVIEW_OUTPUT_INVALID'],
+    ['reject', 'STRICT_SEMANTIC_REVIEW_REJECTED:producer-non-draft'],
+    ['stale', 'ALEMBIC_AGENT_SEMANTIC_REVIEW_OUTPUT_INVALID'],
+    ['rebound', 'ALEMBIC_AGENT_SEMANTIC_REVIEW_OUTPUT_INVALID'],
+    ['reused', 'ALEMBIC_AGENT_SEMANTIC_REVIEW_OUTPUT_INVALID'],
   ] as const)(
     'fails closed before terminal closure when disposition reviewer output is %s',
     async (dispositionReviewerMode, expectedError) => {
@@ -926,6 +1021,62 @@ describe('RecipePipelineFacade strict production integration', () => {
         readRecord(readRecord(reviewed.dispositionReview).reviewer).outputHash =
           sha('tampered-review-output');
       }, 'PRODUCTION_ACTOR_IDENTITY_INVALID');
+      await runCase((checkpoint) => {
+        delete checkpoint.semanticReview;
+      }, 'STRICT_SEMANTIC_REVIEW_CHECKPOINT_MISSING');
+      for (const mutateSemanticReview of [
+        (semanticReview: Record<string, unknown>) => {
+          const record = firstSemanticRecord(semanticReview);
+          readRecord(record.attestation).signatureBase64 = '';
+        },
+        (semanticReview: Record<string, unknown>) => {
+          const record = firstSemanticRecord(semanticReview);
+          readRecord(record.attestation).signatureBase64 = Buffer.from(
+            'wrong-signature',
+            'utf8'
+          ).toString('base64');
+        },
+        (semanticReview: Record<string, unknown>) => {
+          const record = firstSemanticRecord(semanticReview);
+          readRecord(record.request).requestHash = sha('tampered-request');
+          record.requestHash = sha('tampered-request');
+        },
+        (semanticReview: Record<string, unknown>) => {
+          const record = firstSemanticRecord(semanticReview);
+          const loadReceipt = (
+            readRecord(record.attestation).evidenceLoadReceipts as Array<Record<string, unknown>>
+          )[0];
+          if (!loadReceipt) {
+            throw new Error('fixture semantic load receipt missing');
+          }
+          loadReceipt.witnessBindingHash = sha('tampered-witness');
+        },
+        (semanticReview: Record<string, unknown>) => {
+          const policy = readRecord(semanticReview.policy);
+          policy.evidenceStoreConfigHash = sha('tampered-store-config');
+        },
+        (semanticReview: Record<string, unknown>) => {
+          const policy = readRecord(semanticReview.policy);
+          policy.reviewerModelLoadReceiptHash = sha('tampered-model-load');
+        },
+        (semanticReview: Record<string, unknown>) => {
+          const records = semanticReview.records as Array<Record<string, unknown>>;
+          const first = records[0];
+          const second = records[1];
+          if (!first || !second) {
+            throw new Error('fixture semantic replay records missing');
+          }
+          first.attestation = structuredClone(second.attestation);
+          first.attestationHash = readRecord(first.attestation).attestationHash;
+          first.executionHash = readRecord(readRecord(first.attestation).execution).executionHash;
+        },
+      ]) {
+        await runCase((checkpoint) => {
+          const semanticReview = readRecord(checkpoint.semanticReview);
+          mutateSemanticReview(semanticReview);
+          rehashSemanticReviewCheckpoint(semanticReview);
+        }, 'SEMANTIC_');
+      }
     } finally {
       fixture.database.close();
     }
@@ -934,7 +1085,9 @@ describe('RecipePipelineFacade strict production integration', () => {
   it('conserves an explicit zero expression and rejects unsupported investigated-empty G3', async () => {
     const fixture = await createFixture({ producerMode: 'zero' });
     try {
-      await expect(executeFixture(fixture)).rejects.toThrow('STRICT_INVESTIGATED_EMPTY_REJECTED');
+      await expect(executeFixture(fixture)).rejects.toThrow(
+        'SEMANTIC_DISPOSITION_REVIEW_NEGATIVE_EVIDENCE_INVALID'
+      );
       const operationRoot = path.join(
         fixture.dataRoot,
         'strict-production/operations/strict-integration-run'
@@ -965,8 +1118,25 @@ describe('RecipePipelineFacade strict production integration', () => {
         terminalClosure: 'reviewed-non-draft',
         receiptHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
       });
-      expect(content.g1Receipts).toEqual([]);
+      expect(content.g1Receipts).toHaveLength(1);
+      expect((content.g1Receipts as Array<Record<string, unknown>>)[0]).toMatchObject({
+        candidateFingerprint: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+        verdict: 'pass',
+        receiptHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+      });
       expect(content.readyMembers).toEqual([]);
+      expect(fixture.agentService.dispositionReviewInvocations).toHaveLength(1);
+      const semanticRecords = readRecord(checkpoint.semanticReview).records as Array<
+        Record<string, unknown>
+      >;
+      expect(semanticRecords).toHaveLength(1);
+      expect(semanticRecords[0]).toMatchObject({
+        state: 'consumed',
+        attestation: {
+          schemaVersion: 5,
+          signatureAlgorithm: 'Ed25519',
+        },
+      });
       expect(checkpoint).not.toHaveProperty('candidateCoverage');
       await expect(
         fsp.stat(path.join(fixture.dataRoot, '.asd/context/recipe-publications/active.json'))
@@ -976,20 +1146,13 @@ describe('RecipePipelineFacade strict production integration', () => {
     }
   }, 30_000);
 
-  it('executes an independent investigated-empty review and rejects a matched denominator', async () => {
+  it('rejects a non-empty population before invoking investigated-empty review', async () => {
     const fixture = await createFixture({ producerMode: 'no-hypothesis' });
     try {
-      await expect(executeFixture(fixture)).rejects.toThrow('STRICT_INVESTIGATED_EMPTY_REJECTED');
-      expect(fixture.agentService.dispositionReviewInvocations).toHaveLength(1);
-      const invocation = fixture.agentService.dispositionReviewInvocations[0];
-      if (!invocation) {
-        throw new Error('fixture investigated-empty invocation missing');
-      }
-      expect(JSON.parse(invocation.reply)).toMatchObject({
-        reviewKind: 'investigated-empty',
-        verdict: 'pass',
-        reasonCode: expect.stringContaining('fixture-independent-disposition-pass:'),
-      });
+      await expect(executeFixture(fixture)).rejects.toThrow(
+        'SEMANTIC_DISPOSITION_REVIEW_NEGATIVE_EVIDENCE_INVALID'
+      );
+      expect(fixture.agentService.dispositionReviewInvocations).toHaveLength(0);
       const checkpoint = await readJson(
         path.join(
           fixture.dataRoot,
@@ -1003,14 +1166,13 @@ describe('RecipePipelineFacade strict production integration', () => {
     }
   }, 30_000);
 
-  it('fails closed on malformed, rebound, non-pass, tool-calling, or reused investigated-empty reviews', async () => {
+  it('does not fall back to the removed V1 reviewer when investigated-empty context is invalid', async () => {
     const fixture = await createFixture({ producerMode: 'no-hypothesis' });
     try {
-      await expect(executeFixture(fixture)).rejects.toThrow('STRICT_INVESTIGATED_EMPTY_REJECTED');
-      const prior = fixture.agentService.dispositionReviewInvocations[0];
-      if (!prior) {
-        throw new Error('fixture investigated-empty reuse authority missing');
-      }
+      await expect(executeFixture(fixture)).rejects.toThrow(
+        'SEMANTIC_DISPOSITION_REVIEW_NEGATIVE_EVIDENCE_INVALID'
+      );
+      expect(fixture.agentService.dispositionReviewInvocations).toHaveLength(0);
       const checkpoint = await readJson(
         path.join(
           fixture.dataRoot,
@@ -1018,89 +1180,8 @@ describe('RecipePipelineFacade strict production integration', () => {
           'strict-production.checkpoint.json'
         )
       );
-      const analysis = readRecord(checkpoint.analysis) as unknown as Parameters<
-        typeof buildStrictCandidateCoverage
-      >[0]['analysis'];
-      const compiledPlan = readRecord(
-        readRecord(checkpoint.planning).compiledPlan
-      ) as unknown as Parameters<typeof buildStrictCandidateCoverage>[0]['compiledPlan'];
-      const executionReceipts = [...analysis.factExecutionReceipts].sort((left, right) =>
-        left.obligationId.localeCompare(right.obligationId)
-      );
-      const evidenceEntryIds = analysis.evidence.entries.map((entry) => entry.evidenceEntryId);
-      const proposedDispositionHash = hashKnowledgeDispositionProposalV1({
-        reviewKind: 'investigated-empty',
-        populationHash: analysis.epoch.population.populationHash,
-        sourceRevisionVectorHash: compiledPlan.execution.sourceRevisionVectorHash,
-        finalExpandedScheduleHash: analysis.finalExpandedSchedule.finalExpandedScheduleHash,
-        currentAnalysisFixpointHash: analysis.fixpoint.fixpointHash,
-        expectedObligationIds: analysis.finalExpandedSchedule.obligationIds,
-        executionBindings: executionReceipts.map((receipt) => ({
-          obligationId: receipt.obligationId,
-          executionReceiptHash: receipt.receiptHash,
-          executionOutputHash: receipt.outputHash,
-          denominatorHash: receipt.denominatorHash,
-          disposition: receipt.disposition,
-          terminalReceiptId: receipt.terminalReceiptId,
-        })),
-        evidenceEntryIds,
-      });
-      const firstCellId = compiledPlan.universe.cells
-        .filter((cell) => cell.status === 'eligible')
-        .map((cell) => cell.cellId)
-        .sort()[0];
-      if (!firstCellId) {
-        throw new Error('fixture investigated-empty cell missing');
-      }
-      const reviewInput = {
-        agentService: fixture.agentService,
-        reviewKind: 'investigated-empty' as const,
-        currentAnalysisFixpointHash: analysis.fixpoint.fixpointHash,
-        populationHash: analysis.epoch.population.populationHash,
-        proposedDispositionHash,
-        executionReceipts,
-        finalExpandedSchedule: analysis.finalExpandedSchedule,
-        terminalObligations: analysis.fixpoint.terminalObligations,
-        producer: createProductionActorIdentityV1({
-          providerId: 'fixture',
-          modelId: 'fixture-producer',
-          modelVersion: 'strict-v1',
-          promptHash: sha('investigated-empty-producer-prompt'),
-          runId: fixture.runId,
-          invocationId: 'fixture-investigated-empty-producer',
-          loadReceiptHash: sha('fixture-investigated-empty-producer-load'),
-          outputHash: proposedDispositionHash,
-        }),
-        reviewer: {
-          calibrationReceiptHash: sha('calibration'),
-          identity: {
-            provider: 'fixture',
-            model: 'fixture-reviewer',
-            method: 'frozen-evidence',
-          },
-          loadReceiptHash: sha('fixture-investigated-empty-reviewer-load'),
-        },
-        evidenceEntryIds,
-        subject: { schemaVersion: 1, cellId: firstCellId },
-      };
-      for (const [mode, expectedError] of [
-        ['missing', 'STRICT_DISPOSITION_REVIEW_RUN_FAILED'],
-        ['malformed', 'STRICT_DISPOSITION_REVIEW_OUTPUT_INVALID'],
-        ['tool-calling', 'STRICT_DISPOSITION_REVIEW_TOOL_FORBIDDEN'],
-        ['reject', 'STRICT_DISPOSITION_REVIEW_REJECTED'],
-        ['stale', 'STRICT_DISPOSITION_REVIEW_OUTPUT_REBOUND:currentAnalysisFixpointHash'],
-        ['rebound', 'STRICT_DISPOSITION_REVIEW_OUTPUT_REBOUND:proposedDispositionHash'],
-      ] as const) {
-        fixture.agentService.setDispositionReviewerMode(mode);
-        await expect(executeStrictDispositionReviewV1(reviewInput)).rejects.toThrow(expectedError);
-      }
-      fixture.agentService.setDispositionReviewerMode('reused');
-      await expect(
-        executeStrictDispositionReviewV1({
-          ...reviewInput,
-          usedResponseOutputHashes: new Set([hashCanonicalJson(prior.reply)]),
-        })
-      ).rejects.toThrow('STRICT_DISPOSITION_REVIEW_OUTPUT_REUSED:investigated-empty');
+      expect(checkpoint).not.toHaveProperty('semanticReview');
+      expect(checkpoint).not.toHaveProperty('candidateCoverage');
     } finally {
       fixture.database.close();
     }
@@ -1635,17 +1716,22 @@ async function createFixture(options: StrictFixtureOptions = {}) {
   });
   const database = new Database(path.join(dataRoot, 'main.sqlite'));
   const agentService = createStrictFixtureAgentService(options, dataRoot);
+  const semanticReviewRuntimeFactory = new StrictSemanticReviewRuntimeFactory({
+    dataRoot,
+    provider: agentService,
+  });
   const embedProvider = createFixtureEmbedProvider();
   const services = new Map<string, unknown>([
     ['database', database],
     ['agentService', agentService],
+    ['strictSemanticReviewRuntimeFactory', semanticReviewRuntimeFactory],
   ]);
   const container = {
     singletons: {
       _projectRoot: projectRoot,
       _workspaceResolver: resolver,
       _embedProvider: embedProvider,
-      aiProvider: { name: 'fixture', model: 'fixture-reviewer' },
+      aiProvider: agentService,
     },
     get(name: string) {
       if (!services.has(name)) {
@@ -1712,6 +1798,15 @@ async function createFixture(options: StrictFixtureOptions = {}) {
     runtimeArtifactCorePath: runtimeArtifactFixture.coreArtifactPath,
     runtimeArtifactManifestHash: runtimeArtifactFixture.manifest.manifestHash,
     runtimeArtifactManifestPath: runtimeArtifactFixture.manifestPath,
+    restartSemanticReviewFactory() {
+      services.set(
+        'strictSemanticReviewRuntimeFactory',
+        new StrictSemanticReviewRuntimeFactory({
+          dataRoot,
+          provider: agentService,
+        })
+      );
+    },
     sourceConfigBytes,
   };
 }
@@ -1819,6 +1914,8 @@ function createFixtureEmbedProvider() {
 }
 
 class DeterministicStrictAgentService {
+  readonly name = 'fixture';
+  readonly model = 'fixture-reviewer';
   networkRequestCount = 0;
   admissionNoWriteObserved = false;
   readonly dispositionReviewInvocations: Array<{
@@ -1840,6 +1937,84 @@ class DeterministicStrictAgentService {
     this.dispositionReviewerMode = mode;
   }
 
+  async chatWithTools(compiledPrompt: string) {
+    const parsed = JSON.parse(compiledPrompt) as {
+      readonly payload: {
+        readonly schemaVersion: number;
+        readonly semanticRequest: {
+          readonly requestHash: string;
+          readonly contextHash: string;
+          readonly reviewKind: string;
+          readonly proposedDispositionHash: string;
+          readonly evidence: readonly { readonly evidenceEntryId: string }[];
+          readonly calibration: {
+            readonly axes: readonly { readonly axisId: string }[];
+          };
+        };
+      };
+    };
+    const semanticRequest = parsed.payload.semanticRequest;
+    const compiledPromptHash = `sha256:${createHash('sha256')
+      .update(compiledPrompt)
+      .digest('hex')}`;
+    const requestHash = hashCanonicalJson({
+      ...parsed.payload,
+      compiledPrompt,
+      compiledPromptHash,
+    });
+    const evidenceEntryIds = semanticRequest.evidence.map((row) => row.evidenceEntryId);
+    const axisIds = semanticRequest.calibration.axes.map((axis) => axis.axisId);
+    const output = {
+      schemaVersion: parsed.payload.schemaVersion,
+      requestHash,
+      compiledPromptHash,
+      semanticRequestHash: semanticRequest.requestHash,
+      contextHash: semanticRequest.contextHash,
+      reviewKind: semanticRequest.reviewKind,
+      proposedDispositionHash: semanticRequest.proposedDispositionHash,
+      verdict: this.dispositionReviewerMode === 'reject' ? 'reject' : 'pass',
+      reasonCode: `fixture-independent-disposition-pass:${semanticRequest.reviewKind}`,
+      axisDecisions: axisIds.map((axisId) => ({
+        axisId,
+        verdict: 'pass',
+        score: 0.95,
+        reasonCode: `PASS:${axisId}`,
+        evidenceEntryIds,
+      })),
+      evidenceFindings: evidenceEntryIds.map((evidenceEntryId) => ({
+        evidenceEntryId,
+        axisIds,
+        finding: 'The authenticated production evidence covers the complete strict denominator.',
+        supportsVerdict: true,
+      })),
+    };
+    if (this.dispositionReviewerMode === 'stale') {
+      output.contextHash = sha('fixture-stale-fixpoint');
+    }
+    if (this.dispositionReviewerMode === 'rebound') {
+      output.proposedDispositionHash = sha('fixture-rebound-proposal');
+    }
+    let reply =
+      this.dispositionReviewerMode === 'missing'
+        ? ''
+        : this.dispositionReviewerMode === 'malformed'
+          ? 'not-json'
+          : JSON.stringify(output);
+    if (this.dispositionReviewerMode === 'reused' && this.dispositionReviewInvocations[0]) {
+      reply = this.dispositionReviewInvocations[0].reply;
+    }
+    const runId = `fixture-disposition-review-${this.dispositionReviewInvocations.length + 1}`;
+    this.dispositionReviewInvocations.push({ prompt: compiledPrompt, reply, runId });
+    return {
+      text: reply,
+      functionCalls:
+        this.dispositionReviewerMode === 'tool-calling'
+          ? [{ id: 'fixture-tool-call', name: 'knowledge', args: {} }]
+          : [],
+      finishReason: 'stop',
+    };
+  }
+
   async run(input: Record<string, unknown>) {
     const metadata = readRecord(readRecord(input.message).metadata);
     if (metadata.task === 'strict-plan-cognition') {
@@ -1847,9 +2022,6 @@ class DeterministicStrictAgentService {
     }
     if (metadata.task === 'strict-independent-value-review') {
       return this.runIndependentValueReview(input);
-    }
-    if (metadata.task === 'strict-knowledge-disposition-review') {
-      return this.runKnowledgeDispositionReview(input);
     }
     if (metadata.task === 'strict-production') {
       return this.runStrictProduction(input);
@@ -1894,53 +2066,6 @@ class DeterministicStrictAgentService {
       }),
       'plan-selection'
     );
-  }
-
-  private runKnowledgeDispositionReview(input: Record<string, unknown>) {
-    const prompt = String(readRecord(input.message).content ?? '');
-    const jsonStart = prompt.lastIndexOf('\n\n{');
-    if (jsonStart < 0) {
-      throw new Error('fixture disposition reviewer context missing');
-    }
-    const context = readRecord(JSON.parse(prompt.slice(jsonStart + 2)));
-    const output = {
-      schemaVersion: 1,
-      reviewKind: context.reviewKind,
-      currentAnalysisFixpointHash: context.currentAnalysisFixpointHash,
-      populationHash: context.populationHash,
-      proposedDispositionHash: context.proposedDispositionHash,
-      finalExpandedScheduleHash: context.finalExpandedScheduleHash,
-      verdict: this.dispositionReviewerMode === 'reject' ? 'reject' : 'pass',
-      reasonCode: `fixture-independent-disposition-pass:${String(
-        readRecord(context.subject).cellId ?? readRecord(context.subject).expressionId ?? 'terminal'
-      )}`,
-      evidenceEntryIds: context.evidenceEntryIds,
-    };
-    if (this.dispositionReviewerMode === 'stale') {
-      output.currentAnalysisFixpointHash = sha('fixture-stale-fixpoint');
-    }
-    if (this.dispositionReviewerMode === 'rebound') {
-      output.proposedDispositionHash = sha('fixture-rebound-proposal');
-    }
-    let reply =
-      this.dispositionReviewerMode === 'missing'
-        ? ''
-        : this.dispositionReviewerMode === 'malformed'
-          ? 'not-json'
-          : JSON.stringify(output);
-    if (this.dispositionReviewerMode === 'reused' && this.dispositionReviewInvocations[0]) {
-      reply = this.dispositionReviewInvocations[0].reply;
-    }
-    const runId = `fixture-disposition-review-${this.dispositionReviewInvocations.length + 1}`;
-    this.dispositionReviewInvocations.push({ prompt, reply, runId });
-    const result = agentResult(reply, 'plan-selection', runId);
-    if (this.dispositionReviewerMode === 'tool-calling') {
-      return {
-        ...result,
-        toolCalls: [{ name: 'knowledge', args: {}, result: null, iteration: 1 }],
-      };
-    }
-    return result;
   }
 
   private async runStrictProduction(input: Record<string, unknown>) {
@@ -2463,6 +2588,25 @@ function readRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
+function firstSemanticRecord(semanticReview: Record<string, unknown>): Record<string, unknown> {
+  const record = (semanticReview.records as Array<Record<string, unknown>>)[0];
+  if (!record) {
+    throw new Error('fixture semantic record missing');
+  }
+  return record;
+}
+
+function rehashSemanticReviewCheckpoint(semanticReview: Record<string, unknown>): void {
+  for (const record of semanticReview.records as Array<Record<string, unknown>>) {
+    record.recordHash = hashCanonicalJson(withoutKey(record, 'recordHash'));
+  }
+  semanticReview.manifestHash = hashCanonicalJson(withoutKey(semanticReview, 'manifestHash'));
+}
+
 function sha(value: string): `sha256:${string}` {
   return `sha256:${Buffer.from(value).toString('hex').padEnd(64, '0').slice(0, 64)}`;
+}
+
+function byteSha(value: string): `sha256:${string}` {
+  return `sha256:${createHash('sha256').update(value).digest('hex')}`;
 }

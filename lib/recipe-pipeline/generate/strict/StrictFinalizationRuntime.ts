@@ -3,7 +3,6 @@ import fsp, { type FileHandle } from 'node:fs/promises';
 import path from 'node:path';
 import { InvestigatedEmptyReviewer, type ReviewerIdentityV1 } from '@alembic/agent/evaluation';
 import type { StrictProducerExpressionSetV1 } from '@alembic/agent/production';
-import type { AgentService } from '@alembic/agent/service';
 import {
   type CandidateCoverageReceiptV1,
   createCandidateCoverageReceiptV1,
@@ -20,6 +19,7 @@ import {
 } from '@alembic/core/knowledge';
 import type { CompiledColdStartPlanV2 } from '@alembic/core/plans';
 import {
+  createAgentSemanticDispositionReviewRequestV1,
   createProductionActorIdentityV1,
   hashKnowledgeDispositionProposalV1,
 } from '@alembic/core/production';
@@ -35,6 +35,7 @@ import {
   copyAndCheckpointStrictPublicDatabase,
   verifyStrictPublicDatabaseServingSet,
 } from '../../../infrastructure/database/StrictResetDatabaseAdapter.js';
+import type { StrictSemanticReviewSessionV1 } from '../../../service/semantic-review/StrictSemanticReviewRuntimeFactory.js';
 import {
   resolveStrictAnalysisPublicLineageV1,
   type StrictAnalysisExecutionResultV1,
@@ -46,7 +47,11 @@ import {
   STRICT_PUBLICATION_MARKER_FILE,
   STRICT_PUBLICATION_ROOT_RELATIVE_PATH,
 } from './StrictAuthorization.js';
-import { executeStrictDispositionReviewV1 } from './StrictDispositionReviewRuntime.js';
+import {
+  createStrictSemanticReviewEvidenceV1,
+  executeStrictDispositionReviewV5,
+  type StrictSemanticReviewCheckpointPortV1,
+} from './StrictDispositionReviewRuntime.js';
 import type {
   StrictPrivateCorpusContentResultV1,
   StrictPrivateCorpusResultV1,
@@ -1747,16 +1752,15 @@ function freezeDeep<T>(value: T): T {
 }
 
 interface StrictCandidateCoverageInputV1 {
-  readonly agentService: Pick<AgentService, 'run'>;
   readonly analysis: StrictAnalysisExecutionResultV1;
   readonly compiledPlan: CompiledColdStartPlanV2;
   readonly expressionSets: readonly StrictProducerExpressionSetV1[];
   readonly privateCorpus: StrictPrivateCorpusContentResultV1;
   readonly producerModelHash: string;
-  readonly reviewerCalibrationReceiptHash: string;
   readonly reviewerIdentity: ReviewerIdentityV1;
   readonly runId: string;
-  readonly runtimeReceiptHash: string;
+  readonly semanticReviewCheckpoint: StrictSemanticReviewCheckpointPortV1;
+  readonly semanticReviewSession: StrictSemanticReviewSessionV1;
 }
 
 interface StrictG3ResidueV1 {
@@ -1774,8 +1778,6 @@ interface StrictCandidateCoverageBuildContextV1 extends StrictG3ResidueV1 {
     StrictPrivateCorpusContentResultV1['bindings'][number]
   >;
   readonly reviewer: InvestigatedEmptyReviewer;
-  readonly dispositionReviewInvocationIds: Set<string>;
-  readonly dispositionReviewOutputHashes: Set<string>;
   readonly setsByCell: ReadonlyMap<string, StrictProducerExpressionSetV1[]>;
   readonly terminalByExpression: ReadonlyMap<
     string,
@@ -1803,8 +1805,6 @@ export async function buildStrictCandidateCoverage(
   const buildContext: StrictCandidateCoverageBuildContextV1 = {
     bindingByCell,
     bindingByRecipe,
-    dispositionReviewInvocationIds: new Set(),
-    dispositionReviewOutputHashes: new Set(),
     reviewer,
     setsByCell,
     terminalByExpression,
@@ -1940,7 +1940,7 @@ async function buildStrictInvestigatedEmptyCoverageCell(
   );
   const obligationIds = [...input.analysis.finalExpandedSchedule.obligationIds];
   const evidenceEntryIds = input.analysis.evidence.entries.map((entry) => entry.evidenceEntryId);
-  const proposedDispositionHash = hashKnowledgeDispositionProposalV1({
+  const dispositionProposal = {
     reviewKind: 'investigated-empty',
     populationHash: input.analysis.epoch.population.populationHash,
     sourceRevisionVectorHash: input.compiledPlan.execution.sourceRevisionVectorHash,
@@ -1956,7 +1956,8 @@ async function buildStrictInvestigatedEmptyCoverageCell(
       terminalReceiptId: receipt.terminalReceiptId,
     })),
     evidenceEntryIds,
-  });
+  } as const;
+  const proposedDispositionHash = hashKnowledgeDispositionProposalV1(dispositionProposal);
   const producer = createProductionActorIdentityV1({
     providerId: 'alembic-agent',
     modelId: input.producerModelHash,
@@ -1971,31 +1972,43 @@ async function buildStrictInvestigatedEmptyCoverageCell(
     loadReceiptHash: input.producerModelHash,
     outputHash: proposedDispositionHash,
   });
-  const { dispositionReview } = await executeStrictDispositionReviewV1({
-    agentService: input.agentService,
-    reviewKind: 'investigated-empty',
+  const semanticRequest = createAgentSemanticDispositionReviewRequestV1({
+    strictWorkflowRunId: input.runId,
+    sourceRevisionVectorHash: input.analysis.evidence.sourceRevisionVectorHash,
     currentAnalysisFixpointHash: input.analysis.fixpoint.fixpointHash,
     populationHash: input.analysis.epoch.population.populationHash,
     proposedDispositionHash,
-    executionReceipts,
     finalExpandedSchedule: input.analysis.finalExpandedSchedule,
-    terminalObligations: input.analysis.fixpoint.terminalObligations,
+    executionReceipts,
+    evidence: createStrictSemanticReviewEvidenceV1({
+      evidenceEntryIds,
+      executionReceipts,
+      session: input.semanticReviewSession,
+      sourceRevisionVectorHash: input.analysis.evidence.sourceRevisionVectorHash,
+      semanticRole: 'investigated-empty-complete-denominator',
+    }),
+    calibration: input.semanticReviewSession.calibration('investigated-empty'),
     producer,
-    reviewer: {
-      calibrationReceiptHash: input.reviewerCalibrationReceiptHash,
-      identity: input.reviewerIdentity,
-      loadReceiptHash: input.runtimeReceiptHash,
+    context: {
+      reviewKind: 'investigated-empty',
+      analysisFixpoint: input.analysis.fixpoint,
+      population: input.analysis.epoch.population,
+      proposal: dispositionProposal,
+      negativeEvidenceSufficiency: {
+        claim: 'The sealed strict denominator has no content-ready candidate for this cell.',
+        requiredAbsencePredicates: [
+          'no-content-ready-binding',
+          'no-unresolved-hypothesis-or-suppressed-expression',
+        ],
+        inspectedEvidenceEntryIds: evidenceEntryIds,
+        reasonCode: 'COMPLETE_STRICT_DENOMINATOR_INSPECTED',
+      },
     },
-    evidenceEntryIds,
-    subject: {
-      schemaVersion: 1,
-      cellId,
-      candidateDisposition: 'investigated-empty',
-      expressionSetReceiptIds: sets.map((set) => `expression-set:${set.setId}`),
-      lensBindingIds,
-    },
-    usedInvocationIds: context.dispositionReviewInvocationIds,
-    usedResponseOutputHashes: context.dispositionReviewOutputHashes,
+  });
+  const { dispositionReview } = await executeStrictDispositionReviewV5({
+    checkpoint: input.semanticReviewCheckpoint,
+    semanticRequest,
+    session: input.semanticReviewSession,
   });
   const emptyDecision = context.reviewer.review({
     sourceRevisionVectorHash: input.compiledPlan.execution.sourceRevisionVectorHash,

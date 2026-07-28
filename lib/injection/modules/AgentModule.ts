@@ -20,6 +20,7 @@ import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import { DASHBOARD_OPERATION_MANIFESTS } from '#tools/adapters/DashboardOperations.js';
 import { SKILL_CAPABILITY_MANIFESTS } from '#tools/adapters/SkillCapabilities.js';
 import { ToolContextFactory } from '#tools/ToolContextFactory.js';
+import { StrictSemanticReviewRuntimeFactory } from '../../service/semantic-review/StrictSemanticReviewRuntimeFactory.js';
 import { SkillHooks } from '../../service/skills/SkillHooks.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
 
@@ -114,11 +115,37 @@ export function register(c: ServiceContainer) {
     { aiDependent: true }
   );
 
+  c.singleton(
+    'strictSemanticReviewRuntimeFactory',
+    (ct: ServiceContainer) => createStrictSemanticReviewRuntimeFactory(ct),
+    { aiDependent: true }
+  );
+
   c.singleton('skillHooks', () => {
     const hooks = new SkillHooks();
     hooks.load().catch(() => {
       /* skill hooks load is best-effort */
     });
     return hooks;
+  });
+}
+
+function createStrictSemanticReviewRuntimeFactory(
+  container: ServiceContainer
+): StrictSemanticReviewRuntimeFactory {
+  const provider = container.singletons.aiProvider;
+  if (
+    !provider ||
+    typeof provider !== 'object' ||
+    !('chatWithTools' in provider) ||
+    typeof provider.chatWithTools !== 'function'
+  ) {
+    throw new Error('STRICT_SEMANTIC_REVIEW_PROVIDER_UNAVAILABLE');
+  }
+  return new StrictSemanticReviewRuntimeFactory({
+    dataRoot: resolveDataRoot(container),
+    provider: provider as ConstructorParameters<
+      typeof StrictSemanticReviewRuntimeFactory
+    >[0]['provider'],
   });
 }

@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import {
   assertCodeFactGenerationManifestV1,
   createAstFactQueryBackendV1,
@@ -8,11 +7,8 @@ import {
   createProjectContextFactQueryBackendV1,
   createProjectContextFactQueryFamilyV1,
   createStrictAstFactQueryPackV1,
-  createStrictEvidenceLedgerSnapshotV1,
   createStrictFactBackendRegistryV1,
-  createStrictFactDirectWitnessBindingV1,
   createStrictFactSubjectBindingV1,
-  createStrictFactWitnessAuthorityV1,
   executeStrictFactScheduleV1,
   type StrictConfigParserIdV1,
   type StrictFactQueryBackendV1,
@@ -23,15 +19,12 @@ import type {
   FactQueryFamilyV1,
   MiningWorkScheduleV1,
 } from '@alembic/core/plans';
-import type { ProjectContextRef } from '@alembic/core/project-context';
 import {
   type CertifiedProjectFactsArtifactV1,
   hashCanonicalJson,
 } from '@alembic/core/project-context-foundation';
-import type {
-  MainCertifiedProjectionPayload,
-  MainCertifiedSourceFile,
-} from '../../../project-facts/CertifiedProjectFactsRuntime.js';
+import type { MainCertifiedProjectionPayload } from '../../../project-facts/CertifiedProjectFactsRuntime.js';
+import type { MainStrictFactEvidenceAuthorityV1 } from '../../../service/semantic-review/StrictSemanticReviewRuntimeFactory.js';
 
 type MainStrictBackendSpec =
   | {
@@ -135,7 +128,6 @@ export async function executeMainStrictFactScheduleV1(input: {
   readonly artifact: CertifiedProjectFactsArtifactV1;
   readonly certifiedPlanningFacts: CertifiedPlanningFactsV1;
   readonly projection: MainCertifiedProjectionPayload;
-  readonly projectRoot: string;
   readonly schedule: MiningWorkScheduleV1;
   readonly catalog: {
     readonly schemaVersion: 1;
@@ -143,35 +135,8 @@ export async function executeMainStrictFactScheduleV1(input: {
     readonly families: readonly FactQueryFamilyV1[];
     readonly catalogHash: `sha256:${string}`;
   };
-  readonly evidenceSessionId: string;
+  readonly factEvidence: MainStrictFactEvidenceAuthorityV1;
 }): Promise<MainStrictFactExecutionResultV1> {
-  const evidenceEntries = input.projection.files.map((file, index) =>
-    createEvidenceEntry(file, index, input.evidenceSessionId)
-  );
-  const evidenceLedgerSnapshot = createStrictEvidenceLedgerSnapshotV1(evidenceEntries);
-  const projectContextRefs = input.projection.files.map((file) =>
-    resolveProjectContextFileRef(input.projection, input.projectRoot, file)
-  );
-  const witnessAuthority = createStrictFactWitnessAuthorityV1({
-    artifact: input.artifact,
-    evidenceLedgerSnapshot,
-    projectContextRefs,
-  });
-  const witnessBindings = input.projection.files.map((file, index) => {
-    const evidenceEntry = evidenceEntries[index];
-    const projectContextRef = projectContextRefs[index];
-    if (!evidenceEntry || !projectContextRef) {
-      throw new Error(`STRICT_FACT_WITNESS_INPUT_MISSING:${file.repoId}:${file.relativePath}`);
-    }
-    return createStrictFactDirectWitnessBindingV1({
-      artifact: input.artifact,
-      repoId: file.repoId,
-      relativePath: file.relativePath,
-      evidenceEntry,
-      evidenceLedgerSnapshot,
-      projectContextRef,
-    });
-  });
   const modulesById = new Map(input.projection.modules.map((module) => [module.moduleId, module]));
   const subjectBindings = input.certifiedPlanningFacts.modules.map((module) => {
     const owner = modulesById.get(module.moduleId);
@@ -195,8 +160,8 @@ export async function executeMainStrictFactScheduleV1(input: {
     catalog: input.catalog,
     schedule: input.schedule,
     subjectBindings,
-    witnessBindings,
-    witnessAuthority,
+    witnessBindings: input.factEvidence.witnessBindings,
+    witnessAuthority: input.factEvidence.witnessAuthority,
     registry,
   });
   assertCodeFactGenerationManifestV1(executed);
@@ -328,64 +293,6 @@ function createAstPack(familyId: string) {
     queryVersion: '1',
     extractorId: 'declarations-v1',
   });
-}
-
-function createEvidenceEntry(
-  file: MainCertifiedSourceFile,
-  index: number,
-  evidenceSessionId: string
-) {
-  const content = Buffer.from(file.contentBase64, 'base64').toString('utf8');
-  return {
-    id: `E-${index + 1}`,
-    sessionId: evidenceSessionId,
-    dimensionId: 'strict-production',
-    tool: 'code.read' as const,
-    callId: `strict-frozen-file-${index + 1}`,
-    file: file.relativePath,
-    content,
-    contentHash: `sha256:${createHash('sha256').update(Buffer.from(content)).digest('hex')}`,
-    capturedAt: 0,
-  };
-}
-
-function resolveProjectContextFileRef(
-  projection: MainCertifiedProjectionPayload,
-  projectRoot: string,
-  file: MainCertifiedSourceFile
-): ProjectContextRef {
-  const exact = projection.envelopes
-    .flatMap((envelope) => envelope.refs)
-    .find(
-      (ref) =>
-        ref.kind === 'file' &&
-        ref.scope.repoId === file.repoId &&
-        ref.scope.filePath === file.relativePath &&
-        ref.metadata?.hash === file.blobHash
-    );
-  if (exact) {
-    return exact;
-  }
-  // Core 尚未公开 file-ref factory；这里机械复刻其 public contract，并由 Core authority
-  // 对 id/scope/hash 与冻结 artifact 做全量重算校验，任何漂移都会 fail closed。
-  return {
-    id: `file:${encodeRefPart(file.repoId)}:${encodeRefPart(file.relativePath)}:${encodeRefPart(
-      file.blobHash
-    )}`,
-    kind: 'file',
-    label: file.relativePath,
-    level: 'source-slice',
-    metadata: { hash: file.blobHash },
-    scope: {
-      projectRoot,
-      repoId: file.repoId,
-      filePath: file.relativePath,
-    },
-  };
-}
-
-function encodeRefPart(value: string): string {
-  return encodeURIComponent(value).replaceAll('%2F', '/');
 }
 
 function uniqueObligations(rows: readonly FactHarvestObligationV1[]): FactHarvestObligationV1[] {

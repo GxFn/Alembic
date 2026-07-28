@@ -27,12 +27,21 @@ import {
   resolveMainCertifiedProjectScopeHash,
 } from '../../../project-facts/CertifiedProjectFactsRuntime.js';
 import type { ProjectScopeAnalysisContext } from '../../../project-scope/ProjectScopeAnalysis.js';
+import type {
+  StrictSemanticReviewRuntimeFactory,
+  StrictSemanticReviewSessionV1,
+} from '../../../service/semantic-review/StrictSemanticReviewRuntimeFactory.js';
 import { commitPreparedPublicRoute, inspectPublicRoute } from './PublicRouteCas.js';
 import {
   executeStrictAnalysisAndProduction,
   resolveStrictAnalysisPublicLineageV1,
 } from './StrictAnalysisRuntime.js';
 import { confinedPath, loadStrictProductionAuthorization } from './StrictAuthorization.js';
+import {
+  type StrictSemanticReviewCheckpointPortV1,
+  type StrictSemanticReviewCheckpointV1,
+  verifyStrictSemanticReviewCheckpointV1,
+} from './StrictDispositionReviewRuntime.js';
 import {
   getStrictExternalSetupSession,
   readStrictExternalSetupState,
@@ -93,6 +102,7 @@ interface StrictProductionCheckpointV1 {
   publicServingData?: StrictPublicServingDataReceiptV1;
   finalization?: ReturnType<typeof finalizeStrictCandidate>;
   publicServingBundle?: StrictPublicServingBundleReceiptV1;
+  semanticReview?: StrictSemanticReviewCheckpointV1;
   rejectedPublicSnapshotIds?: string[];
 }
 
@@ -247,6 +257,9 @@ async function runStrictColdStartProductionInternal(
           publicRoutePath,
           runtimeArtifactReceipt: runtimeArtifacts.receipt,
           runtimeConfigReceipt,
+          semanticReviewFactory: input.container.get(
+            'strictSemanticReviewRuntimeFactory'
+          ) as StrictSemanticReviewRuntimeFactory,
         });
       }
       const context: StrictExecutionContext = {
@@ -262,13 +275,14 @@ async function runStrictColdStartProductionInternal(
         runtimeConfigReceipt,
       };
       await prepareAuthorizedBlankState(context);
-      const { facts, planning } = await ensureFactsAndPlanning(context);
-      const analysis = await ensureAnalysis(context, facts, planning);
+      const { facts, planning, semanticReviewSession } = await ensureFactsAndPlanning(context);
+      const analysis = await ensureAnalysis(context, facts, planning, semanticReviewSession);
       const { candidateCoverage, privateCorpus } = await ensurePrivateCorpus(
         context,
         facts,
         planning,
-        analysis
+        analysis,
+        semanticReviewSession
       );
       return await finalizeAndPublish(
         context,
@@ -294,6 +308,7 @@ async function verifyFinalizedReplay(input: {
   readonly publicRoutePath: string;
   readonly runtimeArtifactReceipt: RuntimeArtifactLoadReceiptV1;
   readonly runtimeConfigReceipt: RuntimeConfigLoadReceiptV1;
+  readonly semanticReviewFactory: StrictSemanticReviewRuntimeFactory;
 }): Promise<unknown> {
   const {
     authorization,
@@ -303,6 +318,7 @@ async function verifyFinalizedReplay(input: {
     publicRoutePath,
     runtimeArtifactReceipt,
     runtimeConfigReceipt,
+    semanticReviewFactory,
   } = input;
   if (
     !checkpoint.publicServingData ||
@@ -314,6 +330,13 @@ async function verifyFinalizedReplay(input: {
   ) {
     throw new Error('STRICT_FINALIZED_PUBLIC_BUNDLE_CHECKPOINT_MISSING');
   }
+  if (checkpoint.semanticReview) {
+    await semanticReviewFactory.verifyApprovedPolicy({
+      policy: checkpoint.semanticReview.policy,
+      enrollmentHash: checkpoint.semanticReview.enrollmentHash,
+    });
+  }
+  assertSemanticReviewTerminalCustody(checkpoint.semanticReview, checkpoint.privateCorpus);
   const analysisLineage = resolveStrictAnalysisPublicLineageV1({
     analysis: checkpoint.analysis,
     baselineScheduleHash: checkpoint.planning.compiledPlan.schedule.baselineScheduleHash,
@@ -483,9 +506,11 @@ async function prepareAuthorizedBlankState(context: StrictExecutionContext): Pro
   }
 }
 
-async function ensureFactsAndPlanning(
-  context: StrictExecutionContext
-): Promise<{ facts: StrictFactsStage; planning: StrictPlanningStage }> {
+async function ensureFactsAndPlanning(context: StrictExecutionContext): Promise<{
+  facts: StrictFactsStage;
+  planning: StrictPlanningStage;
+  semanticReviewSession: StrictSemanticReviewSessionV1;
+}> {
   const { checkpoint, dataRoot, journal, operationRoot, projectRoot } = context;
   let facts = checkpoint.facts;
   if (!facts) {
@@ -547,8 +572,29 @@ async function ensureFactsAndPlanning(
     carrier: facts.carrier,
     dataRoot,
   });
+  const semanticReviewFactory = context.input.container.get(
+    'strictSemanticReviewRuntimeFactory'
+  ) as StrictSemanticReviewRuntimeFactory;
+  const semanticReviewSession = await semanticReviewFactory.openSession({
+    artifact,
+    credentialLocationSymbol: context.authorization.privateCorpus.credentialLocationSymbol,
+    ...(checkpoint.semanticReview
+      ? { expectedPolicyHash: checkpoint.semanticReview.policyHash }
+      : {}),
+    modelVersion: context.authorization.planning.modelHash,
+    projection,
+    projectRoot: context.projectRoot,
+    reviewer: context.authorization.planning.reviewer,
+    runId: context.input.request.runId,
+    runtimeConfigHash: context.runtimeConfigReceipt.configHash,
+    sourceRevisionVectorHash: planning.compiledPlan.execution.sourceRevisionVectorHash,
+  });
   await advancePlanningJournal(journal, planning);
-  return { facts: { artifact, carrier: facts.carrier, projection }, planning };
+  return {
+    facts: { artifact, carrier: facts.carrier, projection },
+    planning,
+    semanticReviewSession,
+  };
 }
 
 async function advancePlanningJournal(
@@ -575,7 +621,8 @@ async function advancePlanningJournal(
 async function ensureAnalysis(
   context: StrictExecutionContext,
   facts: StrictFactsStage,
-  planning: StrictPlanningStage
+  planning: StrictPlanningStage,
+  semanticReviewSession: StrictSemanticReviewSessionV1
 ): Promise<StrictAnalysisStage> {
   let analysis = context.checkpoint.analysis;
   if (!analysis) {
@@ -592,9 +639,9 @@ async function ensureAnalysis(
       modelHash: context.authorization.planning.modelHash,
       planCognitionHash: planning.planCognitionHash,
       projection: facts.projection,
-      projectRoot: context.projectRoot,
       reviewer: context.authorization.planning.reviewer,
       runId: context.input.request.runId,
+      semanticReviewSession,
     });
     context.checkpoint.analysis = analysis;
     await writeCheckpoint(context.operationRoot, context.checkpoint);
@@ -632,7 +679,8 @@ async function ensurePrivateCorpus(
   context: StrictExecutionContext,
   facts: StrictFactsStage,
   planning: StrictPlanningStage,
-  analysis: StrictAnalysisStage
+  analysis: StrictAnalysisStage,
+  semanticReviewSession: StrictSemanticReviewSessionV1
 ): Promise<{
   candidateCoverage: StrictCandidateCoverageStage;
   privateCorpus: StrictPrivateCorpusStage;
@@ -643,6 +691,7 @@ async function ensurePrivateCorpus(
   if (!resolver || resolver.projectRoot !== path.resolve(context.projectRoot)) {
     throw new Error('STRICT_PRIVATE_CORPUS_WORKSPACE_RESOLVER_MISMATCH');
   }
+  const semanticReviewCheckpoint = createSemanticReviewCheckpointPort(context);
   let content = context.checkpoint.privateCorpusContent;
   if (!content) {
     const initReceipt = await readOptionalJson(
@@ -652,6 +701,7 @@ async function ensurePrivateCorpus(
       acceptedMigrationBundleSemanticHash:
         context.authorization.privateCorpus.acceptedMigrationBundleSemanticHash,
       agentService: context.input.container.get('agentService') as Pick<AgentService, 'run'>,
+      analysis,
       analysisFixpointHash: analysis.fixpoint.fixpointHash,
       baseResolver: resolver,
       configReceiptHash: context.runtimeConfigReceipt.receiptHash,
@@ -669,6 +719,8 @@ async function ensurePrivateCorpus(
       runtimeReceiptHash: context.runtimeArtifactReceipt.receiptHash,
       terminalObligations: analysis.fixpoint.terminalObligations,
       reviewer: context.authorization.planning.reviewer,
+      semanticReviewCheckpoint,
+      semanticReviewSession,
       ...(initReceipt
         ? { resumeInitReceipt: initReceipt as PrivateCorpusRevisionInitReceiptV1 }
         : {}),
@@ -683,6 +735,8 @@ async function ensurePrivateCorpus(
     expressionSetManifestHash: hashCanonicalJson(
       content.hypothesisExpressionSetReceipts.map((receipt) => receipt.receiptHash)
     ),
+    semanticReviewManifestHash: context.checkpoint.semanticReview?.manifestHash ?? null,
+    semanticReviewPolicyHash: context.checkpoint.semanticReview?.policyHash ?? null,
   });
   await advance(context.journal, 'CONTENT_READY_CORPUS_SEALED', {
     privateCorpusRevision: content.revisionId,
@@ -692,23 +746,27 @@ async function ensurePrivateCorpus(
   let candidateCoverage = context.checkpoint.candidateCoverage;
   if (!candidateCoverage) {
     candidateCoverage = await buildStrictCandidateCoverage({
-      agentService: context.input.container.get('agentService') as Pick<AgentService, 'run'>,
       analysis,
       compiledPlan: planning.compiledPlan,
       expressionSets: analysis.expressionSets,
       privateCorpus: content,
       producerModelHash: context.authorization.planning.modelHash,
-      reviewerCalibrationReceiptHash:
-        context.authorization.planning.reviewer.calibrationReceiptHash,
       reviewerIdentity: context.authorization.planning.reviewer.identity,
       runId: context.input.request.runId,
-      runtimeReceiptHash: context.runtimeArtifactReceipt.receiptHash,
+      semanticReviewCheckpoint,
+      semanticReviewSession,
     });
     context.checkpoint.candidateCoverage = candidateCoverage;
     await writeCheckpoint(context.operationRoot, context.checkpoint);
   }
   await advance(context.journal, 'CANDIDATE_COVERAGE_CLOSED', {
     candidateCoverageReceiptHash: candidateCoverage.receiptHash,
+    semanticReviewExecutionHashes:
+      context.checkpoint.semanticReview?.records
+        .map((record) => record.executionHash)
+        .filter((value): value is string => Boolean(value)) ?? [],
+    semanticReviewManifestHash: context.checkpoint.semanticReview?.manifestHash ?? null,
+    semanticReviewPolicyHash: context.checkpoint.semanticReview?.policyHash ?? null,
   });
   await advance(context.journal, 'CANDIDATE_ASSEMBLED', {
     candidateAssemblyHash: hashCanonicalJson({
@@ -808,6 +866,7 @@ async function finalizeAndPublish(
   privateCorpus: StrictPrivateCorpusStage,
   excludedSnapshotId?: string
 ): Promise<unknown> {
+  assertSemanticReviewTerminalCustody(context.checkpoint.semanticReview, privateCorpus);
   const resolver = requirePublicBundleResolver(context);
   const publicServingData = await resolvePublicServingData(
     context,
@@ -880,6 +939,26 @@ async function finalizeAndPublish(
     runtimeConfigReceiptHash: context.runtimeConfigReceipt.receiptHash,
   });
   return report;
+}
+
+function assertSemanticReviewTerminalCustody(
+  checkpoint: StrictSemanticReviewCheckpointV1 | undefined,
+  privateCorpus: Pick<StrictPrivateCorpusStage, 'expressionTerminalRows'>
+): void {
+  const requiredReceiptHashes = privateCorpus.expressionTerminalRows.flatMap((terminal) =>
+    terminal.dispositionReview ? [terminal.dispositionReview.receiptHash] : []
+  );
+  if (requiredReceiptHashes.length === 0) {
+    return;
+  }
+  if (!checkpoint) {
+    throw new Error('STRICT_SEMANTIC_REVIEW_CHECKPOINT_MISSING');
+  }
+  const consumedReviews = verifyStrictSemanticReviewCheckpointV1(checkpoint);
+  const consumedReceiptHashes = new Set(consumedReviews.map((review) => review.receiptHash));
+  if (requiredReceiptHashes.some((receiptHash) => !consumedReceiptHashes.has(receiptHash))) {
+    throw new Error('STRICT_SEMANTIC_REVIEW_TERMINAL_CUSTODY_MISMATCH');
+  }
 }
 
 function requirePublicBundleResolver(context: StrictExecutionContext): WorkspaceResolver {
@@ -1127,6 +1206,11 @@ function buildRuntimeReport(
   finalization: NonNullable<StrictProductionCheckpointV1['finalization']>,
   routeHash: string
 ) {
+  const semanticReviewRecords = context.checkpoint.semanticReview?.records ?? [];
+  const semanticEvidenceLoadCount = semanticReviewRecords.reduce(
+    (total, record) => total + (record.attestation?.evidenceLoadReceipts.length ?? 0),
+    0
+  );
   return Object.freeze({
     schemaVersion: 1,
     mode: 'strict-production',
@@ -1147,6 +1231,19 @@ function buildRuntimeReport(
       finalCoverageBindingHash: finalization.finalCoverage.receiptHash,
       activeRecipeCount: privateCorpus.activeRecipeIds.length,
       g1ReceiptCount: privateCorpus.g1Receipts.length,
+    },
+    semanticReviewEvidence: {
+      policyHash: context.checkpoint.semanticReview?.policyHash ?? null,
+      manifestHash: context.checkpoint.semanticReview?.manifestHash ?? null,
+      consumedRecordCount: semanticReviewRecords.filter((record) => record.state === 'consumed')
+        .length,
+      v5AttestationCount: semanticReviewRecords.filter(
+        (record) => record.attestation?.schemaVersion === 5
+      ).length,
+      ledgerLoadCount: semanticEvidenceLoadCount,
+      witnessResolveCount: semanticEvidenceLoadCount,
+      providerInvocationCount: semanticReviewRecords.filter((record) => record.attestation !== null)
+        .length,
     },
     analysisHandle: {
       factCount: analysis.facts.length,
@@ -1250,6 +1347,18 @@ function closeDatabaseForRecovery(database: unknown): void {
   ) {
     database.close();
   }
+}
+
+function createSemanticReviewCheckpointPort(
+  context: StrictExecutionContext
+): StrictSemanticReviewCheckpointPortV1 {
+  return Object.freeze({
+    read: () => context.checkpoint.semanticReview,
+    persist: async (semanticReview: StrictSemanticReviewCheckpointV1) => {
+      context.checkpoint.semanticReview = semanticReview;
+      await writeCheckpoint(context.operationRoot, context.checkpoint);
+    },
+  });
 }
 
 async function readCheckpoint(operationRoot: string): Promise<StrictProductionCheckpointV1> {

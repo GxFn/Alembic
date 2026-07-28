@@ -9,6 +9,7 @@ import {
 } from '@alembic/agent/evaluation';
 import {
   createStrictHypothesisExpressionSetReceiptV1,
+  createStrictProducerExpressionSetV1,
   type StrictProducerExpressionSetV1,
 } from '@alembic/agent/production';
 import type { AgentService } from '@alembic/agent/service';
@@ -19,6 +20,7 @@ import {
   createRecipeProductionBindingV1,
   createRefReconciliationReceiptV1,
   createStrictAcceptedCorpusInspectionV1,
+  createStrictAdmissionReceiptV1,
   createStrictG1ReceiptV1,
   createStrictG2ReceiptV1,
   createStrictPersistenceReceiptV1,
@@ -39,6 +41,7 @@ import {
   type StrictPersistenceReceiptV1,
 } from '@alembic/core/knowledge';
 import {
+  createAgentSemanticDispositionReviewRequestV1,
   createProductionActorIdentityV1,
   type FactQueryExecutionReceiptV1,
   type FinalExpandedMiningScheduleReceiptV1,
@@ -66,11 +69,17 @@ import {
   validatePrivateCorpusRevisionCheckpointV1,
   type WorkspaceResolver,
 } from '@alembic/core/workspace';
+import type { StrictSemanticReviewSessionV1 } from '../../../service/semantic-review/StrictSemanticReviewRuntimeFactory.js';
 import {
   FileRecipeVectorGenerationStorage,
   RecipeVectorGenerationRuntime,
 } from '../../../service/vector/RecipeVectorGenerationRuntime.js';
-import { executeStrictDispositionReviewV1 } from './StrictDispositionReviewRuntime.js';
+import type { StrictAnalysisExecutionResultV1 } from './StrictAnalysisRuntime.js';
+import {
+  createStrictSemanticReviewEvidenceV1,
+  executeStrictDispositionReviewV5,
+  type StrictSemanticReviewCheckpointPortV1,
+} from './StrictDispositionReviewRuntime.js';
 import type { StrictProductionJournal } from './StrictProductionJournal.js';
 
 export interface StrictPrivateCorpusContentResultV1 {
@@ -167,6 +176,7 @@ interface StrictPreparedRowCheckpointV1 {
 interface StrictPrivateCorpusPersistenceInput {
   readonly acceptedMigrationBundleSemanticHash: string;
   readonly agentService: Pick<AgentService, 'run'>;
+  readonly analysis: StrictAnalysisExecutionResultV1;
   readonly analysisFixpointHash: string;
   readonly baseResolver: WorkspaceResolver;
   readonly configReceiptHash: string;
@@ -191,6 +201,8 @@ interface StrictPrivateCorpusPersistenceInput {
     readonly calibrationReceiptHash: string;
     readonly identity: ReviewerIdentityV1;
   };
+  readonly semanticReviewCheckpoint: StrictSemanticReviewCheckpointPortV1;
+  readonly semanticReviewSession: StrictSemanticReviewSessionV1;
   readonly resumeInitReceipt?: PrivateCorpusRevisionInitReceiptV1;
   readonly onRevisionInitialized?: (
     receipt: PrivateCorpusRevisionInitReceiptV1
@@ -221,8 +233,6 @@ interface StrictPersistenceContext {
     }
   >;
   readonly acceptedCorpus: StrictAcceptedCorpusEntryV1[];
-  readonly dispositionReviewInvocationIds: Set<string>;
-  readonly dispositionReviewOutputHashes: Set<string>;
 }
 
 interface StrictPersistenceAccumulators {
@@ -324,7 +334,7 @@ export async function persistStrictPrivateCorpusContent(
     [];
   const activeRecipes: Array<{ id: string; title: string; lifecycle: 'active' }> = [];
   const readyMembers: StrictReadyMemberProofV1[] = [];
-  await persistStrictExpressionSets(
+  const authorizedExpressionSets = await persistStrictExpressionSets(
     {
       input,
       revisionId,
@@ -335,13 +345,11 @@ export async function persistStrictPrivateCorpusContent(
       expectedById,
       preparedAuthorities,
       acceptedCorpus,
-      dispositionReviewInvocationIds: new Set(),
-      dispositionReviewOutputHashes: new Set(),
     },
     { g1Receipts, bindings, expressionTerminalRows, activeRecipes, readyMembers }
   );
   const hypothesisExpressionSetReceipts = createStrictTerminalExpressionSetReceipts(
-    input.expressionSets,
+    authorizedExpressionSets,
     expressionTerminalRows,
     revisionId
   );
@@ -479,36 +487,190 @@ function createStrictPrivateCorpusGateway(options: {
 async function persistStrictExpressionSets(
   context: StrictPersistenceContext,
   accumulators: StrictPersistenceAccumulators
-): Promise<void> {
+): Promise<readonly StrictProducerExpressionSetV1[]> {
   const reviewer = createStrictIndependentReviewer(context.input);
+  const authorizedSets: StrictProducerExpressionSetV1[] = [];
   for (const set of context.input.expressionSets) {
-    persistStrictZeroTerminal(accumulators, set);
+    const parentSet = set.parentSetId
+      ? authorizedSets.find((candidate) => candidate.setId === set.parentSetId)
+      : null;
+    if (set.parentSetId && !parentSet) {
+      throw new Error(`STRICT_SEMANTIC_REVIEW_PARENT_SET_MISSING:${set.setId}`);
+    }
+    const authorizedSet = await persistStrictZeroTerminal(
+      context,
+      accumulators,
+      set,
+      parentSet ?? null
+    );
+    authorizedSets.push(authorizedSet);
     for (const proposal of set.proposals) {
       await persistStrictProposal(context, accumulators, reviewer, set, proposal);
     }
   }
   assertStrictDispositionTargetsReady(accumulators);
-  assertStrictExpressionTerminalConservation(
-    context.input.expressionSets,
-    accumulators.expressionTerminalRows
-  );
+  assertStrictExpressionTerminalConservation(authorizedSets, accumulators.expressionTerminalRows);
+  return Object.freeze(authorizedSets);
 }
 
-function persistStrictZeroTerminal(
+async function persistStrictZeroTerminal(
+  context: StrictPersistenceContext,
   accumulators: StrictPersistenceAccumulators,
-  set: StrictProducerExpressionSetV1
-): void {
+  set: StrictProducerExpressionSetV1,
+  parentSet: StrictProducerExpressionSetV1 | null
+): Promise<StrictProducerExpressionSetV1> {
   if (!set.zeroDisposition) {
-    return;
+    return set;
+  }
+  const zeroProposal: StrictProposal = {
+    expressionId: `zero:${set.setId}`,
+    kind: 'draft',
+    authored: set.zeroDisposition.authored,
+    authoredFingerprint: hashCanonicalJson({
+      schemaVersion: 1,
+      authored: set.zeroDisposition.authored,
+    }),
+  };
+  const candidate = prepareStrictAdmissionCandidate(context, set, zeroProposal);
+  const admitted = await context.gateway.admitCandidate(candidate.item, {
+    source: 'alembic-agent',
+    runId: context.input.runId,
+    analysisFixpointHash: context.input.analysisFixpointHash,
+    privateCorpusRevision: context.revisionId,
+    revisionRootManifestHash: currentAcceptedCorpusRoot(context.revisionId, context.acceptedCorpus),
+    g1Receipt: candidate.g1,
+    reviewedProjection: candidate.reviewed,
+  });
+  if (
+    admitted.receipt.disposition !== 'admit' ||
+    admitted.receipt.consolidation.action !== 'create'
+  ) {
+    throw new Error(`STRICT_SEMANTIC_REVIEW_ZERO_ADMISSION_REJECTED:${set.setId}`);
+  }
+  const semanticAdmission = createProducerSemanticAdmissionAuthority(
+    context,
+    zeroProposal,
+    candidate.g1,
+    admitted.receipt
+  );
+  accumulators.g1Receipts.push(semanticAdmission.g1);
+  const dispositionReview = await reviewStrictZeroTerminal(
+    context,
+    set,
+    zeroProposal,
+    semanticAdmission
+  );
+  const authorizedSet = createStrictProducerExpressionSetV1({
+    lineage: set.lineage,
+    parentSet,
+    proposals: set.proposals.map((proposal) => ({
+      expressionId: proposal.expressionId,
+      kind: proposal.kind,
+      authored: proposal.authored,
+      ...(proposal.matchingRepresentativeId
+        ? { matchingRepresentativeId: proposal.matchingRepresentativeId }
+        : {}),
+    })),
+    zeroDisposition: {
+      reasonCode: set.zeroDisposition.reasonCode,
+      authored: set.zeroDisposition.authored,
+      dispositionReview,
+    },
+    modelHash: set.repairNode.modelHash,
+    reasonHash: set.repairNode.reasonHash,
+  });
+  if (authorizedSet.setId !== set.setId) {
+    throw new Error(`STRICT_SEMANTIC_REVIEW_ZERO_SET_ID_REBOUND:${set.setId}`);
   }
   accumulators.expressionTerminalRows.push({
     expressionId: `zero:${set.setId}`,
     recipeId: null,
     terminalFate: 'reviewed-zero',
-    terminalReceiptId: set.zeroDisposition.reviewerReceiptId,
-    terminalReceiptHash: set.zeroDisposition.dispositionReview.receiptHash,
-    dispositionReview: set.zeroDisposition.dispositionReview,
+    terminalReceiptId: dispositionReview.reviewReceiptId,
+    terminalReceiptHash: dispositionReview.receiptHash,
+    dispositionReview,
   });
+  return authorizedSet;
+}
+
+async function reviewStrictZeroTerminal(
+  context: StrictPersistenceContext,
+  set: StrictProducerExpressionSetV1,
+  zeroProposal: StrictProposal,
+  semanticAdmission: ReturnType<typeof createProducerSemanticAdmissionAuthority>
+): Promise<KnowledgeDispositionReviewV1> {
+  const zeroDisposition = set.zeroDisposition;
+  if (!zeroDisposition) {
+    throw new Error(`STRICT_SEMANTIC_REVIEW_ZERO_DISPOSITION_MISSING:${set.setId}`);
+  }
+  const dispositionProposal = {
+    reviewKind: 'producer-non-draft',
+    populationHash: set.lineage.populationHash,
+    hypothesisId: set.hypothesis.hypothesisId,
+    expression: null,
+    zeroDisposition: {
+      reasonCode: zeroDisposition.reasonCode,
+      terminalFate: 'reviewed-non-draft',
+    },
+  } as const;
+  const proposedDispositionHash = hashKnowledgeDispositionProposalV1(dispositionProposal);
+  const { induction, falsification, population } = resolveProducerReviewLineage(
+    context.input.analysis,
+    set
+  );
+  const semanticRequest = createAgentSemanticDispositionReviewRequestV1({
+    strictWorkflowRunId: context.input.runId,
+    sourceRevisionVectorHash: context.input.evidence.sourceRevisionVectorHash,
+    currentAnalysisFixpointHash: context.input.analysisFixpointHash,
+    populationHash: set.lineage.populationHash,
+    proposedDispositionHash,
+    finalExpandedSchedule: context.input.finalExpandedSchedule,
+    executionReceipts: context.input.executionReceipts,
+    evidence: createStrictSemanticReviewEvidenceV1({
+      evidenceEntryIds: zeroDisposition.authored.evidenceEntryIds,
+      executionReceipts: context.input.executionReceipts,
+      session: context.input.semanticReviewSession,
+      sourceRevisionVectorHash: context.input.evidence.sourceRevisionVectorHash,
+      semanticRole: 'producer-zero-complete-comparison-authority',
+    }),
+    calibration: context.input.semanticReviewSession.calibration('producer-non-draft'),
+    producer: createProductionActorIdentityV1({
+      providerId: 'alembic-agent',
+      modelId: context.input.producerModelHash,
+      modelVersion: 'strict-producer-expression-v1',
+      promptHash: normalizeStrictActorHash(set.repairNode.reasonHash),
+      runId: set.lineage.runId,
+      invocationId: `producer-zero:${set.setId}`,
+      loadReceiptHash: normalizeStrictActorHash(set.repairNode.modelHash),
+      outputHash: normalizeStrictActorHash(set.repairNode.outputHash),
+    }),
+    context: {
+      reviewKind: 'producer-non-draft',
+      privateCorpusRevision: context.revisionId,
+      analysisFixpoint: context.input.analysis.fixpoint,
+      population,
+      induction,
+      falsification,
+      proposal: dispositionProposal,
+      expressionSetReceiptId: `expression-set:${set.setId}`,
+      g1Receipt: semanticAdmission.g1,
+      admissionReceipt: semanticAdmission.admission,
+      target: {
+        expressionId: null,
+        authoredFingerprint: zeroProposal.authoredFingerprint,
+        terminalFate: 'reviewed-non-draft',
+        targetRecipeId: null,
+        targetFingerprint: null,
+        targetReadyProofHash: null,
+      },
+    },
+  });
+  const { dispositionReview } = await executeStrictDispositionReviewV5({
+    checkpoint: context.input.semanticReviewCheckpoint,
+    semanticRequest,
+    session: context.input.semanticReviewSession,
+  });
+  return dispositionReview;
 }
 
 async function persistStrictProposal(
@@ -540,7 +702,14 @@ async function persistStrictProposal(
     reviewedProjection: candidate.reviewed,
   });
   if (admitted.receipt.disposition !== 'admit') {
-    await persistStrictDispositionTerminal(context, accumulators, set, proposal, admitted.receipt);
+    await persistStrictDispositionTerminal(
+      context,
+      accumulators,
+      set,
+      proposal,
+      candidate.g1,
+      admitted.receipt
+    );
     return;
   }
   if (admitted.receipt.finalAdmittedFingerprint !== candidate.reviewed.authoredFingerprint) {
@@ -826,6 +995,7 @@ async function persistStrictDispositionTerminal(
   accumulators: StrictPersistenceAccumulators,
   set: StrictProducerExpressionSetV1,
   proposal: StrictProposal,
+  g1: StrictG1ReceiptV1,
   admission: StrictAdmissionReceiptV1
 ): Promise<void> {
   if (admission.disposition === 'reject') {
@@ -856,7 +1026,7 @@ async function persistStrictDispositionTerminal(
     admission.disposition === 'merge'
       ? ('reviewed-merge' as const)
       : ('reviewed-duplicate' as const);
-  const proposedDispositionHash = hashKnowledgeDispositionProposalV1({
+  const dispositionProposal = {
     reviewKind: 'producer-non-draft',
     populationHash: set.lineage.populationHash,
     hypothesisId: set.hypothesis.hypothesisId,
@@ -868,7 +1038,8 @@ async function persistStrictDispositionTerminal(
       matchingContentReadyRecipeId: targetRecipeId,
     },
     zeroDisposition: null,
-  });
+  } as const;
+  const proposedDispositionHash = hashKnowledgeDispositionProposalV1(dispositionProposal);
   const producer = createProductionActorIdentityV1({
     providerId: 'alembic-agent',
     modelId: context.input.producerModelHash,
@@ -879,33 +1050,58 @@ async function persistStrictDispositionTerminal(
     loadReceiptHash: normalizeStrictActorHash(set.repairNode.modelHash),
     outputHash: normalizeStrictActorHash(set.repairNode.outputHash),
   });
-  const { dispositionReview } = await executeStrictDispositionReviewV1({
-    agentService: context.input.agentService,
-    reviewKind: 'producer-non-draft',
+  const { induction, falsification, population } = resolveProducerReviewLineage(
+    context.input.analysis,
+    set
+  );
+  const semanticAdmission = createProducerSemanticAdmissionAuthority(
+    context,
+    proposal,
+    g1,
+    admission
+  );
+  const semanticRequest = createAgentSemanticDispositionReviewRequestV1({
+    strictWorkflowRunId: context.input.runId,
+    sourceRevisionVectorHash: context.input.evidence.sourceRevisionVectorHash,
     currentAnalysisFixpointHash: context.input.analysisFixpointHash,
     populationHash: set.lineage.populationHash,
     proposedDispositionHash,
-    executionReceipts: context.input.executionReceipts,
     finalExpandedSchedule: context.input.finalExpandedSchedule,
-    terminalObligations: context.input.terminalObligations,
+    executionReceipts: context.input.executionReceipts,
+    evidence: createStrictSemanticReviewEvidenceV1({
+      evidenceEntryIds: proposal.authored.evidenceEntryIds,
+      executionReceipts: context.input.executionReceipts,
+      session: context.input.semanticReviewSession,
+      sourceRevisionVectorHash: context.input.evidence.sourceRevisionVectorHash,
+      semanticRole: 'producer-non-draft-comparison-authority',
+    }),
+    calibration: context.input.semanticReviewSession.calibration('producer-non-draft'),
     producer,
-    reviewer: {
-      ...context.input.reviewer,
-      loadReceiptHash: context.input.runtimeReceiptHash,
+    context: {
+      reviewKind: 'producer-non-draft',
+      privateCorpusRevision: context.revisionId,
+      analysisFixpoint: context.input.analysis.fixpoint,
+      population,
+      induction,
+      falsification,
+      proposal: dispositionProposal,
+      expressionSetReceiptId: `expression-set:${set.setId}`,
+      g1Receipt: semanticAdmission.g1,
+      admissionReceipt: semanticAdmission.admission,
+      target: {
+        expressionId: proposal.expressionId,
+        authoredFingerprint: proposal.authoredFingerprint,
+        terminalFate,
+        targetRecipeId,
+        targetFingerprint: targetReadyMember.authoredFingerprint,
+        targetReadyProofHash: targetReadyMember.proofHash,
+      },
     },
-    evidenceEntryIds: proposal.authored.evidenceEntryIds,
-    subject: {
-      schemaVersion: 1,
-      expressionId: proposal.expressionId,
-      authoredFingerprint: proposal.authoredFingerprint,
-      terminalFate,
-      admissionReceiptHash: admission.receiptHash,
-      matchingRepresentativeId: targetRecipeId,
-      matchingContentReadyRecipeId: targetRecipeId,
-      targetReadyProofHash: targetReadyMember.proofHash,
-    },
-    usedInvocationIds: context.dispositionReviewInvocationIds,
-    usedResponseOutputHashes: context.dispositionReviewOutputHashes,
+  });
+  const { dispositionReview } = await executeStrictDispositionReviewV5({
+    checkpoint: context.input.semanticReviewCheckpoint,
+    semanticRequest,
+    session: context.input.semanticReviewSession,
   });
   accumulators.expressionTerminalRows.push({
     expressionId: proposal.expressionId,
@@ -917,6 +1113,80 @@ async function persistStrictDispositionTerminal(
     matchingRepresentativeId: targetRecipeId,
     matchingContentReadyRecipeId: targetRecipeId,
   });
+}
+
+function createProducerSemanticAdmissionAuthority(
+  context: StrictPersistenceContext,
+  proposal: StrictProposal,
+  persistenceG1: StrictG1ReceiptV1,
+  persistenceAdmission: StrictAdmissionReceiptV1
+): { readonly g1: StrictG1ReceiptV1; readonly admission: StrictAdmissionReceiptV1 } {
+  // Agent expression receipt 的 authoredFingerprint 是 producer 终态身份；Main 的
+  // RecipeCandidateFingerprint 则包含 persisted payload/lineage，属于 persistence 身份。
+  // 两者不能混用。这里在与 gateway 完全相同的 accepted-corpus snapshot 上重新执行
+  // Core canonical G1/Admission 封印，专供 producer-non-draft V5 语义终态证明。
+  const g1 = createStrictG1ReceiptV1({
+    candidateFingerprint: proposal.authoredFingerprint,
+    retrievalReadinessHash: persistenceG1.retrievalReadinessHash,
+    rows: persistenceG1.rows,
+  });
+  const corpusInspection = createStrictAcceptedCorpusInspectionV1({
+    runId: persistenceAdmission.runId,
+    analysisFixpointHash: persistenceAdmission.analysisFixpointHash,
+    privateCorpusRevision: persistenceAdmission.privateCorpusRevision,
+    revisionRootManifestHash: persistenceAdmission.revisionRootManifestHash,
+    entries: context.acceptedCorpus,
+  });
+  if (
+    corpusInspection.inspectionHash !== persistenceAdmission.acceptedCorpusInspectionHash ||
+    corpusInspection.acceptedCorpusHash !== persistenceAdmission.acceptedCorpusHash
+  ) {
+    throw new Error('STRICT_SEMANTIC_REVIEW_ADMISSION_SNAPSHOT_MISMATCH');
+  }
+  const admission = createStrictAdmissionReceiptV1({
+    g1Receipt: g1,
+    corpusInspection,
+    inputFingerprint: proposal.authoredFingerprint,
+    finalAdmittedFingerprint: proposal.authoredFingerprint,
+    exactMatches: persistenceAdmission.exactMatches,
+    semanticMatches: persistenceAdmission.semanticMatches,
+    consolidation: persistenceAdmission.consolidation,
+    algorithmVersion: persistenceAdmission.algorithmVersion,
+  });
+  if (admission.disposition !== persistenceAdmission.disposition) {
+    throw new Error('STRICT_SEMANTIC_REVIEW_ADMISSION_DECISION_MISMATCH');
+  }
+  return Object.freeze({ g1, admission });
+}
+
+function resolveProducerReviewLineage(
+  analysis: StrictAnalysisExecutionResultV1,
+  set: StrictProducerExpressionSetV1
+) {
+  const epoch = analysis.epochs.find(
+    (candidate) =>
+      candidate.population.populationHash === set.lineage.populationHash &&
+      candidate.inductions.some(
+        (receipt) => receipt.receiptHash === set.lineage.inductionReceiptHash
+      ) &&
+      candidate.falsifications.some(
+        (receipt) => receipt.receiptHash === set.lineage.falsificationReceiptHash
+      )
+  );
+  const induction = epoch?.inductions.find(
+    (receipt) => receipt.receiptHash === set.lineage.inductionReceiptHash
+  );
+  const falsification = epoch?.falsifications.find(
+    (receipt) => receipt.receiptHash === set.lineage.falsificationReceiptHash
+  );
+  if (!epoch || !induction || !falsification) {
+    throw new Error(`STRICT_SEMANTIC_REVIEW_LINEAGE_MISSING:${set.setId}`);
+  }
+  return {
+    induction,
+    falsification,
+    population: epoch.population,
+  };
 }
 
 function normalizeStrictActorHash(value: string): string {

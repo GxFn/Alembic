@@ -81,6 +81,7 @@ import type { CacheCoordinator } from '../infrastructure/cache/CacheCoordinator.
 import type { GenerateTaskManager } from '../recipe-pipeline/generate/runtime/GenerateTaskManager.js';
 import type { AuditRepositoryImpl } from '../repository/AuditRepository.js';
 import type { ModuleService } from '../service/module/ModuleService.js';
+import type { StrictSemanticReviewRuntimeFactory } from '../service/semantic-review/StrictSemanticReviewRuntimeFactory.js';
 import type { SkillHooks } from '../service/skills/SkillHooks.js';
 // ── Vector Service Types ──
 import type { ContextualEnricher } from '../service/vector/ContextualEnricher.js';
@@ -171,6 +172,7 @@ export interface ServiceMap {
   systemRunContextFactory: SystemRunContextFactory;
   agentRuntimeBuilder: AgentRuntimeBuilder;
   agentService: AgentService;
+  strictSemanticReviewRuntimeFactory: StrictSemanticReviewRuntimeFactory;
   skillHooks: SkillHooks;
 
   // ═══ SignalModule ═══
