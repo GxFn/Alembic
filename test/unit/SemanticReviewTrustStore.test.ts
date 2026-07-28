@@ -48,6 +48,78 @@ describe('SemanticReviewTrustStore', () => {
     await expect(prepare(modeRoot)).rejects.toThrow('STRICT_SEMANTIC_REVIEW_TRUST_FILE_INVALID');
   });
 
+  it('does not self-authorize a replacement registry when the enrolled registry is missing', async () => {
+    const dataRoot = await createDataRoot();
+    await prepare(dataRoot);
+    const keyPath = path.join(custodyRoot(dataRoot), 'signing-key.pk8');
+    const registryPath = path.join(custodyRoot(dataRoot), 'approved-policies.json');
+    const enrolledKey = await fsp.readFile(keyPath);
+    await fsp.rm(registryPath);
+
+    await expect(prepare(dataRoot)).rejects.toThrow(
+      'STRICT_SEMANTIC_REVIEW_POLICY_REGISTRY_MISSING'
+    );
+    await expect(pathExists(registryPath)).resolves.toBe(false);
+    await expect(fsp.readFile(keyPath)).resolves.toEqual(enrolledKey);
+  });
+
+  it('does not bootstrap custody from a caller-supplied expected policy hash', async () => {
+    const dataRoot = await createDataRoot();
+
+    await expect(prepare(dataRoot, hashCanonicalJson('unapproved-policy'))).rejects.toThrow(
+      'STRICT_SEMANTIC_REVIEW_POLICY_ENROLLMENT_MISSING'
+    );
+    await expect(pathExists(path.join(custodyRoot(dataRoot), 'signing-key.pk8'))).resolves.toBe(
+      false
+    );
+    await expect(
+      pathExists(path.join(custodyRoot(dataRoot), 'approved-policies.json'))
+    ).resolves.toBe(false);
+  });
+
+  it('rejects a group- or other-writable approved policy registry', async () => {
+    const dataRoot = await createDataRoot();
+    const approved = await prepare(dataRoot);
+    const registryPath = path.join(custodyRoot(dataRoot), 'approved-policies.json');
+    await fsp.chmod(registryPath, 0o666);
+
+    await expect(prepare(dataRoot, approved.policy.policyHash)).rejects.toThrow(
+      'STRICT_SEMANTIC_REVIEW_TRUST_FILE_INVALID'
+    );
+  });
+
+  it.each([
+    'data-root',
+    '.asd',
+    'semantic-review-trust',
+  ] as const)('rejects a symlinked %s custody parent before creating trust artifacts', async (symlinkedComponent) => {
+    const outsideRoot = await createDataRoot();
+    const dataRoot =
+      symlinkedComponent === 'data-root'
+        ? path.join(await createDataRoot(), 'configured-data-root')
+        : await createDataRoot();
+    const outsideCustody =
+      symlinkedComponent === 'data-root'
+        ? path.join(outsideRoot, '.asd', 'semantic-review-trust')
+        : symlinkedComponent === '.asd'
+          ? path.join(outsideRoot, 'semantic-review-trust')
+          : outsideRoot;
+    if (symlinkedComponent === 'data-root') {
+      await fsp.symlink(outsideRoot, dataRoot, 'dir');
+    } else if (symlinkedComponent === '.asd') {
+      await fsp.symlink(outsideRoot, path.join(dataRoot, '.asd'), 'dir');
+    } else {
+      await fsp.mkdir(path.join(dataRoot, '.asd'), { mode: 0o700 });
+      await fsp.symlink(outsideRoot, custodyRoot(dataRoot), 'dir');
+    }
+
+    await expect(prepare(dataRoot)).rejects.toThrow('STRICT_SEMANTIC_REVIEW_CUSTODY_PATH_INVALID');
+    await expect(pathExists(path.join(outsideCustody, 'signing-key.pk8'))).resolves.toBe(false);
+    await expect(pathExists(path.join(outsideCustody, 'approved-policies.json'))).resolves.toBe(
+      false
+    );
+  });
+
   it('rejects policy rotation, registry tampering, and a validly rehashed revocation', async () => {
     const rotationRoot = await createDataRoot();
     await prepare(rotationRoot);
@@ -128,4 +200,16 @@ function prepare(dataRoot: string, expectedPolicyHash?: string) {
     reviewerModelLoadReceipt: modelLoadReceipt(),
     ...(expectedPolicyHash ? { expectedPolicyHash } : {}),
   });
+}
+
+async function pathExists(filePath: string): Promise<boolean> {
+  try {
+    await fsp.lstat(filePath);
+    return true;
+  } catch (err: unknown) {
+    if (err && typeof err === 'object' && 'code' in err && err.code === 'ENOENT') {
+      return false;
+    }
+    throw err;
+  }
 }

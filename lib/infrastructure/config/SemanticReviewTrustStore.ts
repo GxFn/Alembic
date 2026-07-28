@@ -4,6 +4,7 @@ import {
   generateKeyPairSync,
   type KeyObject,
 } from 'node:crypto';
+import { constants as fsConstants } from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import {
@@ -45,6 +46,7 @@ export interface SemanticReviewTrustPreparationV1 {
  * 带回已批准 policyHash，不能要求生成、替换或撤销 key/policy。
  */
 export class SemanticReviewTrustStore {
+  readonly #dataRoot: string;
   readonly #custodyRoot: string;
   readonly #privateKeyPath: string;
   readonly #registryPath: string;
@@ -54,12 +56,13 @@ export class SemanticReviewTrustStore {
     if (!path.isAbsolute(input.dataRoot)) {
       throw new Error('STRICT_SEMANTIC_REVIEW_DATA_ROOT_INVALID');
     }
-    this.#custodyRoot = path.join(input.dataRoot, '.asd', CUSTODY_DIRECTORY);
+    this.#dataRoot = path.resolve(input.dataRoot);
+    this.#custodyRoot = path.join(this.#dataRoot, '.asd', CUSTODY_DIRECTORY);
     this.#privateKeyPath = path.join(this.#custodyRoot, PRIVATE_KEY_FILE);
     this.#registryPath = path.join(this.#custodyRoot, POLICY_REGISTRY_FILE);
     this.#workspaceIdentityHash = hashCanonicalJson({
       kind: 'alembic-main-semantic-review-workspace-v1',
-      dataRoot: path.resolve(input.dataRoot),
+      dataRoot: this.#dataRoot,
     });
   }
 
@@ -69,6 +72,19 @@ export class SemanticReviewTrustStore {
     readonly reviewerModelLoadReceipt: SemanticDispositionReviewerModelLoadReceiptV1;
     readonly expectedPolicyHash?: string;
   }): Promise<SemanticReviewTrustPreparationV1> {
+    await this.#prepareCustodyRoot(true);
+    const [registryExists, privateKeyExists] = await Promise.all([
+      pathEntryExists(this.#registryPath),
+      pathEntryExists(this.#privateKeyPath),
+    ]);
+    // 只有 key/registry 同时不存在才是首次 bootstrap。已有 key 却丢失公开 enrollment
+    // 是持久状态损坏，绝不能借下一次 task 调用重新自授权。
+    if (!registryExists && privateKeyExists) {
+      throw new Error('STRICT_SEMANTIC_REVIEW_POLICY_REGISTRY_MISSING');
+    }
+    if (!registryExists && input.expectedPolicyHash) {
+      throw new Error('STRICT_SEMANTIC_REVIEW_POLICY_ENROLLMENT_MISSING');
+    }
     const registry = await this.#readRegistry();
     const privateKey = await this.#loadOrCreatePrivateKey(registry !== null);
     const policy = createIndependentTrustPolicy({
@@ -141,8 +157,19 @@ export class SemanticReviewTrustStore {
     readonly policyHash: string;
     readonly enrollmentHash: string;
   }): Promise<SemanticDispositionReviewTrustPolicyV3> {
+    await this.#prepareCustodyRoot(false);
     const registry = await this.#readRegistry();
-    const enrollment = registry?.enrollments.find(
+    if (!registry) {
+      // finalized recovery 只读取 public enrollment；但如果私钥仍在而 registry 消失，
+      // 仍须与新 session 打开时使用同一个“持久状态损坏”诊断，不能降级成未注册。
+      const privateKeyExists = await pathEntryExists(this.#privateKeyPath);
+      throw new Error(
+        privateKeyExists
+          ? 'STRICT_SEMANTIC_REVIEW_POLICY_REGISTRY_MISSING'
+          : 'STRICT_SEMANTIC_REVIEW_POLICY_ENROLLMENT_MISSING'
+      );
+    }
+    const enrollment = registry.enrollments.find(
       (candidate) => candidate.policy.policyHash === input.policyHash
     );
     if (!enrollment) {
@@ -155,8 +182,29 @@ export class SemanticReviewTrustStore {
     return structuredClone(enrollment.policy);
   }
 
+  async #prepareCustodyRoot(create: boolean): Promise<void> {
+    await assertSecureDirectory(this.#dataRoot, false);
+    const asdRoot = path.join(this.#dataRoot, '.asd');
+    await assertSecureDirectory(asdRoot, create);
+    await assertSecureDirectory(this.#custodyRoot, create);
+
+    const [realDataRoot, realCustodyRoot] = await Promise.all([
+      fsp.realpath(this.#dataRoot),
+      fsp.realpath(this.#custodyRoot),
+    ]);
+    const expectedCustodyRoot = path.join(realDataRoot, '.asd', CUSTODY_DIRECTORY);
+    const relative = path.relative(realDataRoot, realCustodyRoot);
+    if (
+      realCustodyRoot !== expectedCustodyRoot ||
+      relative.startsWith(`..${path.sep}`) ||
+      relative === '..' ||
+      path.isAbsolute(relative)
+    ) {
+      throw new Error('STRICT_SEMANTIC_REVIEW_CUSTODY_PATH_INVALID');
+    }
+  }
+
   async #loadOrCreatePrivateKey(registryExists: boolean): Promise<KeyObject> {
-    await fsp.mkdir(this.#custodyRoot, { recursive: true, mode: 0o700 });
     let keyBytes: Buffer;
     try {
       keyBytes = await readRegularFile(this.#privateKeyPath, 0o077);
@@ -200,7 +248,8 @@ export class SemanticReviewTrustStore {
   async #readRegistry(): Promise<SemanticReviewPolicyRegistryV1 | null> {
     let bytes: Buffer;
     try {
-      bytes = await readRegularFile(this.#registryPath, 0);
+      // public policy 可以被读取，但不能允许 group/other 改写已经独立批准的 enrollment。
+      bytes = await readRegularFile(this.#registryPath, 0o022);
     } catch (err: unknown) {
       if (readCode(err) === 'ENOENT') {
         return null;
@@ -313,11 +362,25 @@ function assertEnrollment(enrollment: SemanticReviewPolicyEnrollmentV1): void {
 }
 
 async function readRegularFile(filePath: string, forbiddenModeMask: number): Promise<Buffer> {
-  const stat = await fsp.lstat(filePath);
-  if (!stat.isFile() || stat.isSymbolicLink() || (stat.mode & forbiddenModeMask) !== 0) {
-    throw new Error('STRICT_SEMANTIC_REVIEW_TRUST_FILE_INVALID');
+  let handle: Awaited<ReturnType<typeof fsp.open>>;
+  try {
+    // O_NOFOLLOW 把 leaf 换成 symlink 的竞态也封在读取边界，不依赖前置 lstat。
+    handle = await fsp.open(filePath, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
+  } catch (err: unknown) {
+    if (readCode(err) === 'ELOOP') {
+      throw new Error('STRICT_SEMANTIC_REVIEW_TRUST_FILE_INVALID', { cause: err });
+    }
+    throw err;
   }
-  return fsp.readFile(filePath);
+  try {
+    const stat = await handle.stat();
+    if (!stat.isFile() || (stat.mode & forbiddenModeMask) !== 0) {
+      throw new Error('STRICT_SEMANTIC_REVIEW_TRUST_FILE_INVALID');
+    }
+    return await handle.readFile();
+  } finally {
+    await handle.close();
+  }
 }
 
 async function syncDirectory(directoryPath: string): Promise<void> {
@@ -326,6 +389,42 @@ async function syncDirectory(directoryPath: string): Promise<void> {
     await handle.sync();
   } finally {
     await handle.close();
+  }
+}
+
+async function assertSecureDirectory(directoryPath: string, create: boolean): Promise<void> {
+  if (create) {
+    try {
+      await fsp.mkdir(directoryPath, { mode: 0o700 });
+    } catch (err: unknown) {
+      if (readCode(err) !== 'EEXIST') {
+        throw err;
+      }
+    }
+  }
+  let stat: Awaited<ReturnType<typeof fsp.lstat>>;
+  try {
+    stat = await fsp.lstat(directoryPath);
+  } catch (err: unknown) {
+    if (readCode(err) === 'ENOENT') {
+      throw new Error('STRICT_SEMANTIC_REVIEW_CUSTODY_PATH_INVALID', { cause: err });
+    }
+    throw err;
+  }
+  if (stat.isSymbolicLink() || !stat.isDirectory()) {
+    throw new Error('STRICT_SEMANTIC_REVIEW_CUSTODY_PATH_INVALID');
+  }
+}
+
+async function pathEntryExists(filePath: string): Promise<boolean> {
+  try {
+    await fsp.lstat(filePath);
+    return true;
+  } catch (err: unknown) {
+    if (readCode(err) === 'ENOENT') {
+      return false;
+    }
+    throw err;
   }
 }
 

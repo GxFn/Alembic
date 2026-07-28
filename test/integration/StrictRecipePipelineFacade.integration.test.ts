@@ -813,7 +813,20 @@ describe('RecipePipelineFacade strict production integration', () => {
           .join('\n')}\n`
       );
       await fsp.rm(path.join(operationRoot, 'strict-production.runtime-report.json'));
+      const trustRoot = path.join(fixture.dataRoot, '.asd/semantic-review-trust');
+      const signingKeyPath = path.join(trustRoot, 'signing-key.pk8');
+      const approvedRegistryPath = path.join(trustRoot, 'approved-policies.json');
+      const signingKeyBytes = await fsp.readFile(signingKeyPath);
+      const approvedRegistryBytes = await fsp.readFile(approvedRegistryPath);
+      await fsp.rm(approvedRegistryPath);
       fixture.restartSemanticReviewFactory();
+      await expect(executeFixture(fixture)).rejects.toThrow(
+        'STRICT_SEMANTIC_REVIEW_POLICY_REGISTRY_MISSING'
+      );
+      expect(fixture.agentService.dispositionReviewInvocations).toHaveLength(5);
+      await expect(fsp.stat(approvedRegistryPath)).rejects.toMatchObject({ code: 'ENOENT' });
+      await expect(fsp.readFile(signingKeyPath)).resolves.toEqual(signingKeyBytes);
+      await fsp.writeFile(approvedRegistryPath, approvedRegistryBytes, { mode: 0o644 });
       const recovered = await executeFixture(fixture);
       expect(recovered).toMatchObject({ mode: 'strict-production', status: 'FINALIZED' });
       expect(fixture.agentService.dispositionReviewInvocations).toHaveLength(5);
