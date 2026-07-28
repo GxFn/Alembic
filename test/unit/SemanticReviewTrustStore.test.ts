@@ -4,7 +4,10 @@ import path from 'node:path';
 import type { SemanticDispositionReviewerModelLoadReceiptV1 } from '@alembic/core/production';
 import { hashCanonicalJson } from '@alembic/core/project-context-foundation';
 import { afterEach, describe, expect, it } from 'vitest';
-import { SemanticReviewTrustStore } from '../../lib/infrastructure/config/SemanticReviewTrustStore.js';
+import {
+  createSemanticReviewTrustEnrollmentAuthorization,
+  SemanticReviewTrustStore,
+} from '../../lib/infrastructure/config/SemanticReviewTrustStore.js';
 
 const roots: string[] = [];
 
@@ -13,6 +16,19 @@ afterEach(async () => {
 });
 
 describe('SemanticReviewTrustStore', () => {
+  it('requires an explicit host enrollment authorization before creating custody', async () => {
+    const dataRoot = await createDataRoot(false);
+    await fsp.mkdir(path.join(dataRoot, '.asd'), { mode: 0o700 });
+    await fsp.writeFile(path.join(dataRoot, '.asd/config.json'), '{"version":2}\n', {
+      mode: 0o644,
+    });
+
+    await expect(prepare(dataRoot)).rejects.toThrow(
+      'STRICT_SEMANTIC_REVIEW_TRUST_AUTHORITY_MISSING'
+    );
+    await expect(pathExists(custodyRoot(dataRoot))).resolves.toBe(false);
+  });
+
   it('reopens the same Ed25519 custody and independently approved V3 policy', async () => {
     const dataRoot = await createDataRoot();
     const first = await prepare(dataRoot);
@@ -63,12 +79,93 @@ describe('SemanticReviewTrustStore', () => {
     await expect(fsp.readFile(keyPath)).resolves.toEqual(enrolledKey);
   });
 
+  it('does not treat complete custody loss as first enrollment', async () => {
+    const dataRoot = await createDataRoot();
+    await prepare(dataRoot);
+    await fsp.rm(custodyRoot(dataRoot), { recursive: true });
+
+    await expect(prepare(dataRoot)).rejects.toThrow('STRICT_SEMANTIC_REVIEW_TRUST_PAIR_MISSING');
+    await expect(pathExists(path.join(custodyRoot(dataRoot), 'signing-key.pk8'))).resolves.toBe(
+      false
+    );
+    await expect(
+      pathExists(path.join(custodyRoot(dataRoot), 'approved-policies.json'))
+    ).resolves.toBe(false);
+  });
+
+  it('does not accept a self-consistent replacement pair after enrollment', async () => {
+    const enrolledRoot = await createDataRoot();
+    const enrolled = await prepare(enrolledRoot);
+    const replacementRoot = await createDataRoot();
+    await prepare(replacementRoot);
+    const replacementKey = await fsp.readFile(
+      path.join(custodyRoot(replacementRoot), 'signing-key.pk8')
+    );
+    const replacementRegistry = await fsp.readFile(
+      path.join(custodyRoot(replacementRoot), 'approved-policies.json')
+    );
+    await fsp.writeFile(path.join(custodyRoot(enrolledRoot), 'signing-key.pk8'), replacementKey, {
+      mode: 0o600,
+    });
+    await fsp.writeFile(
+      path.join(custodyRoot(enrolledRoot), 'approved-policies.json'),
+      replacementRegistry,
+      { mode: 0o644 }
+    );
+
+    await expect(prepare(enrolledRoot)).rejects.toThrow(
+      'STRICT_SEMANTIC_REVIEW_TRUST_ROOT_REPLACED'
+    );
+    await expect(
+      fsp.readFile(path.join(custodyRoot(enrolledRoot), 'signing-key.pk8'))
+    ).resolves.toEqual(replacementKey);
+    await expect(
+      fsp.readFile(path.join(custodyRoot(enrolledRoot), 'approved-policies.json'))
+    ).resolves.toEqual(replacementRegistry);
+    await expect(
+      new SemanticReviewTrustStore({ dataRoot: enrolledRoot }).readApprovedPolicy({
+        policyHash: enrolled.policy.policyHash,
+        enrollmentHash: enrolled.enrollmentHash,
+      })
+    ).rejects.toThrow('STRICT_SEMANTIC_REVIEW_TRUST_ROOT_REPLACED');
+  });
+
   it('does not bootstrap custody from a caller-supplied expected policy hash', async () => {
     const dataRoot = await createDataRoot();
 
     await expect(prepare(dataRoot, hashCanonicalJson('unapproved-policy'))).rejects.toThrow(
       'STRICT_SEMANTIC_REVIEW_POLICY_ENROLLMENT_MISSING'
     );
+    await expect(pathExists(path.join(custodyRoot(dataRoot), 'signing-key.pk8'))).resolves.toBe(
+      false
+    );
+    await expect(
+      pathExists(path.join(custodyRoot(dataRoot), 'approved-policies.json'))
+    ).resolves.toBe(false);
+  });
+
+  it.each([
+    'data-root',
+    '.asd',
+    'semantic-review-trust',
+  ] as const)('rejects a group/world-writable %s directory before reading or writing trust artifacts', async (writableComponent) => {
+    const dataRoot = await createDataRoot();
+    if (writableComponent !== 'data-root') {
+      await fsp.mkdir(path.join(dataRoot, '.asd'), { mode: 0o700, recursive: true });
+    }
+    if (writableComponent === 'semantic-review-trust') {
+      await fsp.mkdir(custodyRoot(dataRoot), { mode: 0o700 });
+    }
+    const writablePath =
+      writableComponent === 'data-root'
+        ? dataRoot
+        : writableComponent === '.asd'
+          ? path.join(dataRoot, '.asd')
+          : custodyRoot(dataRoot);
+    await fsp.chmod(writablePath, 0o777);
+    expect((await fsp.stat(writablePath)).mode & 0o022).not.toBe(0);
+
+    await expect(prepare(dataRoot)).rejects.toThrow('STRICT_SEMANTIC_REVIEW_CUSTODY_PATH_INVALID');
     await expect(pathExists(path.join(custodyRoot(dataRoot), 'signing-key.pk8'))).resolves.toBe(
       false
     );
@@ -97,7 +194,7 @@ describe('SemanticReviewTrustStore', () => {
     const dataRoot =
       symlinkedComponent === 'data-root'
         ? path.join(await createDataRoot(), 'configured-data-root')
-        : await createDataRoot();
+        : await createDataRoot(symlinkedComponent !== '.asd');
     const outsideCustody =
       symlinkedComponent === 'data-root'
         ? path.join(outsideRoot, '.asd', 'semantic-review-trust')
@@ -109,7 +206,7 @@ describe('SemanticReviewTrustStore', () => {
     } else if (symlinkedComponent === '.asd') {
       await fsp.symlink(outsideRoot, path.join(dataRoot, '.asd'), 'dir');
     } else {
-      await fsp.mkdir(path.join(dataRoot, '.asd'), { mode: 0o700 });
+      await fsp.mkdir(path.join(dataRoot, '.asd'), { mode: 0o700, recursive: true });
       await fsp.symlink(outsideRoot, custodyRoot(dataRoot), 'dir');
     }
 
@@ -169,9 +266,20 @@ describe('SemanticReviewTrustStore', () => {
   });
 });
 
-async function createDataRoot(): Promise<string> {
+async function createDataRoot(authorizeEnrollment = true): Promise<string> {
   const dataRoot = await fsp.mkdtemp(path.join(os.tmpdir(), 'alembic-semantic-trust-'));
   roots.push(dataRoot);
+  if (authorizeEnrollment) {
+    await fsp.mkdir(path.join(dataRoot, '.asd'), { mode: 0o700 });
+    await fsp.writeFile(
+      path.join(dataRoot, '.asd/config.json'),
+      `${JSON.stringify({
+        version: 2,
+        semanticReviewTrust: createSemanticReviewTrustEnrollmentAuthorization({ dataRoot }),
+      })}\n`,
+      { mode: 0o644 }
+    );
+  }
   return dataRoot;
 }
 

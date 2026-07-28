@@ -108,6 +108,14 @@ describe('SetupService workspace mode convergence', () => {
     expect(config).not.toHaveProperty('watch');
     expect(config.ai).toMatchObject({ provider: 'auto' });
     expect(config.guard).toMatchObject({ enabled: true });
+    expect(config).toMatchObject({
+      semanticReviewTrust: {
+        schemaVersion: 1,
+        state: 'enrollment-authorized',
+        workspaceIdentityHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+        authorityHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+      },
+    });
   });
 
   test('project runtime control observes the setup-attached ghost data root', async () => {

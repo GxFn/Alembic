@@ -3,6 +3,7 @@ import {
   createPublicKey,
   generateKeyPairSync,
   type KeyObject,
+  randomUUID,
 } from 'node:crypto';
 import { constants as fsConstants } from 'node:fs';
 import fsp from 'node:fs/promises';
@@ -17,6 +18,30 @@ import { hashBytes, hashCanonicalJson } from '@alembic/core/project-context-foun
 const CUSTODY_DIRECTORY = 'semantic-review-trust';
 const PRIVATE_KEY_FILE = 'signing-key.pk8';
 const POLICY_REGISTRY_FILE = 'approved-policies.json';
+const HOST_CONFIG_FILE = 'config.json';
+const HOST_AUTHORITY_KEY = 'semanticReviewTrust';
+
+export interface SemanticReviewTrustEnrollmentAuthorizationV1 {
+  readonly schemaVersion: 1;
+  readonly state: 'enrollment-authorized';
+  readonly authorizationId: string;
+  readonly workspaceIdentityHash: string;
+  readonly authorityHash: string;
+}
+
+interface SemanticReviewTrustEnrolledAuthorityV1 {
+  readonly schemaVersion: 1;
+  readonly state: 'enrolled';
+  readonly authorizationId: string;
+  readonly workspaceIdentityHash: string;
+  readonly trustRootId: string;
+  readonly publicKeyHash: string;
+  readonly authorityHash: string;
+}
+
+type SemanticReviewTrustHostAuthorityV1 =
+  | SemanticReviewTrustEnrollmentAuthorizationV1
+  | SemanticReviewTrustEnrolledAuthorityV1;
 
 interface SemanticReviewPolicyEnrollmentV1 {
   readonly schemaVersion: 1;
@@ -39,6 +64,24 @@ export interface SemanticReviewTrustPreparationV1 {
 }
 
 /**
+ * 只能由宿主 setup / 明确的 operator re-enrollment 入口写入的首次登记授权。
+ *
+ * 普通 production runtime 不会自行创建这个门禁；授权一经消费就会被替换为带
+ * public-key pin 的 enrolled authority，pair 全失不能把它恢复成首次安装状态。
+ */
+export function createSemanticReviewTrustEnrollmentAuthorization(input: {
+  readonly dataRoot: string;
+}): SemanticReviewTrustEnrollmentAuthorizationV1 {
+  const semantic = {
+    schemaVersion: 1 as const,
+    state: 'enrollment-authorized' as const,
+    authorizationId: randomUUID(),
+    workspaceIdentityHash: createWorkspaceIdentityHash(input.dataRoot),
+  };
+  return Object.freeze({ ...semantic, authorityHash: hashCanonicalJson(semantic) });
+}
+
+/**
  * Main 宿主的稳定签名 custody 与公开 policy registry。
  *
  * 它复用 workspace 既有 `.asd` runtime root；这里只保存 PKCS#8 私钥和可公开的
@@ -47,6 +90,8 @@ export interface SemanticReviewTrustPreparationV1 {
  */
 export class SemanticReviewTrustStore {
   readonly #dataRoot: string;
+  readonly #runtimeRoot: string;
+  readonly #hostConfigPath: string;
   readonly #custodyRoot: string;
   readonly #privateKeyPath: string;
   readonly #registryPath: string;
@@ -57,13 +102,12 @@ export class SemanticReviewTrustStore {
       throw new Error('STRICT_SEMANTIC_REVIEW_DATA_ROOT_INVALID');
     }
     this.#dataRoot = path.resolve(input.dataRoot);
-    this.#custodyRoot = path.join(this.#dataRoot, '.asd', CUSTODY_DIRECTORY);
+    this.#runtimeRoot = path.join(this.#dataRoot, '.asd');
+    this.#hostConfigPath = path.join(this.#runtimeRoot, HOST_CONFIG_FILE);
+    this.#custodyRoot = path.join(this.#runtimeRoot, CUSTODY_DIRECTORY);
     this.#privateKeyPath = path.join(this.#custodyRoot, PRIVATE_KEY_FILE);
     this.#registryPath = path.join(this.#custodyRoot, POLICY_REGISTRY_FILE);
-    this.#workspaceIdentityHash = hashCanonicalJson({
-      kind: 'alembic-main-semantic-review-workspace-v1',
-      dataRoot: this.#dataRoot,
-    });
+    this.#workspaceIdentityHash = createWorkspaceIdentityHash(this.#dataRoot);
   }
 
   async openCustody(input: {
@@ -72,21 +116,11 @@ export class SemanticReviewTrustStore {
     readonly reviewerModelLoadReceipt: SemanticDispositionReviewerModelLoadReceiptV1;
     readonly expectedPolicyHash?: string;
   }): Promise<SemanticReviewTrustPreparationV1> {
-    await this.#prepareCustodyRoot(true);
-    const [registryExists, privateKeyExists] = await Promise.all([
-      pathEntryExists(this.#registryPath),
-      pathEntryExists(this.#privateKeyPath),
-    ]);
-    // 只有 key/registry 同时不存在才是首次 bootstrap。已有 key 却丢失公开 enrollment
-    // 是持久状态损坏，绝不能借下一次 task 调用重新自授权。
-    if (!registryExists && privateKeyExists) {
-      throw new Error('STRICT_SEMANTIC_REVIEW_POLICY_REGISTRY_MISSING');
-    }
-    if (!registryExists && input.expectedPolicyHash) {
-      throw new Error('STRICT_SEMANTIC_REVIEW_POLICY_ENROLLMENT_MISSING');
-    }
+    const { authority, registryExists } = await this.#openCustodyState(input.expectedPolicyHash);
     const registry = await this.#readRegistry();
-    const privateKey = await this.#loadOrCreatePrivateKey(registry !== null);
+    assertRegistryReadState(registryExists, registry);
+    const privateKey = await this.#loadOrCreatePrivateKey(registryExists);
+    assertAuthorityPrivateKeyIfEnrolled(authority, privateKey);
     const policy = createIndependentTrustPolicy({
       evidenceStoreId: input.evidenceStoreId,
       evidenceStoreConfigHash: input.evidenceStoreConfigHash,
@@ -94,6 +128,7 @@ export class SemanticReviewTrustStore {
       privateKey,
       workspaceIdentityHash: this.#workspaceIdentityHash,
     });
+    assertAuthorityPolicyIfEnrolled(authority, policy);
     if (input.expectedPolicyHash && input.expectedPolicyHash !== policy.policyHash) {
       throw new Error('STRICT_SEMANTIC_REVIEW_POLICY_ROTATION_FORBIDDEN');
     }
@@ -106,20 +141,14 @@ export class SemanticReviewTrustStore {
     const existing = registry?.enrollments.find(
       (candidate) => candidate.enrollmentKey === enrollmentKey
     );
-    if (existing) {
-      assertEnrollment(existing);
-      if (
-        existing.status !== 'approved' ||
-        existing.policy.policyHash !== policy.policyHash ||
-        hashCanonicalJson(existing.policy) !== hashCanonicalJson(policy)
-      ) {
-        throw new Error('STRICT_SEMANTIC_REVIEW_POLICY_NOT_APPROVED');
-      }
-      return Object.freeze({
-        privateKey,
-        policy: structuredClone(existing.policy),
-        enrollmentHash: existing.enrollmentHash,
-      });
+    const reused = await this.#reuseApprovedEnrollment({
+      authority,
+      existing,
+      policy,
+      privateKey,
+    });
+    if (reused) {
+      return reused;
     }
     if (input.expectedPolicyHash) {
       throw new Error('STRICT_SEMANTIC_REVIEW_POLICY_ENROLLMENT_MISSING');
@@ -146,6 +175,7 @@ export class SemanticReviewTrustStore {
     ) {
       throw new Error('STRICT_SEMANTIC_REVIEW_POLICY_ENROLLMENT_READBACK_MISMATCH');
     }
+    await this.#commitEnrolledAuthority(authority, approved.policy);
     return Object.freeze({
       privateKey,
       policy: structuredClone(approved.policy),
@@ -153,21 +183,90 @@ export class SemanticReviewTrustStore {
     });
   }
 
+  async #openCustodyState(expectedPolicyHash?: string): Promise<{
+    readonly authority: SemanticReviewTrustHostAuthorityV1;
+    readonly registryExists: boolean;
+  }> {
+    await this.#prepareRuntimeRoot();
+    const authority = (await this.#readHostConfig()).authority;
+    const custodyExists = await pathEntryExists(this.#custodyRoot);
+    if (!custodyExists && (authority.state === 'enrolled' || expectedPolicyHash)) {
+      throw new Error(
+        authority.state === 'enrolled'
+          ? 'STRICT_SEMANTIC_REVIEW_TRUST_PAIR_MISSING'
+          : 'STRICT_SEMANTIC_REVIEW_POLICY_ENROLLMENT_MISSING'
+      );
+    }
+    await this.#prepareCustodyRoot(!custodyExists);
+    const [registryExists, privateKeyExists] = await Promise.all([
+      pathEntryExists(this.#registryPath),
+      pathEntryExists(this.#privateKeyPath),
+    ]);
+    assertTrustPairState({
+      authority,
+      expectedPolicyHash,
+      privateKeyExists,
+      registryExists,
+    });
+    return { authority, registryExists };
+  }
+
+  async #reuseApprovedEnrollment(input: {
+    readonly authority: SemanticReviewTrustHostAuthorityV1;
+    readonly existing: SemanticReviewPolicyEnrollmentV1 | undefined;
+    readonly policy: SemanticDispositionReviewTrustPolicyV3;
+    readonly privateKey: KeyObject;
+  }): Promise<SemanticReviewTrustPreparationV1 | null> {
+    if (!input.existing) {
+      return null;
+    }
+    assertEnrollment(input.existing);
+    if (
+      input.existing.status !== 'approved' ||
+      input.existing.policy.policyHash !== input.policy.policyHash ||
+      hashCanonicalJson(input.existing.policy) !== hashCanonicalJson(input.policy)
+    ) {
+      throw new Error('STRICT_SEMANTIC_REVIEW_POLICY_NOT_APPROVED');
+    }
+    await this.#commitEnrolledAuthority(input.authority, input.existing.policy);
+    return Object.freeze({
+      privateKey: input.privateKey,
+      policy: structuredClone(input.existing.policy),
+      enrollmentHash: input.existing.enrollmentHash,
+    });
+  }
+
   async readApprovedPolicy(input: {
     readonly policyHash: string;
     readonly enrollmentHash: string;
   }): Promise<SemanticDispositionReviewTrustPolicyV3> {
+    await this.#prepareRuntimeRoot();
+    const authority = (await this.#readHostConfig()).authority;
+    if (authority.state !== 'enrolled') {
+      throw new Error('STRICT_SEMANTIC_REVIEW_TRUST_AUTHORITY_NOT_ENROLLED');
+    }
+    if (!(await pathEntryExists(this.#custodyRoot))) {
+      throw new Error('STRICT_SEMANTIC_REVIEW_TRUST_PAIR_MISSING');
+    }
     await this.#prepareCustodyRoot(false);
+    const [registryExists, privateKeyExists] = await Promise.all([
+      pathEntryExists(this.#registryPath),
+      pathEntryExists(this.#privateKeyPath),
+    ]);
+    if (!registryExists && !privateKeyExists) {
+      throw new Error('STRICT_SEMANTIC_REVIEW_TRUST_PAIR_MISSING');
+    }
+    if (!registryExists) {
+      throw new Error('STRICT_SEMANTIC_REVIEW_POLICY_REGISTRY_MISSING');
+    }
+    if (!privateKeyExists) {
+      throw new Error('STRICT_SEMANTIC_REVIEW_SIGNING_KEY_MISSING');
+    }
+    const privateKey = await this.#loadOrCreatePrivateKey(true);
+    assertAuthorityPrivateKey(authority, privateKey);
     const registry = await this.#readRegistry();
     if (!registry) {
-      // finalized recovery 只读取 public enrollment；但如果私钥仍在而 registry 消失，
-      // 仍须与新 session 打开时使用同一个“持久状态损坏”诊断，不能降级成未注册。
-      const privateKeyExists = await pathEntryExists(this.#privateKeyPath);
-      throw new Error(
-        privateKeyExists
-          ? 'STRICT_SEMANTIC_REVIEW_POLICY_REGISTRY_MISSING'
-          : 'STRICT_SEMANTIC_REVIEW_POLICY_ENROLLMENT_MISSING'
-      );
+      throw new Error('STRICT_SEMANTIC_REVIEW_POLICY_REGISTRY_MISSING');
     }
     const enrollment = registry.enrollments.find(
       (candidate) => candidate.policy.policyHash === input.policyHash
@@ -179,13 +278,24 @@ export class SemanticReviewTrustStore {
     if (enrollment.status !== 'approved' || enrollment.enrollmentHash !== input.enrollmentHash) {
       throw new Error('STRICT_SEMANTIC_REVIEW_POLICY_NOT_APPROVED');
     }
+    assertAuthorityPolicy(authority, enrollment.policy);
     return structuredClone(enrollment.policy);
   }
 
-  async #prepareCustodyRoot(create: boolean): Promise<void> {
+  async #prepareRuntimeRoot(): Promise<void> {
     await assertSecureDirectory(this.#dataRoot, false);
-    const asdRoot = path.join(this.#dataRoot, '.asd');
-    await assertSecureDirectory(asdRoot, create);
+    await assertSecureDirectory(this.#runtimeRoot, false);
+    const [realDataRoot, realRuntimeRoot] = await Promise.all([
+      fsp.realpath(this.#dataRoot),
+      fsp.realpath(this.#runtimeRoot),
+    ]);
+    if (realRuntimeRoot !== path.join(realDataRoot, '.asd')) {
+      throw new Error('STRICT_SEMANTIC_REVIEW_CUSTODY_PATH_INVALID');
+    }
+  }
+
+  async #prepareCustodyRoot(create: boolean): Promise<void> {
+    await this.#prepareRuntimeRoot();
     await assertSecureDirectory(this.#custodyRoot, create);
 
     const [realDataRoot, realCustodyRoot] = await Promise.all([
@@ -202,6 +312,90 @@ export class SemanticReviewTrustStore {
     ) {
       throw new Error('STRICT_SEMANTIC_REVIEW_CUSTODY_PATH_INVALID');
     }
+  }
+
+  async #readHostConfig(): Promise<{
+    readonly document: Record<string, unknown>;
+    readonly authority: SemanticReviewTrustHostAuthorityV1;
+    readonly fileMode: number;
+  }> {
+    let bytes: Buffer;
+    try {
+      // 这是 operator-owned 的 enrollment gate / public-key pin，不能接受其他主体可写。
+      bytes = await readRegularFile(this.#hostConfigPath, 0o022);
+    } catch (err: unknown) {
+      if (readCode(err) === 'ENOENT') {
+        throw new Error('STRICT_SEMANTIC_REVIEW_TRUST_AUTHORITY_MISSING', { cause: err });
+      }
+      throw err;
+    }
+    let document: unknown;
+    try {
+      document = JSON.parse(bytes.toString('utf8')) as unknown;
+    } catch (err: unknown) {
+      throw new Error('STRICT_SEMANTIC_REVIEW_TRUST_AUTHORITY_INVALID', { cause: err });
+    }
+    if (!isRecord(document)) {
+      throw new Error('STRICT_SEMANTIC_REVIEW_TRUST_AUTHORITY_INVALID');
+    }
+    const configStat = await fsp.lstat(this.#hostConfigPath);
+    if (configStat.isSymbolicLink() || !configStat.isFile() || (configStat.mode & 0o022) !== 0) {
+      throw new Error('STRICT_SEMANTIC_REVIEW_TRUST_AUTHORITY_INVALID');
+    }
+    const authority = assertHostAuthority(
+      document[HOST_AUTHORITY_KEY],
+      this.#workspaceIdentityHash
+    );
+    return {
+      document: structuredClone(document),
+      authority,
+      fileMode: configStat.mode & 0o777,
+    };
+  }
+
+  async #commitEnrolledAuthority(
+    observedAuthority: SemanticReviewTrustHostAuthorityV1,
+    policy: SemanticDispositionReviewTrustPolicyV3
+  ): Promise<void> {
+    if (observedAuthority.state === 'enrolled') {
+      assertAuthorityPolicy(observedAuthority, policy);
+      return;
+    }
+    const current = await this.#readHostConfig();
+    if (current.authority.state === 'enrolled') {
+      assertAuthorityPolicy(current.authority, policy);
+      return;
+    }
+    if (
+      current.authority.authorizationId !== observedAuthority.authorizationId ||
+      current.authority.authorityHash !== observedAuthority.authorityHash
+    ) {
+      throw new Error('STRICT_SEMANTIC_REVIEW_TRUST_AUTHORITY_CHANGED');
+    }
+    const semantic = {
+      schemaVersion: 1 as const,
+      state: 'enrolled' as const,
+      authorizationId: current.authority.authorizationId,
+      workspaceIdentityHash: this.#workspaceIdentityHash,
+      trustRootId: policy.trustRootId,
+      publicKeyHash: policy.publicKeyHash,
+    };
+    const enrolled = Object.freeze({
+      ...semantic,
+      authorityHash: hashCanonicalJson(semantic),
+    }) satisfies SemanticReviewTrustEnrolledAuthorityV1;
+    await writeJsonAtomically(
+      this.#hostConfigPath,
+      { ...current.document, [HOST_AUTHORITY_KEY]: enrolled },
+      this.#runtimeRoot,
+      true,
+      current.fileMode
+    );
+    const readback = (await this.#readHostConfig()).authority;
+    if (readback.state !== 'enrolled') {
+      throw new Error('STRICT_SEMANTIC_REVIEW_TRUST_AUTHORITY_READBACK_MISSING');
+    }
+    assertAuthorityPolicy(readback, policy);
   }
 
   async #loadOrCreatePrivateKey(registryExists: boolean): Promise<KeyObject> {
@@ -285,16 +479,124 @@ export class SemanticReviewTrustStore {
       ...input,
       registryHash: hashCanonicalJson(input),
     } satisfies SemanticReviewPolicyRegistryV1;
-    const tempPath = `${this.#registryPath}.tmp-${process.pid}-${Date.now()}`;
-    const handle = await fsp.open(tempPath, 'wx', 0o644);
-    try {
-      await handle.writeFile(`${JSON.stringify(registry)}\n`, 'utf8');
-      await handle.sync();
-    } finally {
-      await handle.close();
-    }
-    await fsp.rename(tempPath, this.#registryPath);
-    await syncDirectory(this.#custodyRoot);
+    await writeJsonAtomically(this.#registryPath, registry, this.#custodyRoot, false, 0o644);
+  }
+}
+
+function createWorkspaceIdentityHash(dataRoot: string): string {
+  if (!path.isAbsolute(dataRoot)) {
+    throw new Error('STRICT_SEMANTIC_REVIEW_DATA_ROOT_INVALID');
+  }
+  return hashCanonicalJson({
+    kind: 'alembic-main-semantic-review-workspace-v1',
+    dataRoot: path.resolve(dataRoot),
+  });
+}
+
+function assertHostAuthority(
+  value: unknown,
+  expectedWorkspaceIdentityHash: string
+): SemanticReviewTrustHostAuthorityV1 {
+  if (!isRecord(value)) {
+    throw new Error('STRICT_SEMANTIC_REVIEW_TRUST_AUTHORITY_MISSING');
+  }
+  const { authorityHash, ...semantic } = value;
+  if (
+    value.schemaVersion !== 1 ||
+    !['enrollment-authorized', 'enrolled'].includes(String(value.state)) ||
+    typeof value.authorizationId !== 'string' ||
+    value.authorizationId.length === 0 ||
+    value.workspaceIdentityHash !== expectedWorkspaceIdentityHash ||
+    typeof authorityHash !== 'string' ||
+    authorityHash !== hashCanonicalJson(semantic)
+  ) {
+    throw new Error('STRICT_SEMANTIC_REVIEW_TRUST_AUTHORITY_INVALID');
+  }
+  if (value.state === 'enrollment-authorized') {
+    return structuredClone(value) as unknown as SemanticReviewTrustEnrollmentAuthorizationV1;
+  }
+  if (
+    typeof value.trustRootId !== 'string' ||
+    value.trustRootId.length === 0 ||
+    typeof value.publicKeyHash !== 'string' ||
+    value.publicKeyHash.length === 0
+  ) {
+    throw new Error('STRICT_SEMANTIC_REVIEW_TRUST_AUTHORITY_INVALID');
+  }
+  return structuredClone(value) as unknown as SemanticReviewTrustEnrolledAuthorityV1;
+}
+
+function assertTrustPairState(input: {
+  readonly authority: SemanticReviewTrustHostAuthorityV1;
+  readonly expectedPolicyHash?: string;
+  readonly privateKeyExists: boolean;
+  readonly registryExists: boolean;
+}): void {
+  // pair 自身不能证明“从未登记”。只有 setup 写入、且尚未消费的 host authority
+  // 才能授权首次生成；enrolled authority 下整对缺失必须在任何 artifact 写入前失败。
+  if (!input.registryExists && !input.privateKeyExists && input.authority.state === 'enrolled') {
+    throw new Error('STRICT_SEMANTIC_REVIEW_TRUST_PAIR_MISSING');
+  }
+  if (!input.registryExists && input.privateKeyExists) {
+    throw new Error('STRICT_SEMANTIC_REVIEW_POLICY_REGISTRY_MISSING');
+  }
+  if (input.registryExists && !input.privateKeyExists) {
+    throw new Error('STRICT_SEMANTIC_REVIEW_SIGNING_KEY_MISSING');
+  }
+  if (!input.registryExists && !input.privateKeyExists && input.expectedPolicyHash) {
+    throw new Error('STRICT_SEMANTIC_REVIEW_POLICY_ENROLLMENT_MISSING');
+  }
+}
+
+function assertRegistryReadState(
+  registryExists: boolean,
+  registry: SemanticReviewPolicyRegistryV1 | null
+): void {
+  if (registryExists && !registry) {
+    throw new Error('STRICT_SEMANTIC_REVIEW_POLICY_REGISTRY_MISSING');
+  }
+  if (!registryExists && registry) {
+    throw new Error('STRICT_SEMANTIC_REVIEW_TRUST_STATE_CHANGED');
+  }
+}
+
+function assertAuthorityPrivateKeyIfEnrolled(
+  authority: SemanticReviewTrustHostAuthorityV1,
+  privateKey: KeyObject
+): void {
+  if (authority.state === 'enrolled') {
+    assertAuthorityPrivateKey(authority, privateKey);
+  }
+}
+
+function assertAuthorityPolicyIfEnrolled(
+  authority: SemanticReviewTrustHostAuthorityV1,
+  policy: SemanticDispositionReviewTrustPolicyV3
+): void {
+  if (authority.state === 'enrolled') {
+    assertAuthorityPolicy(authority, policy);
+  }
+}
+
+function assertAuthorityPrivateKey(
+  authority: SemanticReviewTrustEnrolledAuthorityV1,
+  privateKey: KeyObject
+): void {
+  const publicKeyDer = createPublicKey(privateKey).export({ format: 'der', type: 'spki' });
+  if (hashBytes(publicKeyDer) !== authority.publicKeyHash) {
+    throw new Error('STRICT_SEMANTIC_REVIEW_TRUST_ROOT_REPLACED');
+  }
+}
+
+function assertAuthorityPolicy(
+  authority: SemanticReviewTrustEnrolledAuthorityV1,
+  policy: SemanticDispositionReviewTrustPolicyV3
+): void {
+  if (
+    authority.trustRootId !== policy.trustRootId ||
+    authority.publicKeyHash !== policy.publicKeyHash
+  ) {
+    throw new Error('STRICT_SEMANTIC_REVIEW_TRUST_ROOT_REPLACED');
   }
 }
 
@@ -383,6 +685,34 @@ async function readRegularFile(filePath: string, forbiddenModeMask: number): Pro
   }
 }
 
+async function writeJsonAtomically(
+  filePath: string,
+  value: unknown,
+  directoryPath: string,
+  pretty: boolean,
+  mode: number
+): Promise<void> {
+  const tempPath = `${filePath}.tmp-${process.pid}-${randomUUID()}`;
+  let renamed = false;
+  try {
+    const handle = await fsp.open(tempPath, 'wx', mode);
+    try {
+      const serialized = pretty ? JSON.stringify(value, null, 2) : JSON.stringify(value);
+      await handle.writeFile(`${serialized}\n`, 'utf8');
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    await fsp.rename(tempPath, filePath);
+    renamed = true;
+    await syncDirectory(directoryPath);
+  } finally {
+    if (!renamed) {
+      await fsp.rm(tempPath, { force: true });
+    }
+  }
+}
+
 async function syncDirectory(directoryPath: string): Promise<void> {
   const handle = await fsp.open(directoryPath, 'r');
   try {
@@ -411,7 +741,7 @@ async function assertSecureDirectory(directoryPath: string, create: boolean): Pr
     }
     throw err;
   }
-  if (stat.isSymbolicLink() || !stat.isDirectory()) {
+  if (stat.isSymbolicLink() || !stat.isDirectory() || (stat.mode & 0o022) !== 0) {
     throw new Error('STRICT_SEMANTIC_REVIEW_CUSTODY_PATH_INVALID');
   }
 }

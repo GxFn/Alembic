@@ -23,6 +23,7 @@ import { hashCanonicalJson } from '@alembic/core/project-context-foundation';
 import { WorkspaceResolver } from '@alembic/core/workspace';
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createSemanticReviewTrustEnrollmentAuthorization } from '../../lib/infrastructure/config/SemanticReviewTrustStore.js';
 import type { ServiceContainer } from '../../lib/injection/ServiceContainer.js';
 import { resolveMainCertifiedProjectScopeHash } from '../../lib/project-facts/CertifiedProjectFactsRuntime.js';
 import { resolveProjectScopeAnalysisContext } from '../../lib/project-scope/ProjectScopeAnalysis.js';
@@ -790,8 +791,23 @@ describe('RecipePipelineFacade strict production integration', () => {
       const servingConfig = await readJson(path.join(snapshotRoot, 'data/.asd/config.json'));
       expect(servingConfig).toMatchObject({ kind: 'strict-public-serving-config' });
       expect(JSON.stringify(servingConfig)).not.toContain('credentialLocationSymbol');
-      expect(await fsp.readFile(path.join(fixture.dataRoot, '.asd/config.json'), 'utf8')).toBe(
-        fixture.sourceConfigBytes
+      const enrolledSourceConfig = await readJson(path.join(fixture.dataRoot, '.asd/config.json'));
+      expect(enrolledSourceConfig).toMatchObject({
+        provider: 'fixture',
+        model: 'fixture-embedding-v1',
+        credentialLocationSymbol: 'env:STRICT_FIXTURE_ONLY',
+        semanticReviewTrust: {
+          schemaVersion: 1,
+          state: 'enrolled',
+          trustRootId: semanticPolicy.trustRootId,
+          publicKeyHash: semanticPolicy.publicKeyHash,
+        },
+      });
+      expect(withoutKey(enrolledSourceConfig, 'semanticReviewTrust')).toEqual(
+        withoutKey(
+          JSON.parse(fixture.sourceConfigBytes) as Record<string, unknown>,
+          'semanticReviewTrust'
+        )
       );
       for (const serialized of [JSON.stringify(checkpoint), JSON.stringify(report)]) {
         expect(serialized).not.toContain('candidateOracle');
@@ -818,18 +834,32 @@ describe('RecipePipelineFacade strict production integration', () => {
       const approvedRegistryPath = path.join(trustRoot, 'approved-policies.json');
       const signingKeyBytes = await fsp.readFile(signingKeyPath);
       const approvedRegistryBytes = await fsp.readFile(approvedRegistryPath);
-      await fsp.rm(approvedRegistryPath);
+      const enrolledHostConfigBytes = await fsp.readFile(
+        path.join(fixture.dataRoot, '.asd/config.json')
+      );
+      await fsp.rm(trustRoot, { recursive: true });
       fixture.restartSemanticReviewFactory();
       await expect(executeFixture(fixture)).rejects.toThrow(
-        'STRICT_SEMANTIC_REVIEW_POLICY_REGISTRY_MISSING'
+        'STRICT_SEMANTIC_REVIEW_TRUST_PAIR_MISSING'
       );
       expect(fixture.agentService.dispositionReviewInvocations).toHaveLength(5);
+      await expect(fsp.stat(signingKeyPath)).rejects.toMatchObject({ code: 'ENOENT' });
       await expect(fsp.stat(approvedRegistryPath)).rejects.toMatchObject({ code: 'ENOENT' });
-      await expect(fsp.readFile(signingKeyPath)).resolves.toEqual(signingKeyBytes);
+      await expect(fsp.readFile(path.join(fixture.dataRoot, '.asd/config.json'))).resolves.toEqual(
+        enrolledHostConfigBytes
+      );
+      await fsp.mkdir(trustRoot, { mode: 0o700 });
+      await fsp.writeFile(signingKeyPath, signingKeyBytes, { mode: 0o600 });
       await fsp.writeFile(approvedRegistryPath, approvedRegistryBytes, { mode: 0o644 });
       const recovered = await executeFixture(fixture);
       expect(recovered).toMatchObject({ mode: 'strict-production', status: 'FINALIZED' });
       expect(fixture.agentService.dispositionReviewInvocations).toHaveLength(5);
+      const recoveredCheckpoint = await readJson(
+        path.join(operationRoot, 'strict-production.checkpoint.json')
+      );
+      expect(readRecord(recoveredCheckpoint).semanticReview).toEqual(
+        readRecord(checkpoint as unknown).semanticReview
+      );
       const recoveredRows = (await fsp.readFile(journalPath, 'utf8'))
         .trim()
         .split('\n')
@@ -1835,6 +1865,7 @@ async function createStrictFixtureProject() {
     provider: 'fixture',
     model: 'fixture-embedding-v1',
     credentialLocationSymbol: 'env:STRICT_FIXTURE_ONLY',
+    semanticReviewTrust: createSemanticReviewTrustEnrollmentAuthorization({ dataRoot }),
   })}\n`;
   await fsp.writeFile(path.join(dataRoot, '.asd/config.json'), sourceConfigBytes);
   await fsp.writeFile(

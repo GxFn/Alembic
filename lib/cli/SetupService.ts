@@ -62,6 +62,7 @@ import {
   type WorkspaceMode,
   WorkspaceResolver,
 } from '@alembic/core/workspace';
+import { createSemanticReviewTrustEnrollmentAuthorization } from '../infrastructure/config/SemanticReviewTrustStore.js';
 import { resolveAlembicWorkspace } from '../project-scope/ProjectScopeRegistry.js';
 import { PACKAGE_ROOT } from '../shared/package-assets.js';
 
@@ -284,6 +285,11 @@ export class SetupService {
         },
         ai: { provider: process.env.ALEMBIC_AI_PROVIDER || 'auto' },
         guard: { enabled: true },
+        // 只有显式 setup / setup --force 能打开首次 semantic trust 登记门禁。production
+        // runtime 消费后会把它原位收敛为 public-key pin，不会因 pair 丢失自行重开。
+        semanticReviewTrust: createSemanticReviewTrustEnrollmentAuthorization({
+          dataRoot: this.resolver?.dataRoot ?? this.projectRoot,
+        }),
       };
       writeFileSync(configPath, JSON.stringify(config, null, 2));
     }
