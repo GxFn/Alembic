@@ -153,7 +153,7 @@ export function toStrictTestRunStatusPublicDtoV1(value: unknown): StrictTestRunS
           terminalState: terminalState(terminal.terminalState),
           terminalHash: text(terminal.terminalHash),
           failedStage: nullableText(terminal.failedStage),
-          errorCode: nullableText(terminal.errorCode),
+          errorCode: nullablePublicErrorCode(terminal.errorCode),
           productionFinalized: false,
           publicRouteChanged: false,
         })
@@ -203,7 +203,7 @@ export function toStrictTestReportPublicDtoV1(value: unknown): StrictTestReportP
     failure: failure
       ? Object.freeze({
           failedStage: text(failure.failedStage),
-          errorCode: text(failure.errorCode),
+          errorCode: publicErrorCode(failure.errorCode),
         })
       : null,
     evidenceRefs: safeEvidenceRefs(report.privateArtifactRefs),
@@ -232,6 +232,15 @@ function text(value: unknown): string {
 
 function nullableText(value: unknown): string | null {
   return value === null || value === undefined ? null : text(value);
+}
+
+function nullablePublicErrorCode(value: unknown): string | null {
+  return value === null || value === undefined ? null : publicErrorCode(value);
+}
+
+function publicErrorCode(value: unknown): string {
+  const code = text(value);
+  return /^STRICT_TEST_[A-Z0-9_]+$/u.test(code) ? code : 'STRICT_TEST_FAILED';
 }
 
 function array(value: unknown): readonly unknown[] {

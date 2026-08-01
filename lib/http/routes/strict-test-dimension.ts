@@ -14,6 +14,7 @@ import {
   type StrictTestPreflightRequestV1,
   type StrictTestRunRequestV1,
 } from '../../recipe-pipeline/generate/strict/StrictTestRequestContracts.js';
+import { type AlembicHttpProblemReason, buildAlembicHttpProblem } from '../problem-taxonomy.js';
 
 export interface StrictTestDimensionApiService {
   preflight(input: StrictTestPreflightRequestV1): Promise<unknown>;
@@ -42,7 +43,18 @@ export function createStrictTestDimensionRouter(getService: StrictTestDimensionS
     try {
       assertStrictTestEmptyQuery(req.query);
       const result = await getService().start(parseStrictTestRunRequest(req.body));
-      res.status(202).json({ success: true, data: toStrictTestRunStatusPublicDtoV1(result) });
+      const data = toStrictTestRunStatusPublicDtoV1(result);
+      if (data.terminal?.terminalState === 'STRICT_TEST_FAILED') {
+        respondStrictTestProblem(res, {
+          code: publicStrictTestCode(data.terminal.errorCode),
+          data,
+          message: 'Strict-test run failed',
+          reasonCode: 'host-failure',
+          status: 422,
+        });
+        return;
+      }
+      res.status(202).json({ success: true, data });
     } catch (error: unknown) {
       respondStrictTestError(res, error);
     }
@@ -78,30 +90,67 @@ function defaultService(): StrictTestDimensionApiService {
 
 function respondStrictTestError(res: Response, error: unknown): void {
   if (error instanceof ZodError) {
-    res.status(400).json({
-      success: false,
-      error: {
-        code: 'STRICT_TEST_REQUEST_INVALID',
-        message: 'Strict-test request does not match the exact profile contract',
-        details: error.flatten(),
-      },
+    respondStrictTestProblem(res, {
+      code: 'STRICT_TEST_REQUEST_INVALID',
+      message: 'Strict-test request does not match the exact profile contract',
+      reasonCode: 'invalid-input',
+      status: 400,
     });
     return;
   }
-  const code = error instanceof Error ? error.message.split(':', 1)[0] : 'STRICT_TEST_FAILED';
-  const status =
-    code === 'STRICT_TEST_RUN_NOT_FOUND'
-      ? 404
-      : code === 'STRICT_TEST_REPORT_NOT_READY'
-        ? 409
-        : 422;
-  res.status(status).json({
-    success: false,
-    error: {
+  const rawCode = error instanceof Error ? error.message.split(':', 1)[0] : null;
+  const code = publicStrictTestCode(rawCode);
+  if (code === 'STRICT_TEST_RUN_NOT_FOUND') {
+    respondStrictTestProblem(res, {
       code,
-      message: error instanceof Error ? error.message : String(error),
-    },
+      message: 'Strict-test run was not found',
+      reasonCode: 'not-found',
+      status: 404,
+    });
+    return;
+  }
+  if (code === 'STRICT_TEST_REPORT_NOT_READY') {
+    respondStrictTestProblem(res, {
+      code,
+      message: 'Strict-test report is not ready',
+      reasonCode: 'conflict',
+      status: 409,
+    });
+    return;
+  }
+  respondStrictTestProblem(res, {
+    code,
+    message: 'Strict-test operation failed',
+    reasonCode: strictTestFailureReason(code),
+    status: 422,
   });
+}
+
+function respondStrictTestProblem(
+  res: Response,
+  input: {
+    readonly code: string;
+    readonly data?: unknown;
+    readonly message: string;
+    readonly reasonCode: AlembicHttpProblemReason;
+    readonly status: number;
+  }
+): void {
+  res.status(input.status).json({
+    success: false,
+    error: buildAlembicHttpProblem(input.code, input.message, input.reasonCode, {
+      status: input.status,
+    }),
+    ...(input.data === undefined ? {} : { data: input.data }),
+  });
+}
+
+function publicStrictTestCode(value: string | null): string {
+  return value && /^STRICT_TEST_[A-Z0-9_]+$/u.test(value) ? value : 'STRICT_TEST_FAILED';
+}
+
+function strictTestFailureReason(code: string): AlembicHttpProblemReason {
+  return /(?:AUTHORITY|DRIFT|INVALID|MISMATCH)/u.test(code) ? 'schema-drift' : 'internal-error';
 }
 
 function singleParam(value: string | string[] | undefined): string {

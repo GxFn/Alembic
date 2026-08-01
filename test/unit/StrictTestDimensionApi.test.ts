@@ -1,4 +1,6 @@
+import Ajv from 'ajv';
 import { describe, expect, test, vi } from 'vitest';
+import { ALEMBIC_PROVIDER_ROUTE_CONTRACTS } from '../../lib/http/provider-contracts.js';
 import {
   createStrictTestDimensionRouter,
   type StrictTestDimensionApiService,
@@ -7,6 +9,17 @@ import { invokeRouter } from '../helpers/express.js';
 
 const PROJECT_ROOT = '/workspace/project';
 const PREFLIGHT_HASH = `sha256:${'a'.repeat(64)}`;
+const ajv = new Ajv({ strict: false, validateFormats: false });
+
+function expectProviderResponse(operationId: string, status: number, body: unknown): void {
+  const route = ALEMBIC_PROVIDER_ROUTE_CONTRACTS.find(
+    (candidate) => candidate.operationId === operationId
+  );
+  const schema = route?.responseSchemas[status];
+  expect(schema, `${operationId} must declare HTTP ${status}`).toBeDefined();
+  const validate = ajv.compile(schema ?? false);
+  expect(validate(body), JSON.stringify(validate.errors)).toBe(true);
+}
 
 function createService() {
   const status = {
@@ -100,6 +113,10 @@ describe('strict-test-dimension HTTP API', () => {
     expect(service.start).toHaveBeenCalledTimes(1);
     expect(service.status).toHaveBeenCalledWith('strict-run-1');
     expect(service.report).toHaveBeenCalledWith('strict-run-1');
+    expectProviderResponse('preflightStrictTestDimension', preflight.status, preflight.body);
+    expectProviderResponse('startStrictTestDimensionRun', start.status, start.body);
+    expectProviderResponse('getStrictTestDimensionRun', status.status, status.body);
+    expectProviderResponse('getStrictTestDimensionReport', report.status, report.body);
   });
 
   test.each([
@@ -178,13 +195,128 @@ describe('strict-test-dimension HTTP API', () => {
     expect(status.status).toBe(404);
     expect(status.body).toMatchObject({
       success: false,
-      error: { code: 'STRICT_TEST_RUN_NOT_FOUND' },
+      error: {
+        code: 'STRICT_TEST_RUN_NOT_FOUND',
+        failureId: 'core.failure.not-found',
+        message: 'Strict-test run was not found',
+        privateDataSafe: true,
+        reasonCode: 'not-found',
+        status: 404,
+      },
     });
     expect(report.status).toBe(409);
     expect(report.body).toMatchObject({
       success: false,
-      error: { code: 'STRICT_TEST_REPORT_NOT_READY' },
+      error: {
+        code: 'STRICT_TEST_REPORT_NOT_READY',
+        failureId: 'core.failure.conflict',
+        message: 'Strict-test report is not ready',
+        privateDataSafe: true,
+        reasonCode: 'conflict',
+        status: 409,
+      },
     });
+    expectProviderResponse('getStrictTestDimensionRun', status.status, status.body);
+    expectProviderResponse('getStrictTestDimensionReport', report.status, report.body);
+  });
+
+  test('returns a durable failed start as a canonical safe 422 problem with public status data', async () => {
+    const service = createService();
+    service.start.mockResolvedValueOnce({
+      schemaVersion: 1,
+      profile: 'strict-test-dimension',
+      demandKey: 'demand-1',
+      runId: 'strict-run-1',
+      phase: 'STRICT_TEST_FAILED',
+      runRoot: '/private/control/strict-test-runs/demand-1/strict-run-1',
+      executionContext: {
+        projection: { files: [{ relativePath: 'src/secret.ts', contentBase64: 'c2VjcmV0' }] },
+      },
+      preflight: { preflightHash: PREFLIGHT_HASH },
+      automaticSelection: {
+        selectedDimensionId: 'architecture',
+        selectedEligibleCellIds: ['core::architecture'],
+        selectedEligibleCellsHash: `sha256:${'c'.repeat(64)}`,
+        automaticSelectionHash: `sha256:${'d'.repeat(64)}`,
+      },
+      projection: {
+        executionCellIds: ['core::architecture'],
+        executionCellSetHash: `sha256:${'c'.repeat(64)}`,
+        projectionHash: `sha256:${'e'.repeat(64)}`,
+      },
+      terminal: {
+        terminalState: 'STRICT_TEST_FAILED',
+        terminalHash: `sha256:${'f'.repeat(64)}`,
+        failedStage: 'PRIVATE_INDEXES_VERIFIED',
+        errorCode: 'STRICT_TEST_INJECTED_PRIVATE_INDEXES_VERIFIED',
+        productionFinalized: false,
+        publicRouteChanged: false,
+      },
+      report: { reportHash: `sha256:${'1'.repeat(64)}` },
+      privateEvidenceRefs: ['/private/control/strict-test-runs/demand-1/strict-run-1'],
+    });
+
+    const response = await invokeRouter(
+      createStrictTestDimensionRouter(() => service),
+      {
+        method: 'POST',
+        path: '/runs',
+        body: { demandKey: 'demand-1', preflightHash: PREFLIGHT_HASH, runId: 'strict-run-1' },
+      }
+    );
+
+    expect(response.status).toBe(422);
+    expect(response.body).toMatchObject({
+      success: false,
+      error: {
+        code: 'STRICT_TEST_INJECTED_PRIVATE_INDEXES_VERIFIED',
+        message: 'Strict-test run failed',
+        privateDataSafe: true,
+        status: 422,
+      },
+      data: {
+        phase: 'STRICT_TEST_FAILED',
+        terminal: {
+          terminalState: 'STRICT_TEST_FAILED',
+          failedStage: 'PRIVATE_INDEXES_VERIFIED',
+          productionFinalized: false,
+          publicRouteChanged: false,
+        },
+      },
+    });
+    expect(JSON.stringify(response.body)).not.toMatch(
+      /contentBase64|executionContext|runRoot|\/private\//u
+    );
+    expectProviderResponse('startStrictTestDimensionRun', response.status, response.body);
+  });
+
+  test('redacts raw internal error details and absolute paths from canonical problems', async () => {
+    const service = createService();
+    service.preflight.mockRejectedValueOnce(
+      new Error('STRICT_TEST_PRIVATE_WORKSPACE_OVERLAP:/private/control/strict-test-runs/demand-1')
+    );
+
+    const response = await invokeRouter(
+      createStrictTestDimensionRouter(() => service),
+      {
+        method: 'POST',
+        path: '/preflight',
+        body: { demandKey: 'demand-1', projectRoot: PROJECT_ROOT, runId: 'strict-run-1' },
+      }
+    );
+
+    expect(response.status).toBe(422);
+    expect(response.body).toMatchObject({
+      success: false,
+      error: {
+        code: 'STRICT_TEST_PRIVATE_WORKSPACE_OVERLAP',
+        message: 'Strict-test operation failed',
+        privateDataSafe: true,
+        status: 422,
+      },
+    });
+    expect(JSON.stringify(response.body)).not.toContain('/private/control');
+    expectProviderResponse('preflightStrictTestDimension', response.status, response.body);
   });
 
   test('never serializes the private checkpoint, source bytes, trust material, or filesystem paths', async () => {

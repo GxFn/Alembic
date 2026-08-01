@@ -581,7 +581,7 @@ export const DASHBOARD_JOB_KINDS: readonly DashboardJobKind[] = [
 
 export const DASHBOARD_API_CONTRACT_VERSION = 1;
 
-export type DashboardApiSchemaId = 'schema-1' | 'schema-2' | 'schema-3';
+export type DashboardApiSchemaId = 'schema-1' | 'schema-2' | 'schema-3' | 'schema-4' | 'schema-5' | 'schema-6';
 
 export const DASHBOARD_API_RESPONSE_SCHEMAS: Readonly<Record<DashboardApiSchemaId, Record<string, unknown>>> = {
   "schema-1": {
@@ -598,7 +598,7 @@ export const DASHBOARD_API_RESPONSE_SCHEMAS: Readonly<Record<DashboardApiSchemaI
       "data": {
         "type": "object",
         "additionalProperties": {
-          "oneOf": [
+          "anyOf": [
             {
               "type": "string"
             },
@@ -649,7 +649,7 @@ export const DASHBOARD_API_RESPONSE_SCHEMAS: Readonly<Record<DashboardApiSchemaI
       "data": {
         "type": "object",
         "additionalProperties": {
-          "oneOf": [
+          "anyOf": [
             {
               "type": "string"
             },
@@ -946,6 +946,515 @@ export const DASHBOARD_API_RESPONSE_SCHEMAS: Readonly<Record<DashboardApiSchemaI
     }
   },
   "schema-3": {
+    "type": "object",
+    "required": [
+      "success",
+      "data"
+    ],
+    "additionalProperties": false,
+    "properties": {
+      "success": {
+        "const": true
+      },
+      "data": {
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "profile",
+          "demandKey",
+          "runId",
+          "phase",
+          "preflightHash",
+          "previewHash",
+          "canAutoSelect",
+          "recommendation",
+          "fullUniverse"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "schemaVersion": {
+            "const": 1
+          },
+          "profile": {
+            "const": "strict-test-dimension"
+          },
+          "demandKey": {
+            "type": "string",
+            "minLength": 1
+          },
+          "runId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "phase": {
+            "const": "AUTOMATIC_SELECTION_READY"
+          },
+          "preflightHash": {
+            "type": "string",
+            "minLength": 1
+          },
+          "previewHash": {
+            "type": "string",
+            "minLength": 1
+          },
+          "canAutoSelect": {
+            "type": "boolean"
+          },
+          "recommendation": {
+            "type": "object",
+            "required": [
+              "dimensionId",
+              "reasonCode"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "dimensionId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "reasonCode": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "fullUniverse": {
+            "type": "object",
+            "required": [
+              "dimensionCount",
+              "cellCount",
+              "eligibleCellCount",
+              "excludedCellCount",
+              "fullCellUniverseHash"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "dimensionCount": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "cellCount": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "eligibleCellCount": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "excludedCellCount": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "fullCellUniverseHash": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "schema-4": {
+    "type": "object",
+    "required": [
+      "success",
+      "data"
+    ],
+    "additionalProperties": false,
+    "properties": {
+      "success": {
+        "const": true
+      },
+      "data": {
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "profile",
+          "demandKey",
+          "runId",
+          "phase",
+          "preflightHash",
+          "automaticSelection",
+          "terminal",
+          "reportHash",
+          "evidenceRefs"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "schemaVersion": {
+            "const": 1
+          },
+          "profile": {
+            "const": "strict-test-dimension"
+          },
+          "demandKey": {
+            "type": "string",
+            "minLength": 1
+          },
+          "runId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "phase": {
+            "enum": [
+              "AUTOMATIC_SELECTION_READY",
+              "SELECTION_AUTO_SELECTED",
+              "PRIVATE_WORKSPACE_READY",
+              "STRICT_TEST_COMPLETED_PRIVATE",
+              "STRICT_TEST_FAILED"
+            ]
+          },
+          "preflightHash": {
+            "type": "string",
+            "minLength": 1
+          },
+          "automaticSelection": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": [
+                  "selectedDimensionId",
+                  "selectedCellIds",
+                  "selectedCellSetHash",
+                  "automaticSelectionHash",
+                  "projectionHash"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "selectedDimensionId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "selectedCellIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "selectedCellSetHash": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "automaticSelectionHash": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "projectionHash": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "terminal": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": [
+                  "terminalState",
+                  "terminalHash",
+                  "failedStage",
+                  "errorCode",
+                  "productionFinalized",
+                  "publicRouteChanged"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "terminalState": {
+                    "enum": [
+                      "STRICT_TEST_COMPLETED_PRIVATE",
+                      "STRICT_TEST_FAILED"
+                    ]
+                  },
+                  "terminalHash": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "failedStage": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "errorCode": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "productionFinalized": {
+                    "const": false
+                  },
+                  "publicRouteChanged": {
+                    "const": false
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reportHash": {
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "evidenceRefs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    }
+  },
+  "schema-5": {
+    "type": "object",
+    "required": [
+      "success",
+      "data"
+    ],
+    "additionalProperties": false,
+    "properties": {
+      "success": {
+        "const": true
+      },
+      "data": {
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "profile",
+          "demandKey",
+          "runId",
+          "terminalState",
+          "terminalHash",
+          "reportHash",
+          "preflightHash",
+          "automaticSelectionHash",
+          "projectionHash",
+          "fullUniverse",
+          "executedProjection",
+          "unexecutedDimensionIds",
+          "failure",
+          "evidenceRefs",
+          "productionFinalized",
+          "publicRouteChanged"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "schemaVersion": {
+            "const": 1
+          },
+          "profile": {
+            "const": "strict-test-dimension"
+          },
+          "demandKey": {
+            "type": "string",
+            "minLength": 1
+          },
+          "runId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "terminalState": {
+            "enum": [
+              "STRICT_TEST_COMPLETED_PRIVATE",
+              "STRICT_TEST_FAILED"
+            ]
+          },
+          "terminalHash": {
+            "type": "string",
+            "minLength": 1
+          },
+          "reportHash": {
+            "type": "string",
+            "minLength": 1
+          },
+          "preflightHash": {
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "automaticSelectionHash": {
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "projectionHash": {
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fullUniverse": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": [
+                  "dimensionCount",
+                  "cellCount",
+                  "eligibleCellCount",
+                  "excludedCellCount",
+                  "cellUniverseHash"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "dimensionCount": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "cellCount": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "eligibleCellCount": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "excludedCellCount": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "cellUniverseHash": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "executedProjection": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": [
+                  "dimensionId",
+                  "cellCount",
+                  "cellSetHash"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "dimensionId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "cellCount": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "cellSetHash": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unexecutedDimensionIds": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "failure": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": [
+                  "failedStage",
+                  "errorCode"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "failedStage": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "errorCode": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "evidenceRefs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "productionFinalized": {
+            "const": false
+          },
+          "publicRouteChanged": {
+            "const": false
+          }
+        }
+      }
+    }
+  },
+  "schema-6": {
     "type": "object",
     "required": [
       "success",
@@ -1582,16 +2091,9 @@ export const DASHBOARD_API_ROUTES: readonly DashboardApiRouteContract[] = [
       "Strict Test"
     ],
     "responseSchemas": {
-      "200": "schema-1",
-      "206": "schema-2",
+      "200": "schema-3",
       "400": "schema-2",
-      "404": "schema-2",
-      "424": "schema-2",
-      "500": "schema-2",
-      "501": "schema-2",
-      "502": "schema-2",
-      "503": "schema-2",
-      "504": "schema-2"
+      "422": "schema-2"
     }
   },
   {
@@ -1652,16 +2154,10 @@ export const DASHBOARD_API_ROUTES: readonly DashboardApiRouteContract[] = [
       "Strict Test"
     ],
     "responseSchemas": {
-      "200": "schema-1",
-      "206": "schema-2",
+      "202": "schema-4",
       "400": "schema-2",
       "404": "schema-2",
-      "424": "schema-2",
-      "500": "schema-2",
-      "501": "schema-2",
-      "502": "schema-2",
-      "503": "schema-2",
-      "504": "schema-2"
+      "422": "schema-2"
     }
   },
   {
@@ -1722,16 +2218,9 @@ export const DASHBOARD_API_ROUTES: readonly DashboardApiRouteContract[] = [
       "Strict Test"
     ],
     "responseSchemas": {
-      "200": "schema-1",
-      "206": "schema-2",
-      "400": "schema-2",
+      "200": "schema-4",
       "404": "schema-2",
-      "424": "schema-2",
-      "500": "schema-2",
-      "501": "schema-2",
-      "502": "schema-2",
-      "503": "schema-2",
-      "504": "schema-2"
+      "422": "schema-2"
     }
   },
   {
@@ -1792,16 +2281,10 @@ export const DASHBOARD_API_ROUTES: readonly DashboardApiRouteContract[] = [
       "Strict Test"
     ],
     "responseSchemas": {
-      "200": "schema-1",
-      "206": "schema-2",
-      "400": "schema-2",
+      "200": "schema-5",
       "404": "schema-2",
-      "424": "schema-2",
-      "500": "schema-2",
-      "501": "schema-2",
-      "502": "schema-2",
-      "503": "schema-2",
-      "504": "schema-2"
+      "409": "schema-2",
+      "422": "schema-2"
     }
   },
   {
@@ -2188,7 +2671,7 @@ export const DASHBOARD_API_ROUTES: readonly DashboardApiRouteContract[] = [
       "Knowledge"
     ],
     "responseSchemas": {
-      "200": "schema-3",
+      "200": "schema-6",
       "206": "schema-2",
       "400": "schema-2",
       "404": "schema-2",

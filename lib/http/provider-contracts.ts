@@ -94,7 +94,8 @@ const envelopeBase = {
 } as const satisfies JsonSchema;
 
 const jsonValueSchema = {
-  oneOf: [
+  // JSON integer 同时也是 number；使用 anyOf 才能让扩展点正确接受所有 JSON 值。
+  anyOf: [
     { type: 'string' },
     { type: 'number' },
     { type: 'integer' },
@@ -219,6 +220,276 @@ function dataEnvelope(dataSchema: JsonSchema): JsonSchema {
     },
   };
 }
+
+function strictTestSuccessEnvelope(dataSchema: JsonSchema): JsonSchema {
+  return {
+    type: 'object',
+    required: ['success', 'data'],
+    additionalProperties: false,
+    properties: {
+      success: { const: true },
+      data: dataSchema,
+    },
+  };
+}
+
+const nonEmptyStringSchema = { type: 'string', minLength: 1 } as const satisfies JsonSchema;
+const nullableStringSchema = {
+  oneOf: [nonEmptyStringSchema, { type: 'null' }],
+} as const satisfies JsonSchema;
+const nonNegativeIntegerSchema = {
+  type: 'integer',
+  minimum: 0,
+} as const satisfies JsonSchema;
+const strictTestStringArraySchema = {
+  type: 'array',
+  items: nonEmptyStringSchema,
+} as const satisfies JsonSchema;
+const strictTestAutomaticSelectionSchema = {
+  type: 'object',
+  required: [
+    'selectedDimensionId',
+    'selectedCellIds',
+    'selectedCellSetHash',
+    'automaticSelectionHash',
+    'projectionHash',
+  ],
+  additionalProperties: false,
+  properties: {
+    selectedDimensionId: nonEmptyStringSchema,
+    selectedCellIds: strictTestStringArraySchema,
+    selectedCellSetHash: nonEmptyStringSchema,
+    automaticSelectionHash: nonEmptyStringSchema,
+    projectionHash: nonEmptyStringSchema,
+  },
+} as const satisfies JsonSchema;
+const strictTestTerminalSchema = {
+  type: 'object',
+  required: [
+    'terminalState',
+    'terminalHash',
+    'failedStage',
+    'errorCode',
+    'productionFinalized',
+    'publicRouteChanged',
+  ],
+  additionalProperties: false,
+  properties: {
+    terminalState: { enum: ['STRICT_TEST_COMPLETED_PRIVATE', 'STRICT_TEST_FAILED'] },
+    terminalHash: nonEmptyStringSchema,
+    failedStage: nullableStringSchema,
+    errorCode: nullableStringSchema,
+    productionFinalized: { const: false },
+    publicRouteChanged: { const: false },
+  },
+} as const satisfies JsonSchema;
+const strictTestPreflightPublicSchema = {
+  type: 'object',
+  required: [
+    'schemaVersion',
+    'profile',
+    'demandKey',
+    'runId',
+    'phase',
+    'preflightHash',
+    'previewHash',
+    'canAutoSelect',
+    'recommendation',
+    'fullUniverse',
+  ],
+  additionalProperties: false,
+  properties: {
+    schemaVersion: { const: 1 },
+    profile: { const: 'strict-test-dimension' },
+    demandKey: nonEmptyStringSchema,
+    runId: nonEmptyStringSchema,
+    phase: { const: 'AUTOMATIC_SELECTION_READY' },
+    preflightHash: nonEmptyStringSchema,
+    previewHash: nonEmptyStringSchema,
+    canAutoSelect: { type: 'boolean' },
+    recommendation: {
+      type: 'object',
+      required: ['dimensionId', 'reasonCode'],
+      additionalProperties: false,
+      properties: {
+        dimensionId: nonEmptyStringSchema,
+        reasonCode: nonEmptyStringSchema,
+      },
+    },
+    fullUniverse: {
+      type: 'object',
+      required: [
+        'dimensionCount',
+        'cellCount',
+        'eligibleCellCount',
+        'excludedCellCount',
+        'fullCellUniverseHash',
+      ],
+      additionalProperties: false,
+      properties: {
+        dimensionCount: nonNegativeIntegerSchema,
+        cellCount: nonNegativeIntegerSchema,
+        eligibleCellCount: nonNegativeIntegerSchema,
+        excludedCellCount: nonNegativeIntegerSchema,
+        fullCellUniverseHash: nonEmptyStringSchema,
+      },
+    },
+  },
+} as const satisfies JsonSchema;
+const strictTestRunStatusPublicSchema = {
+  type: 'object',
+  required: [
+    'schemaVersion',
+    'profile',
+    'demandKey',
+    'runId',
+    'phase',
+    'preflightHash',
+    'automaticSelection',
+    'terminal',
+    'reportHash',
+    'evidenceRefs',
+  ],
+  additionalProperties: false,
+  properties: {
+    schemaVersion: { const: 1 },
+    profile: { const: 'strict-test-dimension' },
+    demandKey: nonEmptyStringSchema,
+    runId: nonEmptyStringSchema,
+    phase: {
+      enum: [
+        'AUTOMATIC_SELECTION_READY',
+        'SELECTION_AUTO_SELECTED',
+        'PRIVATE_WORKSPACE_READY',
+        'STRICT_TEST_COMPLETED_PRIVATE',
+        'STRICT_TEST_FAILED',
+      ],
+    },
+    preflightHash: nonEmptyStringSchema,
+    automaticSelection: {
+      oneOf: [strictTestAutomaticSelectionSchema, { type: 'null' }],
+    },
+    terminal: { oneOf: [strictTestTerminalSchema, { type: 'null' }] },
+    reportHash: nullableStringSchema,
+    evidenceRefs: strictTestStringArraySchema,
+  },
+} as const satisfies JsonSchema;
+const strictTestReportPublicSchema = {
+  type: 'object',
+  required: [
+    'schemaVersion',
+    'profile',
+    'demandKey',
+    'runId',
+    'terminalState',
+    'terminalHash',
+    'reportHash',
+    'preflightHash',
+    'automaticSelectionHash',
+    'projectionHash',
+    'fullUniverse',
+    'executedProjection',
+    'unexecutedDimensionIds',
+    'failure',
+    'evidenceRefs',
+    'productionFinalized',
+    'publicRouteChanged',
+  ],
+  additionalProperties: false,
+  properties: {
+    schemaVersion: { const: 1 },
+    profile: { const: 'strict-test-dimension' },
+    demandKey: nonEmptyStringSchema,
+    runId: nonEmptyStringSchema,
+    terminalState: { enum: ['STRICT_TEST_COMPLETED_PRIVATE', 'STRICT_TEST_FAILED'] },
+    terminalHash: nonEmptyStringSchema,
+    reportHash: nonEmptyStringSchema,
+    preflightHash: nullableStringSchema,
+    automaticSelectionHash: nullableStringSchema,
+    projectionHash: nullableStringSchema,
+    fullUniverse: {
+      oneOf: [
+        {
+          type: 'object',
+          required: [
+            'dimensionCount',
+            'cellCount',
+            'eligibleCellCount',
+            'excludedCellCount',
+            'cellUniverseHash',
+          ],
+          additionalProperties: false,
+          properties: {
+            dimensionCount: nonNegativeIntegerSchema,
+            cellCount: nonNegativeIntegerSchema,
+            eligibleCellCount: nonNegativeIntegerSchema,
+            excludedCellCount: nonNegativeIntegerSchema,
+            cellUniverseHash: nonEmptyStringSchema,
+          },
+        },
+        { type: 'null' },
+      ],
+    },
+    executedProjection: {
+      oneOf: [
+        {
+          type: 'object',
+          required: ['dimensionId', 'cellCount', 'cellSetHash'],
+          additionalProperties: false,
+          properties: {
+            dimensionId: nonEmptyStringSchema,
+            cellCount: nonNegativeIntegerSchema,
+            cellSetHash: nonEmptyStringSchema,
+          },
+        },
+        { type: 'null' },
+      ],
+    },
+    unexecutedDimensionIds: {
+      oneOf: [strictTestStringArraySchema, { type: 'null' }],
+    },
+    failure: {
+      oneOf: [
+        {
+          type: 'object',
+          required: ['failedStage', 'errorCode'],
+          additionalProperties: false,
+          properties: {
+            failedStage: nonEmptyStringSchema,
+            errorCode: nonEmptyStringSchema,
+          },
+        },
+        { type: 'null' },
+      ],
+    },
+    evidenceRefs: strictTestStringArraySchema,
+    productionFinalized: { const: false },
+    publicRouteChanged: { const: false },
+  },
+} as const satisfies JsonSchema;
+
+const strictTestPreflightResponseSchemas = {
+  200: strictTestSuccessEnvelope(strictTestPreflightPublicSchema),
+  400: problemSchema,
+  422: problemSchema,
+} as const satisfies Readonly<Record<string, JsonSchema>>;
+const strictTestStartResponseSchemas = {
+  202: strictTestSuccessEnvelope(strictTestRunStatusPublicSchema),
+  400: problemSchema,
+  404: problemSchema,
+  422: problemSchema,
+} as const satisfies Readonly<Record<string, JsonSchema>>;
+const strictTestStatusResponseSchemas = {
+  200: strictTestSuccessEnvelope(strictTestRunStatusPublicSchema),
+  404: problemSchema,
+  422: problemSchema,
+} as const satisfies Readonly<Record<string, JsonSchema>>;
+const strictTestReportResponseSchemas = {
+  200: strictTestSuccessEnvelope(strictTestReportPublicSchema),
+  404: problemSchema,
+  409: problemSchema,
+  422: problemSchema,
+} as const satisfies Readonly<Record<string, JsonSchema>>;
 
 const retrievalReadinessDiagnosticSchema = {
   type: 'object',
@@ -439,7 +710,8 @@ export const ALEMBIC_PROVIDER_ROUTE_CONTRACTS = [
     '/strict-test-dimension/preflight',
     'preflightStrictTestDimension',
     'Freeze the strict-test full-universe preflight authority',
-    ['Knowledge', 'Strict Test']
+    ['Knowledge', 'Strict Test'],
+    { responseSchemas: strictTestPreflightResponseSchemas }
   ),
   route(
     'I22',
@@ -447,7 +719,8 @@ export const ALEMBIC_PROVIDER_ROUTE_CONTRACTS = [
     '/strict-test-dimension/runs',
     'startStrictTestDimensionRun',
     'Automatically select and start one private strict-test dimension run',
-    ['Knowledge', 'Strict Test']
+    ['Knowledge', 'Strict Test'],
+    { responseSchemas: strictTestStartResponseSchemas }
   ),
   route(
     'I22',
@@ -455,7 +728,8 @@ export const ALEMBIC_PROVIDER_ROUTE_CONTRACTS = [
     '/strict-test-dimension/runs/{runId}',
     'getStrictTestDimensionRun',
     'Read durable strict-test phase and terminal state',
-    ['Knowledge', 'Strict Test']
+    ['Knowledge', 'Strict Test'],
+    { responseSchemas: strictTestStatusResponseSchemas }
   ),
   route(
     'I22',
@@ -463,7 +737,8 @@ export const ALEMBIC_PROVIDER_ROUTE_CONTRACTS = [
     '/strict-test-dimension/runs/{runId}/report',
     'getStrictTestDimensionReport',
     'Read the durable canonical strict-test audit report',
-    ['Knowledge', 'Strict Test']
+    ['Knowledge', 'Strict Test'],
+    { responseSchemas: strictTestReportResponseSchemas }
   ),
   route(
     'I07',
@@ -1130,6 +1405,7 @@ function route(
     dataSchema?: JsonSchema;
     fixtureIds?: readonly string[];
     functionClass?: CoreContractFunctionClass | 'rest-command';
+    responseSchemas?: Readonly<Record<string, JsonSchema>>;
   } = {}
 ): AlembicProviderRouteContract {
   const row = routeRows[registryRowId];
@@ -1145,10 +1421,12 @@ function route(
     operationId,
     path,
     registryRowId,
-    responseSchemas: {
-      ...responseSchemasFor(row.errorKinds, row.scenarios),
-      ...(options.dataSchema ? { 200: dataEnvelope(options.dataSchema) } : {}),
-    },
+    responseSchemas:
+      options.responseSchemas ??
+      Object.freeze({
+        ...responseSchemasFor(row.errorKinds, row.scenarios),
+        ...(options.dataSchema ? { 200: dataEnvelope(options.dataSchema) } : {}),
+      }),
     summary,
     supportedScenarios: row.scenarios,
     tags,
