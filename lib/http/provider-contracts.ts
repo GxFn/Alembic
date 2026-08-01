@@ -434,6 +434,38 @@ export const ALEMBIC_PROVIDER_ROUTE_CONTRACTS = [
   route('I06', 'post', '/jobs/rescan', 'startRescanJob', 'Rescan job command', ['Jobs']),
   route('I06', 'post', '/jobs/{jobId}/cancel', 'cancelJob', 'Job cancellation command', ['Jobs']),
   route(
+    'I22',
+    'post',
+    '/strict-test-dimension/preflight',
+    'preflightStrictTestDimension',
+    'Freeze the strict-test full-universe preflight authority',
+    ['Knowledge', 'Strict Test']
+  ),
+  route(
+    'I22',
+    'post',
+    '/strict-test-dimension/runs',
+    'startStrictTestDimensionRun',
+    'Automatically select and start one private strict-test dimension run',
+    ['Knowledge', 'Strict Test']
+  ),
+  route(
+    'I22',
+    'get',
+    '/strict-test-dimension/runs/{runId}',
+    'getStrictTestDimensionRun',
+    'Read durable strict-test phase and terminal state',
+    ['Knowledge', 'Strict Test']
+  ),
+  route(
+    'I22',
+    'get',
+    '/strict-test-dimension/runs/{runId}/report',
+    'getStrictTestDimensionReport',
+    'Read the durable canonical strict-test audit report',
+    ['Knowledge', 'Strict Test']
+  ),
+  route(
     'I07',
     'get',
     '/jobs/{jobId}/events',
@@ -557,6 +589,7 @@ export const ALEMBIC_PROVIDER_ROUTE_MOUNTS = [
   mount('I09', '/api/v1/health'),
   mount('I03', '/api/v1/daemon'),
   mount('I06', '/api/v1/jobs'),
+  mount('I22', '/api/v1/strict-test-dimension'),
   mount('I04', '/api/v1/projects'),
   mount('I05', '/api/v1/project-scope'),
   mount('I09', '/api/v1/auth/probe'),

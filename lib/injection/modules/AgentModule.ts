@@ -20,6 +20,7 @@ import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import { DASHBOARD_OPERATION_MANIFESTS } from '#tools/adapters/DashboardOperations.js';
 import { SKILL_CAPABILITY_MANIFESTS } from '#tools/adapters/SkillCapabilities.js';
 import { ToolContextFactory } from '#tools/ToolContextFactory.js';
+import { createStrictTestDimensionOrchestrator } from '../../recipe-pipeline/generate/strict/StrictTestDimensionRuntime.js';
 import { StrictSemanticReviewRuntimeFactory } from '../../service/semantic-review/StrictSemanticReviewRuntimeFactory.js';
 import { SkillHooks } from '../../service/skills/SkillHooks.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
@@ -118,6 +119,11 @@ export function register(c: ServiceContainer) {
   c.singleton(
     'strictSemanticReviewRuntimeFactory',
     (ct: ServiceContainer) => createStrictSemanticReviewRuntimeFactory(ct),
+    { aiDependent: true }
+  );
+  c.singleton(
+    'strictTestDimensionOrchestrator',
+    (ct: ServiceContainer) => createStrictTestDimensionOrchestrator(ct),
     { aiDependent: true }
   );
 

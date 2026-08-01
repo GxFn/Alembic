@@ -184,6 +184,8 @@ interface StrictPrivateCorpusPersistenceInput {
   readonly evidence: FrozenEvidenceProjectionV1;
   readonly executionReceipts: readonly FactQueryExecutionReceiptV1[];
   readonly expressionSets: readonly StrictProducerExpressionSetV1[];
+  /** strict-test 传入 projection 的 exact selected cells；production 省略并保持原全量语义。 */
+  readonly executionCellIds?: readonly string[];
   readonly finalExpandedSchedule: FinalExpandedMiningScheduleReceiptV1;
   readonly journal: StrictProductionJournal;
   readonly manifestHash: string;
@@ -272,6 +274,7 @@ type StrictKnowledgeEntry = NonNullable<Awaited<ReturnType<StrictKnowledgeReposi
 export async function persistStrictPrivateCorpusContent(
   input: StrictPrivateCorpusPersistenceInput
 ): Promise<StrictPrivateCorpusContentResultV1> {
+  assertStrictPrivateCorpusExecutionCells(input);
   const revisionId = revisionIdForFixpoint(input.analysisFixpointHash);
   const expectedCurrentContext = strictPrivateCorpusExpectedContext(input, revisionId);
   const initialized = input.resumeInitReceipt
@@ -388,6 +391,31 @@ export async function persistStrictPrivateCorpusContent(
       left.recipeId.localeCompare(right.recipeId)
     ),
   });
+}
+
+function assertStrictPrivateCorpusExecutionCells(input: StrictPrivateCorpusPersistenceInput): void {
+  if (!input.executionCellIds) {
+    return;
+  }
+  const selected = new Set(input.executionCellIds);
+  if (selected.size === 0 || selected.size !== input.executionCellIds.length) {
+    throw new Error('STRICT_PRIVATE_CORPUS_EXECUTION_CELL_SET_INVALID');
+  }
+  for (const set of input.expressionSets) {
+    const authoredRows = [
+      ...set.proposals.map((proposal) => proposal.authored),
+      ...(set.zeroDisposition ? [set.zeroDisposition.authored] : []),
+    ];
+    for (const authored of authoredRows) {
+      if (
+        authored.scope.moduleIds.length !== 1 ||
+        authored.scope.dimensionIds.length !== 1 ||
+        !selected.has(`${authored.scope.moduleIds[0]}::${authored.scope.dimensionIds[0]}`)
+      ) {
+        throw new Error('STRICT_PRIVATE_CORPUS_EXECUTION_CELL_SET_INVALID');
+      }
+    }
+  }
 }
 
 function strictPrivateCorpusExpectedContext(
