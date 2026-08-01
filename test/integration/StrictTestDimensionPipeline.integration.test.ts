@@ -580,6 +580,50 @@ describe('strict-test-dimension real Main private pipeline', () => {
         body: await invalidRunIdResponse.json(),
       });
 
+      const invalidStartResponse = await fetch(`${base}/runs`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          demandKey,
+          preflightHash: sha('invalid-start-body'),
+          runId,
+          confirmation: 'caller-forbidden',
+        }),
+      });
+      contractCases.push({
+        label: 'invalid start body',
+        operationId: 'startStrictTestDimensionRun',
+        status: invalidStartResponse.status,
+        body: await invalidStartResponse.json(),
+      });
+
+      const missingStartRunId = 'strict-test-missing-start-http-run';
+      const missingStartResponse = await fetch(`${base}/runs`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          demandKey: 'strict-test-missing-start-http',
+          preflightHash: sha('missing-start-preflight'),
+          runId: missingStartRunId,
+        }),
+      });
+      contractCases.push({
+        label: 'missing start run',
+        operationId: 'startStrictTestDimensionRun',
+        status: missingStartResponse.status,
+        body: await missingStartResponse.json(),
+      });
+
+      const missingReportResponse = await fetch(
+        `${base}/runs/strict-test-missing-report-http-run/report`
+      );
+      contractCases.push({
+        label: 'missing report run',
+        operationId: 'getStrictTestDimensionReport',
+        status: missingReportResponse.status,
+        body: await missingReportResponse.json(),
+      });
+
       const preflightResponse = await fetch(`${base}/preflight`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -598,6 +642,22 @@ describe('strict-test-dimension real Main private pipeline', () => {
         profile: 'strict-test-dimension',
         phase: 'AUTOMATIC_SELECTION_READY',
         fullUniverse: { dimensionCount: 26, cellCount: 52 },
+      });
+
+      const driftedPreflightResponse = await fetch(`${base}/preflight`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          demandKey,
+          projectRoot: path.join(fixture.root, 'second-project'),
+          runId,
+        }),
+      });
+      contractCases.push({
+        label: 'preflight resume identity drift',
+        operationId: 'preflightStrictTestDimension',
+        status: driftedPreflightResponse.status,
+        body: await driftedPreflightResponse.json(),
       });
 
       const notReadyResponse = await fetch(`${base}/runs/${runId}/report`);
@@ -729,6 +789,40 @@ describe('strict-test-dimension real Main private pipeline', () => {
       expectProviderHttpResponse('startStrictTestDimensionRun', startResponse.status, startBody);
       expectProviderHttpResponse('getStrictTestDimensionRun', statusResponse.status, statusBody);
       expectProviderHttpResponse('getStrictTestDimensionReport', reportResponse.status, reportBody);
+
+      const ownerPath = path.join(
+        fixture.root,
+        'strict-test-runs',
+        demandKey,
+        runId,
+        'strict-test-workspace-owner.json'
+      );
+      const ownerSource = await fsp.readFile(ownerPath, 'utf8');
+      try {
+        const owner = JSON.parse(ownerSource) as Record<string, unknown>;
+        await fsp.writeFile(
+          ownerPath,
+          `${JSON.stringify({ ...owner, policyHash: sha('http-owner-integrity-drift') })}\n`
+        );
+        const driftedStatusResponse = await fetch(`${base}/runs/${runId}`);
+        const driftedReportResponse = await fetch(`${base}/runs/${runId}/report`);
+        contractCases.push(
+          {
+            label: 'status private integrity drift',
+            operationId: 'getStrictTestDimensionRun',
+            status: driftedStatusResponse.status,
+            body: await driftedStatusResponse.json(),
+          },
+          {
+            label: 'report private integrity drift',
+            operationId: 'getStrictTestDimensionReport',
+            status: driftedReportResponse.status,
+            body: await driftedReportResponse.json(),
+          }
+        );
+      } finally {
+        await fsp.writeFile(ownerPath, ownerSource);
+      }
       for (const body of [preflightBody, startBody, statusBody, reportBody]) {
         expect(findForbiddenPublicFields(body)).toEqual([]);
       }
@@ -736,14 +830,43 @@ describe('strict-test-dimension real Main private pipeline', () => {
         ['invalid POST body', 400],
         ['nonempty GET query', 400],
         ['invalid runId', 400],
+        ['invalid start body', 400],
+        ['missing start run', 404],
+        ['missing report run', 404],
         ['normal preflight', 200],
+        ['preflight resume identity drift', 422],
         ['report before ready', 409],
         ['missing run', 404],
         ['wrong authority', 422],
         ['normal start', 202],
         ['durable completed reopen', 200],
         ['canonical completed report', 200],
+        ['status private integrity drift', 422],
+        ['report private integrity drift', 422],
       ]);
+      const observedStatusMatrix = Object.fromEntries(
+        [
+          'preflightStrictTestDimension',
+          'startStrictTestDimensionRun',
+          'getStrictTestDimensionRun',
+          'getStrictTestDimensionReport',
+        ].map((operationId) => [
+          operationId,
+          [
+            ...new Set(
+              contractCases
+                .filter((contractCase) => contractCase.operationId === operationId)
+                .map((contractCase) => contractCase.status)
+            ),
+          ].sort((left, right) => left - right),
+        ])
+      );
+      expect(observedStatusMatrix).toEqual({
+        preflightStrictTestDimension: [200, 400, 422],
+        startStrictTestDimensionRun: [202, 400, 404, 422],
+        getStrictTestDimensionRun: [200, 400, 404, 422],
+        getStrictTestDimensionReport: [200, 400, 404, 409, 422],
+      });
       for (const contractCase of contractCases) {
         expectProviderHttpResponse(
           contractCase.operationId,

@@ -2648,7 +2648,9 @@ export const DASHBOARD_API_INPUT_SCHEMAS: Readonly<Record<DashboardApiInputSchem
       },
       "projectRoot": {
         "type": "string",
-        "minLength": 1
+        "minLength": 1,
+        "format": "alembic-canonical-absolute-path-v1",
+        "x-alembic-validator": "alembic-canonical-absolute-path-v1"
       },
       "runId": {
         "type": "string",
@@ -2698,6 +2700,8 @@ export const DASHBOARD_API_INPUT_SCHEMAS: Readonly<Record<DashboardApiInputSchem
     "pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,255}$"
   }
 };
+
+export type DashboardApiInputStringFormat = 'alembic-canonical-absolute-path-v1';
 
 export interface DashboardApiRouteContract {
   readonly artifactPolicy: string;
@@ -5009,3 +5013,615 @@ export const DASHBOARD_API_ROUTES: readonly DashboardApiRouteContract[] = [
     }
   }
 ];
+
+// ════════════════════════════════════════════════════════════════════
+// Strict-test consumer contract (readonly types mechanically projected from provider JSON Schema)
+// ════════════════════════════════════════════════════════════════════
+
+export type DashboardStrictTestPreflightRequestV1 = {
+  readonly demandKey: string;
+  readonly projectRoot: string;
+  readonly runId: string;
+};
+
+export type DashboardStrictTestRunRequestV1 = {
+  readonly demandKey: string;
+  readonly preflightHash: string;
+  readonly runId: string;
+};
+
+export type DashboardStrictTestEmptyQueryV1 = Readonly<Record<string, never>>;
+
+export type DashboardStrictTestEmptyPathParametersV1 = Readonly<Record<string, never>>;
+
+export type DashboardStrictTestRunPathParametersV1 = {
+  readonly runId: string;
+};
+
+export type DashboardStrictTestPreflightPublicDtoV1 = {
+  readonly schemaVersion: 1;
+  readonly profile: "strict-test-dimension";
+  readonly demandKey: string;
+  readonly runId: string;
+  readonly phase: "AUTOMATIC_SELECTION_READY";
+  readonly preflightHash: string;
+  readonly previewHash: string;
+  readonly canAutoSelect: boolean;
+  readonly recommendation: {
+    readonly dimensionId: string;
+    readonly reasonCode: string;
+  };
+  readonly fullUniverse: {
+    readonly dimensionCount: number;
+    readonly cellCount: number;
+    readonly eligibleCellCount: number;
+    readonly excludedCellCount: number;
+    readonly fullCellUniverseHash: string;
+  };
+};
+
+export type DashboardStrictTestRunStatusPublicDtoV1 = {
+  readonly schemaVersion: 1;
+  readonly profile: "strict-test-dimension";
+  readonly demandKey: string;
+  readonly runId: string;
+  readonly phase: "AUTOMATIC_SELECTION_READY" | "SELECTION_AUTO_SELECTED" | "PRIVATE_WORKSPACE_READY" | "STRICT_TEST_COMPLETED_PRIVATE" | "STRICT_TEST_FAILED";
+  readonly preflightHash: string;
+  readonly automaticSelection: ({
+    readonly selectedDimensionId: string;
+    readonly selectedCellIds: readonly (string)[];
+    readonly selectedCellSetHash: string;
+    readonly automaticSelectionHash: string;
+    readonly projectionHash: string;
+  }) | (null);
+  readonly terminal: ({
+    readonly terminalState: "STRICT_TEST_COMPLETED_PRIVATE" | "STRICT_TEST_FAILED";
+    readonly terminalHash: string;
+    readonly failedStage: (string) | (null);
+    readonly errorCode: (string) | (null);
+    readonly productionFinalized: false;
+    readonly publicRouteChanged: false;
+  }) | (null);
+  readonly reportHash: (string) | (null);
+  readonly evidenceRefs: readonly (string)[];
+};
+
+export type DashboardStrictTestReportPublicDtoV1 = {
+  readonly schemaVersion: 1;
+  readonly profile: "strict-test-dimension";
+  readonly demandKey: string;
+  readonly runId: string;
+  readonly terminalState: "STRICT_TEST_COMPLETED_PRIVATE" | "STRICT_TEST_FAILED";
+  readonly terminalHash: string;
+  readonly reportHash: string;
+  readonly preflightHash: (string) | (null);
+  readonly automaticSelectionHash: (string) | (null);
+  readonly projectionHash: (string) | (null);
+  readonly fullUniverse: ({
+    readonly dimensionCount: number;
+    readonly cellCount: number;
+    readonly eligibleCellCount: number;
+    readonly excludedCellCount: number;
+    readonly cellUniverseHash: string;
+  }) | (null);
+  readonly executedProjection: ({
+    readonly dimensionId: string;
+    readonly cellCount: number;
+    readonly cellSetHash: string;
+  }) | (null);
+  readonly unexecutedDimensionIds: (readonly (string)[]) | (null);
+  readonly failure: ({
+    readonly failedStage: string;
+    readonly errorCode: string;
+  }) | (null);
+  readonly evidenceRefs: readonly (string)[];
+  readonly productionFinalized: false;
+  readonly publicRouteChanged: false;
+};
+
+export type DashboardStrictTestProblemDetailV1 = {
+  readonly agentBranch: "failure" | "host-adapter" | "permission-denial" | "timeout" | "cancellation" | "partial-result" | "needs-confirmation" | "provider-error" | "host-failure";
+  readonly artifactRefs?: readonly (string)[];
+  readonly canonicalHttpStatus: number;
+  readonly code: string;
+  readonly dashboardState: "invalid-input" | "unavailable" | "capability-mismatch" | "not-found" | "conflict" | "permission-denied" | "timeout" | "cancelled" | "partial" | "degraded" | "needs-confirmation" | "provider-error" | "host-failure" | "internal-error" | "schema-drift" | "sensitive-leak";
+  readonly detailExposureClass: "public" | "consumer-needed" | "diagnostic" | "internal" | "sensitive" | "raw-provider" | "hidden-reasoning" | "detailRef-only" | "artifactRef-only" | "compatibility-private" | "typed-extension";
+  readonly detailRefs?: readonly (string)[];
+  readonly exposureClass: "public" | "consumer-needed" | "diagnostic" | "internal" | "sensitive" | "raw-provider" | "hidden-reasoning" | "detailRef-only" | "artifactRef-only" | "compatibility-private" | "typed-extension";
+  readonly failureId: "core.failure.invalid-input" | "core.failure.unavailable" | "core.failure.capability-mismatch" | "core.failure.not-found" | "core.failure.conflict" | "core.failure.permission-denied" | "core.failure.timeout" | "core.failure.cancelled" | "core.failure.partial" | "core.failure.degraded" | "core.failure.needs-confirmation" | "core.failure.provider-error" | "core.failure.host-failure" | "core.failure.internal-error" | "core.failure.schema-drift" | "core.failure.sensitive-leak";
+  readonly failureStatus: "blocked" | "failed" | "degraded" | "partial" | "cancelled" | "needs-confirmation";
+  readonly mcpErrorCode: "core.failure.invalid-input" | "core.failure.unavailable" | "core.failure.capability-mismatch" | "core.failure.not-found" | "core.failure.conflict" | "core.failure.permission-denied" | "core.failure.timeout" | "core.failure.cancelled" | "core.failure.partial" | "core.failure.degraded" | "core.failure.needs-confirmation" | "core.failure.provider-error" | "core.failure.host-failure" | "core.failure.internal-error" | "core.failure.schema-drift" | "core.failure.sensitive-leak";
+  readonly mcpStatus: "invalid-input" | "unavailable" | "capability-mismatch" | "not-found" | "conflict" | "permission-denied" | "timeout" | "cancelled" | "partial" | "degraded" | "needs-confirmation" | "provider-error" | "host-failure" | "internal-error" | "schema-drift" | "sensitive-leak";
+  readonly message: string;
+  readonly privateDataSafe: true;
+  readonly problemClass: "request-problem" | "resource-problem" | "state-conflict" | "permission-problem" | "time-problem" | "cancellation" | "availability-problem" | "degradation" | "partial-result" | "capability-problem" | "confirmation-required" | "provider-problem" | "host-problem" | "internal-problem" | "schema-problem" | "sensitive-data-problem";
+  readonly reasonCode: "invalid-input" | "unavailable" | "capability-mismatch" | "not-found" | "conflict" | "permission-denied" | "timeout" | "cancelled" | "partial" | "degraded" | "needs-confirmation" | "provider-error" | "host-failure" | "internal-error" | "schema-drift" | "sensitive-leak";
+  readonly refPolicy: "none" | "detailRef" | "artifactRef" | "detailRef-or-artifactRef" | "redacted-detailRef";
+  readonly retryPolicy: "never" | "after-caller-action" | "after-input-change" | "after-state-change" | "after-confirmation" | "retryable" | "retryable-after-backoff" | "operator-action";
+  readonly retryable: boolean;
+  readonly status: number;
+  readonly taxonomyVersion: 1;
+};
+
+export interface DashboardStrictTestSuccessEnvelopeV1<TData> {
+  readonly success: true;
+  readonly data: TData;
+}
+
+export type DashboardStrictTestPreflightSuccessV1 =
+  DashboardStrictTestSuccessEnvelopeV1<DashboardStrictTestPreflightPublicDtoV1>;
+export type DashboardStrictTestRunStatusSuccessV1 =
+  DashboardStrictTestSuccessEnvelopeV1<DashboardStrictTestRunStatusPublicDtoV1>;
+export type DashboardStrictTestReportSuccessV1 =
+  DashboardStrictTestSuccessEnvelopeV1<DashboardStrictTestReportPublicDtoV1>;
+
+export type DashboardStrictTestOrdinaryProblemV1 = ({
+  readonly data?: {
+    readonly [key: string]: (string) | (number) | (number) | (boolean) | (null) | (readonly (unknown)[]) | ({
+
+    });
+  };
+  readonly success: false;
+  readonly error: {
+    readonly agentBranch: "failure" | "host-adapter" | "permission-denial" | "timeout" | "cancellation" | "partial-result" | "needs-confirmation" | "provider-error" | "host-failure";
+    readonly artifactRefs?: readonly (string)[];
+    readonly canonicalHttpStatus: number;
+    readonly code: string;
+    readonly dashboardState: "invalid-input" | "unavailable" | "capability-mismatch" | "not-found" | "conflict" | "permission-denied" | "timeout" | "cancelled" | "partial" | "degraded" | "needs-confirmation" | "provider-error" | "host-failure" | "internal-error" | "schema-drift" | "sensitive-leak";
+    readonly detailExposureClass: "public" | "consumer-needed" | "diagnostic" | "internal" | "sensitive" | "raw-provider" | "hidden-reasoning" | "detailRef-only" | "artifactRef-only" | "compatibility-private" | "typed-extension";
+    readonly detailRefs?: readonly (string)[];
+    readonly exposureClass: "public" | "consumer-needed" | "diagnostic" | "internal" | "sensitive" | "raw-provider" | "hidden-reasoning" | "detailRef-only" | "artifactRef-only" | "compatibility-private" | "typed-extension";
+    readonly failureId: "core.failure.invalid-input" | "core.failure.unavailable" | "core.failure.capability-mismatch" | "core.failure.not-found" | "core.failure.conflict" | "core.failure.permission-denied" | "core.failure.timeout" | "core.failure.cancelled" | "core.failure.partial" | "core.failure.degraded" | "core.failure.needs-confirmation" | "core.failure.provider-error" | "core.failure.host-failure" | "core.failure.internal-error" | "core.failure.schema-drift" | "core.failure.sensitive-leak";
+    readonly failureStatus: "blocked" | "failed" | "degraded" | "partial" | "cancelled" | "needs-confirmation";
+    readonly mcpErrorCode: "core.failure.invalid-input" | "core.failure.unavailable" | "core.failure.capability-mismatch" | "core.failure.not-found" | "core.failure.conflict" | "core.failure.permission-denied" | "core.failure.timeout" | "core.failure.cancelled" | "core.failure.partial" | "core.failure.degraded" | "core.failure.needs-confirmation" | "core.failure.provider-error" | "core.failure.host-failure" | "core.failure.internal-error" | "core.failure.schema-drift" | "core.failure.sensitive-leak";
+    readonly mcpStatus: "invalid-input" | "unavailable" | "capability-mismatch" | "not-found" | "conflict" | "permission-denied" | "timeout" | "cancelled" | "partial" | "degraded" | "needs-confirmation" | "provider-error" | "host-failure" | "internal-error" | "schema-drift" | "sensitive-leak";
+    readonly message: string;
+    readonly privateDataSafe: true;
+    readonly problemClass: "request-problem" | "resource-problem" | "state-conflict" | "permission-problem" | "time-problem" | "cancellation" | "availability-problem" | "degradation" | "partial-result" | "capability-problem" | "confirmation-required" | "provider-problem" | "host-problem" | "internal-problem" | "schema-problem" | "sensitive-data-problem";
+    readonly reasonCode: "invalid-input" | "unavailable" | "capability-mismatch" | "not-found" | "conflict" | "permission-denied" | "timeout" | "cancelled" | "partial" | "degraded" | "needs-confirmation" | "provider-error" | "host-failure" | "internal-error" | "schema-drift" | "sensitive-leak";
+    readonly refPolicy: "none" | "detailRef" | "artifactRef" | "detailRef-or-artifactRef" | "redacted-detailRef";
+    readonly retryPolicy: "never" | "after-caller-action" | "after-input-change" | "after-state-change" | "after-confirmation" | "retryable" | "retryable-after-backoff" | "operator-action";
+    readonly retryable: boolean;
+    readonly status: number;
+    readonly taxonomyVersion: 1;
+  };
+}) & ({
+  readonly data?: never;
+});
+
+export type DashboardStrictTestProblemWithStatusV1 = {
+  readonly success: false;
+  readonly error: {
+    readonly agentBranch: "failure" | "host-adapter" | "permission-denial" | "timeout" | "cancellation" | "partial-result" | "needs-confirmation" | "provider-error" | "host-failure";
+    readonly artifactRefs?: readonly (string)[];
+    readonly canonicalHttpStatus: number;
+    readonly code: string;
+    readonly dashboardState: "invalid-input" | "unavailable" | "capability-mismatch" | "not-found" | "conflict" | "permission-denied" | "timeout" | "cancelled" | "partial" | "degraded" | "needs-confirmation" | "provider-error" | "host-failure" | "internal-error" | "schema-drift" | "sensitive-leak";
+    readonly detailExposureClass: "public" | "consumer-needed" | "diagnostic" | "internal" | "sensitive" | "raw-provider" | "hidden-reasoning" | "detailRef-only" | "artifactRef-only" | "compatibility-private" | "typed-extension";
+    readonly detailRefs?: readonly (string)[];
+    readonly exposureClass: "public" | "consumer-needed" | "diagnostic" | "internal" | "sensitive" | "raw-provider" | "hidden-reasoning" | "detailRef-only" | "artifactRef-only" | "compatibility-private" | "typed-extension";
+    readonly failureId: "core.failure.invalid-input" | "core.failure.unavailable" | "core.failure.capability-mismatch" | "core.failure.not-found" | "core.failure.conflict" | "core.failure.permission-denied" | "core.failure.timeout" | "core.failure.cancelled" | "core.failure.partial" | "core.failure.degraded" | "core.failure.needs-confirmation" | "core.failure.provider-error" | "core.failure.host-failure" | "core.failure.internal-error" | "core.failure.schema-drift" | "core.failure.sensitive-leak";
+    readonly failureStatus: "blocked" | "failed" | "degraded" | "partial" | "cancelled" | "needs-confirmation";
+    readonly mcpErrorCode: "core.failure.invalid-input" | "core.failure.unavailable" | "core.failure.capability-mismatch" | "core.failure.not-found" | "core.failure.conflict" | "core.failure.permission-denied" | "core.failure.timeout" | "core.failure.cancelled" | "core.failure.partial" | "core.failure.degraded" | "core.failure.needs-confirmation" | "core.failure.provider-error" | "core.failure.host-failure" | "core.failure.internal-error" | "core.failure.schema-drift" | "core.failure.sensitive-leak";
+    readonly mcpStatus: "invalid-input" | "unavailable" | "capability-mismatch" | "not-found" | "conflict" | "permission-denied" | "timeout" | "cancelled" | "partial" | "degraded" | "needs-confirmation" | "provider-error" | "host-failure" | "internal-error" | "schema-drift" | "sensitive-leak";
+    readonly message: string;
+    readonly privateDataSafe: true;
+    readonly problemClass: "request-problem" | "resource-problem" | "state-conflict" | "permission-problem" | "time-problem" | "cancellation" | "availability-problem" | "degradation" | "partial-result" | "capability-problem" | "confirmation-required" | "provider-problem" | "host-problem" | "internal-problem" | "schema-problem" | "sensitive-data-problem";
+    readonly reasonCode: "invalid-input" | "unavailable" | "capability-mismatch" | "not-found" | "conflict" | "permission-denied" | "timeout" | "cancelled" | "partial" | "degraded" | "needs-confirmation" | "provider-error" | "host-failure" | "internal-error" | "schema-drift" | "sensitive-leak";
+    readonly refPolicy: "none" | "detailRef" | "artifactRef" | "detailRef-or-artifactRef" | "redacted-detailRef";
+    readonly retryPolicy: "never" | "after-caller-action" | "after-input-change" | "after-state-change" | "after-confirmation" | "retryable" | "retryable-after-backoff" | "operator-action";
+    readonly retryable: boolean;
+    readonly status: number;
+    readonly taxonomyVersion: 1;
+  };
+  readonly data: {
+    readonly schemaVersion: 1;
+    readonly profile: "strict-test-dimension";
+    readonly demandKey: string;
+    readonly runId: string;
+    readonly phase: "AUTOMATIC_SELECTION_READY" | "SELECTION_AUTO_SELECTED" | "PRIVATE_WORKSPACE_READY" | "STRICT_TEST_COMPLETED_PRIVATE" | "STRICT_TEST_FAILED";
+    readonly preflightHash: string;
+    readonly automaticSelection: ({
+      readonly selectedDimensionId: string;
+      readonly selectedCellIds: readonly (string)[];
+      readonly selectedCellSetHash: string;
+      readonly automaticSelectionHash: string;
+      readonly projectionHash: string;
+    }) | (null);
+    readonly terminal: ({
+      readonly terminalState: "STRICT_TEST_COMPLETED_PRIVATE" | "STRICT_TEST_FAILED";
+      readonly terminalHash: string;
+      readonly failedStage: (string) | (null);
+      readonly errorCode: (string) | (null);
+      readonly productionFinalized: false;
+      readonly publicRouteChanged: false;
+    }) | (null);
+    readonly reportHash: (string) | (null);
+    readonly evidenceRefs: readonly (string)[];
+  };
+};
+
+export type DashboardStrictTestStartProblemV1 = (({
+  readonly data?: {
+    readonly [key: string]: (string) | (number) | (number) | (boolean) | (null) | (readonly (unknown)[]) | ({
+
+    });
+  };
+  readonly success: false;
+  readonly error: {
+    readonly agentBranch: "failure" | "host-adapter" | "permission-denial" | "timeout" | "cancellation" | "partial-result" | "needs-confirmation" | "provider-error" | "host-failure";
+    readonly artifactRefs?: readonly (string)[];
+    readonly canonicalHttpStatus: number;
+    readonly code: string;
+    readonly dashboardState: "invalid-input" | "unavailable" | "capability-mismatch" | "not-found" | "conflict" | "permission-denied" | "timeout" | "cancelled" | "partial" | "degraded" | "needs-confirmation" | "provider-error" | "host-failure" | "internal-error" | "schema-drift" | "sensitive-leak";
+    readonly detailExposureClass: "public" | "consumer-needed" | "diagnostic" | "internal" | "sensitive" | "raw-provider" | "hidden-reasoning" | "detailRef-only" | "artifactRef-only" | "compatibility-private" | "typed-extension";
+    readonly detailRefs?: readonly (string)[];
+    readonly exposureClass: "public" | "consumer-needed" | "diagnostic" | "internal" | "sensitive" | "raw-provider" | "hidden-reasoning" | "detailRef-only" | "artifactRef-only" | "compatibility-private" | "typed-extension";
+    readonly failureId: "core.failure.invalid-input" | "core.failure.unavailable" | "core.failure.capability-mismatch" | "core.failure.not-found" | "core.failure.conflict" | "core.failure.permission-denied" | "core.failure.timeout" | "core.failure.cancelled" | "core.failure.partial" | "core.failure.degraded" | "core.failure.needs-confirmation" | "core.failure.provider-error" | "core.failure.host-failure" | "core.failure.internal-error" | "core.failure.schema-drift" | "core.failure.sensitive-leak";
+    readonly failureStatus: "blocked" | "failed" | "degraded" | "partial" | "cancelled" | "needs-confirmation";
+    readonly mcpErrorCode: "core.failure.invalid-input" | "core.failure.unavailable" | "core.failure.capability-mismatch" | "core.failure.not-found" | "core.failure.conflict" | "core.failure.permission-denied" | "core.failure.timeout" | "core.failure.cancelled" | "core.failure.partial" | "core.failure.degraded" | "core.failure.needs-confirmation" | "core.failure.provider-error" | "core.failure.host-failure" | "core.failure.internal-error" | "core.failure.schema-drift" | "core.failure.sensitive-leak";
+    readonly mcpStatus: "invalid-input" | "unavailable" | "capability-mismatch" | "not-found" | "conflict" | "permission-denied" | "timeout" | "cancelled" | "partial" | "degraded" | "needs-confirmation" | "provider-error" | "host-failure" | "internal-error" | "schema-drift" | "sensitive-leak";
+    readonly message: string;
+    readonly privateDataSafe: true;
+    readonly problemClass: "request-problem" | "resource-problem" | "state-conflict" | "permission-problem" | "time-problem" | "cancellation" | "availability-problem" | "degradation" | "partial-result" | "capability-problem" | "confirmation-required" | "provider-problem" | "host-problem" | "internal-problem" | "schema-problem" | "sensitive-data-problem";
+    readonly reasonCode: "invalid-input" | "unavailable" | "capability-mismatch" | "not-found" | "conflict" | "permission-denied" | "timeout" | "cancelled" | "partial" | "degraded" | "needs-confirmation" | "provider-error" | "host-failure" | "internal-error" | "schema-drift" | "sensitive-leak";
+    readonly refPolicy: "none" | "detailRef" | "artifactRef" | "detailRef-or-artifactRef" | "redacted-detailRef";
+    readonly retryPolicy: "never" | "after-caller-action" | "after-input-change" | "after-state-change" | "after-confirmation" | "retryable" | "retryable-after-backoff" | "operator-action";
+    readonly retryable: boolean;
+    readonly status: number;
+    readonly taxonomyVersion: 1;
+  };
+}) & ({
+  readonly data?: never;
+})) | ({
+  readonly success: false;
+  readonly error: {
+    readonly agentBranch: "failure" | "host-adapter" | "permission-denial" | "timeout" | "cancellation" | "partial-result" | "needs-confirmation" | "provider-error" | "host-failure";
+    readonly artifactRefs?: readonly (string)[];
+    readonly canonicalHttpStatus: number;
+    readonly code: string;
+    readonly dashboardState: "invalid-input" | "unavailable" | "capability-mismatch" | "not-found" | "conflict" | "permission-denied" | "timeout" | "cancelled" | "partial" | "degraded" | "needs-confirmation" | "provider-error" | "host-failure" | "internal-error" | "schema-drift" | "sensitive-leak";
+    readonly detailExposureClass: "public" | "consumer-needed" | "diagnostic" | "internal" | "sensitive" | "raw-provider" | "hidden-reasoning" | "detailRef-only" | "artifactRef-only" | "compatibility-private" | "typed-extension";
+    readonly detailRefs?: readonly (string)[];
+    readonly exposureClass: "public" | "consumer-needed" | "diagnostic" | "internal" | "sensitive" | "raw-provider" | "hidden-reasoning" | "detailRef-only" | "artifactRef-only" | "compatibility-private" | "typed-extension";
+    readonly failureId: "core.failure.invalid-input" | "core.failure.unavailable" | "core.failure.capability-mismatch" | "core.failure.not-found" | "core.failure.conflict" | "core.failure.permission-denied" | "core.failure.timeout" | "core.failure.cancelled" | "core.failure.partial" | "core.failure.degraded" | "core.failure.needs-confirmation" | "core.failure.provider-error" | "core.failure.host-failure" | "core.failure.internal-error" | "core.failure.schema-drift" | "core.failure.sensitive-leak";
+    readonly failureStatus: "blocked" | "failed" | "degraded" | "partial" | "cancelled" | "needs-confirmation";
+    readonly mcpErrorCode: "core.failure.invalid-input" | "core.failure.unavailable" | "core.failure.capability-mismatch" | "core.failure.not-found" | "core.failure.conflict" | "core.failure.permission-denied" | "core.failure.timeout" | "core.failure.cancelled" | "core.failure.partial" | "core.failure.degraded" | "core.failure.needs-confirmation" | "core.failure.provider-error" | "core.failure.host-failure" | "core.failure.internal-error" | "core.failure.schema-drift" | "core.failure.sensitive-leak";
+    readonly mcpStatus: "invalid-input" | "unavailable" | "capability-mismatch" | "not-found" | "conflict" | "permission-denied" | "timeout" | "cancelled" | "partial" | "degraded" | "needs-confirmation" | "provider-error" | "host-failure" | "internal-error" | "schema-drift" | "sensitive-leak";
+    readonly message: string;
+    readonly privateDataSafe: true;
+    readonly problemClass: "request-problem" | "resource-problem" | "state-conflict" | "permission-problem" | "time-problem" | "cancellation" | "availability-problem" | "degradation" | "partial-result" | "capability-problem" | "confirmation-required" | "provider-problem" | "host-problem" | "internal-problem" | "schema-problem" | "sensitive-data-problem";
+    readonly reasonCode: "invalid-input" | "unavailable" | "capability-mismatch" | "not-found" | "conflict" | "permission-denied" | "timeout" | "cancelled" | "partial" | "degraded" | "needs-confirmation" | "provider-error" | "host-failure" | "internal-error" | "schema-drift" | "sensitive-leak";
+    readonly refPolicy: "none" | "detailRef" | "artifactRef" | "detailRef-or-artifactRef" | "redacted-detailRef";
+    readonly retryPolicy: "never" | "after-caller-action" | "after-input-change" | "after-state-change" | "after-confirmation" | "retryable" | "retryable-after-backoff" | "operator-action";
+    readonly retryable: boolean;
+    readonly status: number;
+    readonly taxonomyVersion: 1;
+  };
+  readonly data: {
+    readonly schemaVersion: 1;
+    readonly profile: "strict-test-dimension";
+    readonly demandKey: string;
+    readonly runId: string;
+    readonly phase: "AUTOMATIC_SELECTION_READY" | "SELECTION_AUTO_SELECTED" | "PRIVATE_WORKSPACE_READY" | "STRICT_TEST_COMPLETED_PRIVATE" | "STRICT_TEST_FAILED";
+    readonly preflightHash: string;
+    readonly automaticSelection: ({
+      readonly selectedDimensionId: string;
+      readonly selectedCellIds: readonly (string)[];
+      readonly selectedCellSetHash: string;
+      readonly automaticSelectionHash: string;
+      readonly projectionHash: string;
+    }) | (null);
+    readonly terminal: ({
+      readonly terminalState: "STRICT_TEST_COMPLETED_PRIVATE" | "STRICT_TEST_FAILED";
+      readonly terminalHash: string;
+      readonly failedStage: (string) | (null);
+      readonly errorCode: (string) | (null);
+      readonly productionFinalized: false;
+      readonly publicRouteChanged: false;
+    }) | (null);
+    readonly reportHash: (string) | (null);
+    readonly evidenceRefs: readonly (string)[];
+  };
+});
+
+export type DashboardStrictTestDimensionOperationIdV1 = 'preflightStrictTestDimension' | 'startStrictTestDimensionRun' | 'getStrictTestDimensionRun' | 'getStrictTestDimensionReport';
+
+export interface DashboardStrictTestDimensionOperationMapV1 {
+  readonly preflightStrictTestDimension: {
+    readonly request: {
+      readonly body: DashboardStrictTestPreflightRequestV1;
+      readonly pathParameters: DashboardStrictTestEmptyPathParametersV1;
+      readonly query: DashboardStrictTestEmptyQueryV1;
+    };
+    readonly responses: {
+      readonly 200: DashboardStrictTestPreflightSuccessV1;
+      readonly 400: DashboardStrictTestOrdinaryProblemV1;
+      readonly 422: DashboardStrictTestOrdinaryProblemV1;
+    };
+  };
+  readonly startStrictTestDimensionRun: {
+    readonly request: {
+      readonly body: DashboardStrictTestRunRequestV1;
+      readonly pathParameters: DashboardStrictTestEmptyPathParametersV1;
+      readonly query: DashboardStrictTestEmptyQueryV1;
+    };
+    readonly responses: {
+      readonly 202: DashboardStrictTestRunStatusSuccessV1;
+      readonly 400: DashboardStrictTestOrdinaryProblemV1;
+      readonly 404: DashboardStrictTestOrdinaryProblemV1;
+      readonly 422: DashboardStrictTestStartProblemV1;
+    };
+  };
+  readonly getStrictTestDimensionRun: {
+    readonly request: {
+      readonly body?: never;
+      readonly pathParameters: DashboardStrictTestRunPathParametersV1;
+      readonly query: DashboardStrictTestEmptyQueryV1;
+    };
+    readonly responses: {
+      readonly 200: DashboardStrictTestRunStatusSuccessV1;
+      readonly 400: DashboardStrictTestOrdinaryProblemV1;
+      readonly 404: DashboardStrictTestOrdinaryProblemV1;
+      readonly 422: DashboardStrictTestOrdinaryProblemV1;
+    };
+  };
+  readonly getStrictTestDimensionReport: {
+    readonly request: {
+      readonly body?: never;
+      readonly pathParameters: DashboardStrictTestRunPathParametersV1;
+      readonly query: DashboardStrictTestEmptyQueryV1;
+    };
+    readonly responses: {
+      readonly 200: DashboardStrictTestReportSuccessV1;
+      readonly 400: DashboardStrictTestOrdinaryProblemV1;
+      readonly 404: DashboardStrictTestOrdinaryProblemV1;
+      readonly 409: DashboardStrictTestOrdinaryProblemV1;
+      readonly 422: DashboardStrictTestOrdinaryProblemV1;
+    };
+  };
+}
+
+export type DashboardStrictTestOperationRequestV1<
+  TOperationId extends DashboardStrictTestDimensionOperationIdV1,
+> = DashboardStrictTestDimensionOperationMapV1[TOperationId]['request'];
+
+export type DashboardStrictTestOperationResponseV1<
+  TOperationId extends DashboardStrictTestDimensionOperationIdV1,
+  TStatus extends number,
+> = TStatus extends keyof DashboardStrictTestDimensionOperationMapV1[TOperationId]['responses']
+  ? DashboardStrictTestDimensionOperationMapV1[TOperationId]['responses'][TStatus]
+  : never;
+
+// Main-owned custom formats are injected explicitly. Missing format authority fails closed.
+export type DashboardApiInputFormatValidators = Readonly<
+  Partial<Record<DashboardApiInputStringFormat, (value: string) => boolean>>
+>;
+
+function dashboardApiSchemaRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function validateDashboardApiJsonSchema(
+  schemaValue: unknown,
+  value: unknown,
+  formatValidators: DashboardApiInputFormatValidators
+): boolean {
+  if (schemaValue === true) {
+    return true;
+  }
+  if (schemaValue === false) {
+    return false;
+  }
+  const schema = dashboardApiSchemaRecord(schemaValue);
+  if (!schema) {
+    return false;
+  }
+  if (Object.hasOwn(schema, 'const') && !Object.is(value, schema.const)) {
+    return false;
+  }
+  if (Array.isArray(schema.enum) && !schema.enum.some((item) => Object.is(item, value))) {
+    return false;
+  }
+  if (
+    Array.isArray(schema.oneOf) &&
+    schema.oneOf.filter((item) =>
+      validateDashboardApiJsonSchema(item, value, formatValidators)
+    ).length !== 1
+  ) {
+    return false;
+  }
+  if (
+    Array.isArray(schema.anyOf) &&
+    !schema.anyOf.some((item) => validateDashboardApiJsonSchema(item, value, formatValidators))
+  ) {
+    return false;
+  }
+  if (
+    Array.isArray(schema.allOf) &&
+    !schema.allOf.every((item) => validateDashboardApiJsonSchema(item, value, formatValidators))
+  ) {
+    return false;
+  }
+  if (schema.not && validateDashboardApiJsonSchema(schema.not, value, formatValidators)) {
+    return false;
+  }
+  if (schema.type === 'string') {
+    if (typeof value !== 'string') {
+      return false;
+    }
+    if (typeof schema.minLength === 'number' && value.length < schema.minLength) {
+      return false;
+    }
+    if (typeof schema.maxLength === 'number' && value.length > schema.maxLength) {
+      return false;
+    }
+    if (typeof schema.pattern === 'string') {
+      try {
+        if (!new RegExp(schema.pattern, 'u').test(value)) {
+          return false;
+        }
+      } catch {
+        return false;
+      }
+    }
+    if (typeof schema.format === 'string') {
+      const validator = formatValidators[schema.format as DashboardApiInputStringFormat];
+      if (!validator || !validator(value)) {
+        return false;
+      }
+    }
+  } else if (schema.type === 'number') {
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      return false;
+    }
+  } else if (schema.type === 'integer') {
+    if (!Number.isInteger(value)) {
+      return false;
+    }
+  } else if (schema.type === 'boolean') {
+    if (typeof value !== 'boolean') {
+      return false;
+    }
+  } else if (schema.type === 'null') {
+    if (value !== null) {
+      return false;
+    }
+  } else if (schema.type === 'array') {
+    if (!Array.isArray(value)) {
+      return false;
+    }
+    if (
+      schema.items &&
+      !value.every((item) => validateDashboardApiJsonSchema(schema.items, item, formatValidators))
+    ) {
+      return false;
+    }
+  } else if (schema.type === 'object' || schema.properties || schema.required) {
+    const record = dashboardApiSchemaRecord(value);
+    if (!record) {
+      return false;
+    }
+    const properties = dashboardApiSchemaRecord(schema.properties) ?? {};
+    const required = Array.isArray(schema.required)
+      ? schema.required.map((item) => String(item))
+      : [];
+    if (required.some((key) => !Object.hasOwn(record, key))) {
+      return false;
+    }
+    for (const [key, child] of Object.entries(properties)) {
+      if (
+        Object.hasOwn(record, key) &&
+        !validateDashboardApiJsonSchema(child, record[key], formatValidators)
+      ) {
+        return false;
+      }
+    }
+    const extraKeys = Object.keys(record).filter((key) => !Object.hasOwn(properties, key));
+    if (schema.additionalProperties === false && extraKeys.length > 0) {
+      return false;
+    }
+    if (schema.additionalProperties && typeof schema.additionalProperties === 'object') {
+      if (
+        !extraKeys.every((key) =>
+          validateDashboardApiJsonSchema(schema.additionalProperties, record[key], formatValidators)
+        )
+      ) {
+        return false;
+      }
+    }
+  }
+  if (typeof schema.minimum === 'number' && typeof value === 'number' && value < schema.minimum) {
+    return false;
+  }
+  return true;
+}
+
+export function validateDashboardApiInputSchema(
+  schemaId: DashboardApiInputSchemaId,
+  value: unknown,
+  formatValidators: DashboardApiInputFormatValidators
+): boolean {
+  return validateDashboardApiJsonSchema(
+    DASHBOARD_API_INPUT_SCHEMAS[schemaId],
+    value,
+    formatValidators
+  );
+}
+
+export function validateDashboardApiResponseSchema(
+  schemaId: DashboardApiSchemaId,
+  value: unknown,
+  formatValidators: DashboardApiInputFormatValidators = {}
+): boolean {
+  return validateDashboardApiJsonSchema(
+    DASHBOARD_API_RESPONSE_SCHEMAS[schemaId],
+    value,
+    formatValidators
+  );
+}
+
+export function validateDashboardStrictTestOperationRequest<
+  TOperationId extends DashboardStrictTestDimensionOperationIdV1,
+>(
+  operationId: TOperationId,
+  value: unknown,
+  formatValidators: DashboardApiInputFormatValidators
+): value is DashboardStrictTestOperationRequestV1<TOperationId> {
+  const route = DASHBOARD_API_ROUTES.find((candidate) => candidate.operationId === operationId);
+  const request = dashboardApiSchemaRecord(value);
+  if (!route || !request) {
+    return false;
+  }
+  const expectedKeys = new Set(['pathParameters', 'query']);
+  if (route.requestBodySchema) {
+    expectedKeys.add('body');
+  }
+  if (
+    Object.keys(request).some((key) => !expectedKeys.has(key)) ||
+    [...expectedKeys].some((key) => !Object.hasOwn(request, key))
+  ) {
+    return false;
+  }
+  if (
+    route.requestBodySchema &&
+    !validateDashboardApiInputSchema(route.requestBodySchema, request.body, formatValidators)
+  ) {
+    return false;
+  }
+  const query = route.querySchema
+    ? validateDashboardApiInputSchema(route.querySchema, request.query, formatValidators)
+    : request.query === null;
+  if (!query) {
+    return false;
+  }
+  const pathParameters = dashboardApiSchemaRecord(request.pathParameters);
+  if (!pathParameters) {
+    return false;
+  }
+  const pathSchemas = route.pathParameterSchemas ?? {};
+  if (
+    Object.keys(pathParameters).sort().join('\0') !== Object.keys(pathSchemas).sort().join('\0')
+  ) {
+    return false;
+  }
+  return Object.entries(pathSchemas).every(([name, schemaId]) =>
+    validateDashboardApiInputSchema(schemaId, pathParameters[name], formatValidators)
+  );
+}
+
+export function validateDashboardStrictTestOperationResponse<
+  TOperationId extends DashboardStrictTestDimensionOperationIdV1,
+  TStatus extends number,
+>(
+  operationId: TOperationId,
+  status: TStatus,
+  value: unknown,
+  formatValidators: DashboardApiInputFormatValidators = {}
+): value is DashboardStrictTestOperationResponseV1<TOperationId, TStatus> {
+  const route = DASHBOARD_API_ROUTES.find((candidate) => candidate.operationId === operationId);
+  const schemaId = route?.responseSchemas[String(status)];
+  return schemaId ? validateDashboardApiResponseSchema(schemaId, value, formatValidators) : false;
+}
