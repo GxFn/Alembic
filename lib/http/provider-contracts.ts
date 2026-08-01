@@ -14,6 +14,12 @@ import {
   type CoreFieldFailureKind,
   getCoreFailureTaxonomyEntry,
 } from '@alembic/core/shared';
+import {
+  STRICT_TEST_EMPTY_QUERY_JSON_SCHEMA,
+  STRICT_TEST_PREFLIGHT_REQUEST_JSON_SCHEMA,
+  STRICT_TEST_RUN_ID_JSON_SCHEMA,
+  STRICT_TEST_RUN_REQUEST_JSON_SCHEMA,
+} from '../recipe-pipeline/generate/strict/StrictTestRequestContracts.js';
 import { buildAlembicHttpProblem } from './problem-taxonomy.js';
 
 export const ALEMBIC_PROVIDER_CONTRACT_VERSION = 1;
@@ -42,7 +48,10 @@ export interface AlembicProviderRouteContract {
   readonly method: HttpMethod;
   readonly operationId: string;
   readonly path: string;
+  readonly pathParameterSchemas: Readonly<Record<string, JsonSchema>>;
+  readonly querySchema: JsonSchema | null;
   readonly registryRowId: AlembicProviderRegistryRowId;
+  readonly requestBodySchema: JsonSchema | null;
   readonly responseSchemas: Readonly<Record<string, JsonSchema>>;
   readonly summary: string;
   readonly supportedScenarios: readonly AlembicProviderFixtureScenario[];
@@ -193,6 +202,11 @@ const problemSchema = {
     success: { const: false },
     error: problemDetailSchema,
   },
+} as const satisfies JsonSchema;
+
+/** strict-test 错误不继承 provider 通用任意 data 扩展；无持久失败投影时必须完全无 data。 */
+const strictTestProblemWithoutDataSchema = {
+  allOf: [problemSchema, { not: { required: ['data'] } }],
 } as const satisfies JsonSchema;
 
 const eventMetadataSchema = {
@@ -374,6 +388,19 @@ const strictTestRunStatusPublicSchema = {
     evidenceRefs: strictTestStringArraySchema,
   },
 } as const satisfies JsonSchema;
+const strictTestProblemWithStatusSchema = {
+  type: 'object',
+  required: ['success', 'error', 'data'],
+  additionalProperties: false,
+  properties: {
+    success: { const: false },
+    error: problemDetailSchema,
+    data: strictTestRunStatusPublicSchema,
+  },
+} as const satisfies JsonSchema;
+const strictTestStartProblemSchema = {
+  oneOf: [strictTestProblemWithoutDataSchema, strictTestProblemWithStatusSchema],
+} as const satisfies JsonSchema;
 const strictTestReportPublicSchema = {
   type: 'object',
   required: [
@@ -470,25 +497,27 @@ const strictTestReportPublicSchema = {
 
 const strictTestPreflightResponseSchemas = {
   200: strictTestSuccessEnvelope(strictTestPreflightPublicSchema),
-  400: problemSchema,
-  422: problemSchema,
+  400: strictTestProblemWithoutDataSchema,
+  422: strictTestProblemWithoutDataSchema,
 } as const satisfies Readonly<Record<string, JsonSchema>>;
 const strictTestStartResponseSchemas = {
   202: strictTestSuccessEnvelope(strictTestRunStatusPublicSchema),
-  400: problemSchema,
-  404: problemSchema,
-  422: problemSchema,
+  400: strictTestProblemWithoutDataSchema,
+  404: strictTestProblemWithoutDataSchema,
+  422: strictTestStartProblemSchema,
 } as const satisfies Readonly<Record<string, JsonSchema>>;
 const strictTestStatusResponseSchemas = {
   200: strictTestSuccessEnvelope(strictTestRunStatusPublicSchema),
-  404: problemSchema,
-  422: problemSchema,
+  400: strictTestProblemWithoutDataSchema,
+  404: strictTestProblemWithoutDataSchema,
+  422: strictTestProblemWithoutDataSchema,
 } as const satisfies Readonly<Record<string, JsonSchema>>;
 const strictTestReportResponseSchemas = {
   200: strictTestSuccessEnvelope(strictTestReportPublicSchema),
-  404: problemSchema,
-  409: problemSchema,
-  422: problemSchema,
+  400: strictTestProblemWithoutDataSchema,
+  404: strictTestProblemWithoutDataSchema,
+  409: strictTestProblemWithoutDataSchema,
+  422: strictTestProblemWithoutDataSchema,
 } as const satisfies Readonly<Record<string, JsonSchema>>;
 
 const retrievalReadinessDiagnosticSchema = {
@@ -711,7 +740,11 @@ export const ALEMBIC_PROVIDER_ROUTE_CONTRACTS = [
     'preflightStrictTestDimension',
     'Freeze the strict-test full-universe preflight authority',
     ['Knowledge', 'Strict Test'],
-    { responseSchemas: strictTestPreflightResponseSchemas }
+    {
+      querySchema: STRICT_TEST_EMPTY_QUERY_JSON_SCHEMA,
+      requestBodySchema: STRICT_TEST_PREFLIGHT_REQUEST_JSON_SCHEMA,
+      responseSchemas: strictTestPreflightResponseSchemas,
+    }
   ),
   route(
     'I22',
@@ -720,7 +753,11 @@ export const ALEMBIC_PROVIDER_ROUTE_CONTRACTS = [
     'startStrictTestDimensionRun',
     'Automatically select and start one private strict-test dimension run',
     ['Knowledge', 'Strict Test'],
-    { responseSchemas: strictTestStartResponseSchemas }
+    {
+      querySchema: STRICT_TEST_EMPTY_QUERY_JSON_SCHEMA,
+      requestBodySchema: STRICT_TEST_RUN_REQUEST_JSON_SCHEMA,
+      responseSchemas: strictTestStartResponseSchemas,
+    }
   ),
   route(
     'I22',
@@ -729,7 +766,11 @@ export const ALEMBIC_PROVIDER_ROUTE_CONTRACTS = [
     'getStrictTestDimensionRun',
     'Read durable strict-test phase and terminal state',
     ['Knowledge', 'Strict Test'],
-    { responseSchemas: strictTestStatusResponseSchemas }
+    {
+      pathParameterSchemas: { runId: STRICT_TEST_RUN_ID_JSON_SCHEMA },
+      querySchema: STRICT_TEST_EMPTY_QUERY_JSON_SCHEMA,
+      responseSchemas: strictTestStatusResponseSchemas,
+    }
   ),
   route(
     'I22',
@@ -738,7 +779,11 @@ export const ALEMBIC_PROVIDER_ROUTE_CONTRACTS = [
     'getStrictTestDimensionReport',
     'Read the durable canonical strict-test audit report',
     ['Knowledge', 'Strict Test'],
-    { responseSchemas: strictTestReportResponseSchemas }
+    {
+      pathParameterSchemas: { runId: STRICT_TEST_RUN_ID_JSON_SCHEMA },
+      querySchema: STRICT_TEST_EMPTY_QUERY_JSON_SCHEMA,
+      responseSchemas: strictTestReportResponseSchemas,
+    }
   ),
   route(
     'I07',
@@ -1405,6 +1450,9 @@ function route(
     dataSchema?: JsonSchema;
     fixtureIds?: readonly string[];
     functionClass?: CoreContractFunctionClass | 'rest-command';
+    pathParameterSchemas?: Readonly<Record<string, JsonSchema>>;
+    querySchema?: JsonSchema;
+    requestBodySchema?: JsonSchema;
     responseSchemas?: Readonly<Record<string, JsonSchema>>;
   } = {}
 ): AlembicProviderRouteContract {
@@ -1420,7 +1468,10 @@ function route(
     method,
     operationId,
     path,
+    pathParameterSchemas: options.pathParameterSchemas ?? Object.freeze({}),
+    querySchema: options.querySchema ?? null,
     registryRowId,
+    requestBodySchema: options.requestBodySchema ?? null,
     responseSchemas:
       options.responseSchemas ??
       Object.freeze({
@@ -1580,6 +1631,27 @@ function buildOpenApiPaths(contracts: readonly AlembicProviderRouteContract[]) {
       operationId: contract.operationId,
       summary: contract.summary,
       tags: contract.tags,
+      ...(contract.requestBodySchema
+        ? {
+            requestBody: {
+              required: true,
+              content: {
+                'application/json': { schema: contract.requestBodySchema },
+              },
+            },
+          }
+        : {}),
+      ...(Object.keys(contract.pathParameterSchemas).length > 0
+        ? {
+            parameters: Object.entries(contract.pathParameterSchemas).map(([name, schema]) => ({
+              in: 'path',
+              name,
+              required: true,
+              schema,
+            })),
+          }
+        : {}),
+      ...(contract.querySchema ? { 'x-alembic-query-schema': contract.querySchema } : {}),
       responses: Object.fromEntries(
         Object.entries(contract.responseSchemas).map(([status, schema]) => [
           status,
@@ -1601,7 +1673,12 @@ function buildOpenApiPaths(contracts: readonly AlembicProviderRouteContract[]) {
         exposureClasses: contract.exposureClasses,
         fixtureIds: contract.fixtureIds,
         functionClass: contract.functionClass,
+        ...(Object.keys(contract.pathParameterSchemas).length > 0
+          ? { pathParameterSchemas: contract.pathParameterSchemas }
+          : {}),
+        ...(contract.querySchema ? { querySchema: contract.querySchema } : {}),
         registryRowId: contract.registryRowId,
+        ...(contract.requestBodySchema ? { requestBodySchema: contract.requestBodySchema } : {}),
         supportedScenarios: contract.supportedScenarios,
       },
     };

@@ -1,3 +1,4 @@
+import Logger from '@alembic/core/logging';
 import express, { type Request, type Response } from 'express';
 import { ZodError } from 'zod';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
@@ -24,6 +25,7 @@ export interface StrictTestDimensionApiService {
 }
 
 type StrictTestDimensionServiceFactory = () => StrictTestDimensionApiService;
+const logger = Logger.getInstance();
 
 /** 独立 strict-test API；该 router 没有 DaemonJob/legacy bootstrap 依赖。 */
 export function createStrictTestDimensionRouter(getService: StrictTestDimensionServiceFactory) {
@@ -42,8 +44,45 @@ export function createStrictTestDimensionRouter(getService: StrictTestDimensionS
   router.post('/runs', async (req: Request, res: Response): Promise<void> => {
     try {
       assertStrictTestEmptyQuery(req.query);
-      const result = await getService().start(parseStrictTestRunRequest(req.body));
+      const input = parseStrictTestRunRequest(req.body);
+      const service = getService();
+      let result: unknown;
+      try {
+        result = await service.start(input);
+      } catch (error: unknown) {
+        // 真实 orchestrator 会先封存失败 terminal/report 再抛错；只按同一 owner-bound
+        // service 重开同 run，并在 public DTO 的 demand/preflight/run 全匹配时附带安全状态。
+        const failed = await reopenDurableFailedStart(service, input);
+        if (failed) {
+          logger.warn('[strict-test] reopened durable failed start', {
+            code: publicStrictTestCode(failed.terminal?.errorCode ?? null),
+            demandKey: input.demandKey,
+            runId: input.runId,
+            terminalState: failed.terminal?.terminalState,
+          });
+          respondStrictTestProblem(res, {
+            code: publicStrictTestCode(failed.terminal?.errorCode ?? null),
+            data: failed,
+            message: 'Strict-test run failed',
+            reasonCode: 'host-failure',
+            status: 422,
+          });
+          return;
+        }
+        logger.warn('[strict-test] start failed without matching durable public checkpoint', {
+          code: publicStrictTestCode(
+            error instanceof Error ? error.message.split(':', 1)[0] : null
+          ),
+          demandKey: input.demandKey,
+          runId: input.runId,
+        });
+        respondStrictTestError(res, error);
+        return;
+      }
       const data = toStrictTestRunStatusPublicDtoV1(result);
+      if (!matchesStartAuthority(data, input)) {
+        throw new Error('STRICT_TEST_START_RESULT_AUTHORITY_MISMATCH');
+      }
       if (data.terminal?.terminalState === 'STRICT_TEST_FAILED') {
         respondStrictTestProblem(res, {
           code: publicStrictTestCode(data.terminal.errorCode),
@@ -81,6 +120,40 @@ export function createStrictTestDimensionRouter(getService: StrictTestDimensionS
   });
 
   return router;
+}
+
+async function reopenDurableFailedStart(
+  service: StrictTestDimensionApiService,
+  input: StrictTestRunRequestV1
+): Promise<ReturnType<typeof toStrictTestRunStatusPublicDtoV1> | null> {
+  try {
+    const data = toStrictTestRunStatusPublicDtoV1(await service.status(input.runId));
+    if (
+      !matchesStartAuthority(data, input) ||
+      data.phase !== 'STRICT_TEST_FAILED' ||
+      data.terminal?.terminalState !== 'STRICT_TEST_FAILED' ||
+      !data.terminal.failedStage ||
+      !data.terminal.errorCode ||
+      !data.reportHash
+    ) {
+      return null;
+    }
+    return data;
+  } catch (_error: unknown) {
+    // 重开只是已失败 start 的受限证据恢复；缺失/损坏 checkpoint 不得替换原始错误。
+    return null;
+  }
+}
+
+function matchesStartAuthority(
+  data: ReturnType<typeof toStrictTestRunStatusPublicDtoV1>,
+  input: StrictTestRunRequestV1
+): boolean {
+  return (
+    data.demandKey === input.demandKey &&
+    data.runId === input.runId &&
+    data.preflightHash === input.preflightHash
+  );
 }
 
 function defaultService(): StrictTestDimensionApiService {

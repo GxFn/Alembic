@@ -7,8 +7,8 @@
  * text (P0 §8 spec): Core knowledge wire types (verbatim from the Core
  * declaration file), the failure taxonomy + problem envelope projection,
  * job kinds, and the provider-contracts route table with a deduplicated
- * response-schema registry (the raw per-route schemas repeat 2 distinct
- * envelope schemas 239 times; inlining them would commit ~1 MB).
+ * response/input-schema registries (the raw per-route schemas repeat across
+ * many routes; inlining them would commit a needlessly large artifact).
  *
  * The canonical artifact text is committed in THIS repo at
  * lib/generated/dashboard-api-types.ts; AlembicDashboard lands the same
@@ -167,27 +167,66 @@ export function generateDashboardApiTypes(
   );
 
   // ── Route table with deduplicated response-schema registry ──
-  const schemaIdByContent = new Map<string, string>();
-  const schemaById = new Map<string, unknown>();
+  const responseSchemaIdByContent = new Map<string, string>();
+  const responseSchemaById = new Map<string, unknown>();
+  const inputSchemaIdByContent = new Map<string, string>();
+  const inputSchemaById = new Map<string, unknown>();
+  const inputSchemaRef = (schema: unknown): string | null => {
+    if (schema === null || schema === undefined) {
+      return null;
+    }
+    const content = JSON.stringify(schema);
+    let id = inputSchemaIdByContent.get(content);
+    if (!id) {
+      id = `input-schema-${inputSchemaIdByContent.size + 1}`;
+      inputSchemaIdByContent.set(content, id);
+      inputSchemaById.set(id, schema);
+    }
+    return id;
+  };
   const routes = ALEMBIC_PROVIDER_ROUTE_CONTRACTS.map((contract) => {
-    const { responseSchemas, ...rest } = contract as unknown as Record<string, unknown> & {
-      responseSchemas?: Record<string, unknown>;
-    };
-    const refs: Record<string, string> = {};
+    const { pathParameterSchemas, querySchema, requestBodySchema, responseSchemas, ...rest } =
+      contract as unknown as Record<string, unknown> & {
+        pathParameterSchemas?: Record<string, unknown>;
+        querySchema?: unknown;
+        requestBodySchema?: unknown;
+        responseSchemas?: Record<string, unknown>;
+      };
+    const responseRefs: Record<string, string> = {};
     for (const [status, schema] of Object.entries(responseSchemas ?? {})) {
       const content = JSON.stringify(schema);
-      let id = schemaIdByContent.get(content);
+      let id = responseSchemaIdByContent.get(content);
       if (!id) {
-        id = `schema-${schemaIdByContent.size + 1}`;
-        schemaIdByContent.set(content, id);
-        schemaById.set(id, schema);
+        id = `schema-${responseSchemaIdByContent.size + 1}`;
+        responseSchemaIdByContent.set(content, id);
+        responseSchemaById.set(id, schema);
       }
-      refs[status] = id;
+      responseRefs[status] = id;
     }
-    return { ...rest, responseSchemas: refs };
+    const pathParameterRefs = Object.fromEntries(
+      Object.entries(pathParameterSchemas ?? {}).map(([name, schema]) => [
+        name,
+        inputSchemaRef(schema),
+      ])
+    );
+    const querySchemaRef = inputSchemaRef(querySchema);
+    const requestBodySchemaRef = inputSchemaRef(requestBodySchema);
+    return {
+      ...rest,
+      ...(Object.keys(pathParameterRefs).length > 0
+        ? { pathParameterSchemas: pathParameterRefs }
+        : {}),
+      ...(querySchemaRef ? { querySchema: querySchemaRef } : {}),
+      ...(requestBodySchemaRef ? { requestBodySchema: requestBodySchemaRef } : {}),
+      responseSchemas: responseRefs,
+    };
   });
-  const schemaIds = [...schemaById.keys()];
+  const responseSchemaIds = [...responseSchemaById.keys()];
+  const inputSchemaIds = [...inputSchemaById.keys()];
   const routeInterface = deriveInterfaceText('DashboardApiRouteContract', routes, {
+    pathParameterSchemas: 'Readonly<Record<string, DashboardApiInputSchemaId>>',
+    querySchema: 'DashboardApiInputSchemaId | null',
+    requestBodySchema: 'DashboardApiInputSchemaId | null',
     responseSchemas: 'Readonly<Record<string, DashboardApiSchemaId>>',
   });
 
@@ -197,7 +236,7 @@ export function generateDashboardApiTypes(
  * Dashboard API contract artifact (IC2, P0 §8): Core knowledge wire types,
  * failure taxonomy + problem envelope projection, job kinds, and the
  * Alembic provider-contracts route table with a deduplicated
- * response-schema registry.
+ * response/input-schema registries.
  *
  * Authority chain: @alembic/core src/types/KnowledgeWire.ts +
  * src/shared/FailureTaxonomy.ts, Alembic lib/http/provider-contracts.ts +
@@ -245,9 +284,13 @@ export const DASHBOARD_JOB_KINDS: readonly DashboardJobKind[] = ${toJson([...ALE
 
 export const DASHBOARD_API_CONTRACT_VERSION = ${ALEMBIC_PROVIDER_CONTRACT_VERSION};
 
-export type DashboardApiSchemaId = ${unionOf(schemaIds)};
+export type DashboardApiSchemaId = ${unionOf(responseSchemaIds)};
 
-export const DASHBOARD_API_RESPONSE_SCHEMAS: Readonly<Record<DashboardApiSchemaId, Record<string, unknown>>> = ${toJson(Object.fromEntries(schemaById))};
+export const DASHBOARD_API_RESPONSE_SCHEMAS: Readonly<Record<DashboardApiSchemaId, Record<string, unknown>>> = ${toJson(Object.fromEntries(responseSchemaById))};
+
+export type DashboardApiInputSchemaId = ${unionOf(inputSchemaIds)};
+
+export const DASHBOARD_API_INPUT_SCHEMAS: Readonly<Record<DashboardApiInputSchemaId, Record<string, unknown>>> = ${toJson(Object.fromEntries(inputSchemaById))};
 
 ${routeInterface}
 

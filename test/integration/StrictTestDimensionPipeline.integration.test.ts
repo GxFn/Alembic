@@ -260,6 +260,160 @@ describe('strict-test-dimension real Main private pipeline', () => {
     expect(await treeHash(fixture.dataRoot)).toBe(productionBefore);
   }, 120_000);
 
+  it('returns and reopens a genuine same-run durable failure through the real Main HTTP chain', async () => {
+    const fixture = await createFixture({ multiModule: true });
+    const forbiddenSpies = createForbiddenProductionSpies();
+    const productionBefore = await treeHash(fixture.dataRoot);
+    const namedProductionBefore = await snapshotNamedProductionSurface(fixture.dataRoot);
+    const globalContainer = getServiceContainer();
+    const previousSingletons = globalContainer.singletons;
+    const previousServices = globalContainer.services;
+    let server: HttpServer | null = null;
+    try {
+      globalContainer.singletons = {
+        ...(fixture.container as unknown as { singletons: Record<string, unknown> }).singletons,
+      };
+      globalContainer.services = {};
+      globalContainer.register('agentService', () => fixture.agent.service);
+      globalContainer.register('strictTestDimensionOrchestrator', () =>
+        createStrictTestDimensionOrchestrator(globalContainer, {
+          failAtStage: 'EXPRESSION_SETS_REVIEWED',
+        })
+      );
+
+      server = new HttpServer({ host: '127.0.0.1', port: 0 });
+      server.setupMiddleware();
+      server.setupRoutes();
+      server.setupErrorHandling();
+      const listener = await server.start();
+      const port = (listener.address() as AddressInfo).port;
+      const base = `http://127.0.0.1:${port}/api/v1/strict-test-dimension`;
+      const demandKey = 'strict-test-real-http-failure';
+      const runId = `${demandKey}-run`;
+
+      const preflightResponse = await fetch(`${base}/preflight`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ demandKey, projectRoot: fixture.projectRoot, runId }),
+      });
+      const preflightBody = (await preflightResponse.json()) as Record<string, unknown>;
+      const preflightData = readRecord(preflightBody.data);
+      const startResponse = await fetch(`${base}/runs`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          demandKey,
+          preflightHash: preflightData.preflightHash,
+          runId,
+        }),
+      });
+      const startBody = (await startResponse.json()) as Record<string, unknown>;
+      const statusResponse = await fetch(`${base}/runs/${runId}`);
+      const statusBody = (await statusResponse.json()) as Record<string, unknown>;
+      const reportResponse = await fetch(`${base}/runs/${runId}/report`);
+      const reportBody = (await reportResponse.json()) as Record<string, unknown>;
+
+      const contractCases = [
+        {
+          label: 'real preflight',
+          operationId: 'preflightStrictTestDimension',
+          status: preflightResponse.status,
+          body: preflightBody,
+        },
+        {
+          label: 'first real stage failure',
+          operationId: 'startStrictTestDimensionRun',
+          status: startResponse.status,
+          body: startBody,
+        },
+        {
+          label: 'durable failed status reopen',
+          operationId: 'getStrictTestDimensionRun',
+          status: statusResponse.status,
+          body: statusBody,
+        },
+        {
+          label: 'durable failed report reopen',
+          operationId: 'getStrictTestDimensionReport',
+          status: reportResponse.status,
+          body: reportBody,
+        },
+      ];
+      expect(contractCases.map(({ label, status }) => [label, status])).toEqual([
+        ['real preflight', 200],
+        ['first real stage failure', 422],
+        ['durable failed status reopen', 200],
+        ['durable failed report reopen', 200],
+      ]);
+      for (const contractCase of contractCases) {
+        expectProviderHttpResponse(
+          contractCase.operationId,
+          contractCase.status,
+          contractCase.body
+        );
+        expect(findForbiddenPublicFields(contractCase.body), contractCase.label).toEqual([]);
+      }
+      expect(startBody).toMatchObject({
+        success: false,
+        error: {
+          code: 'STRICT_TEST_INJECTED_EXPRESSION_SETS_REVIEWED',
+          privateDataSafe: true,
+          status: 422,
+        },
+        data: {
+          demandKey,
+          runId,
+          phase: 'STRICT_TEST_FAILED',
+          terminal: {
+            terminalState: 'STRICT_TEST_FAILED',
+            failedStage: 'EXPRESSION_SETS_REVIEWED',
+            productionFinalized: false,
+            publicRouteChanged: false,
+          },
+        },
+      });
+      expect(readRecord(statusBody.data)).toMatchObject({
+        demandKey,
+        runId,
+        phase: 'STRICT_TEST_FAILED',
+      });
+      expect(readRecord(reportBody.data)).toMatchObject({
+        demandKey,
+        runId,
+        terminalState: 'STRICT_TEST_FAILED',
+        failure: { failedStage: 'EXPRESSION_SETS_REVIEWED' },
+      });
+      expect(fixture.agent.strictPipelineCount).toBe(1);
+      expect(await treeHash(fixture.dataRoot)).toBe(productionBefore);
+      expect(await snapshotNamedProductionSurface(fixture.dataRoot)).toEqual(namedProductionBefore);
+      assertForbiddenProductionSpiesUntouched(forbiddenSpies);
+
+      const failureProbeOutput = process.env.ALEMBIC_STRICT_TEST_FAILED_START_PROBE_OUTPUT;
+      if (failureProbeOutput) {
+        await fsp.writeFile(
+          failureProbeOutput,
+          `${JSON.stringify({
+            schemaVersion: 1,
+            realOrchestrator: true,
+            start: { status: startResponse.status, body: startBody },
+            reopen: {
+              status: statusResponse.status,
+              body: statusBody,
+              reportStatus: reportResponse.status,
+            },
+            sameRunAgentPipelineCount: fixture.agent.strictPipelineCount,
+            productionStateUnchanged: true,
+            publicRouteUnchanged: true,
+          })}\n`
+        );
+      }
+    } finally {
+      await server?.stop();
+      globalContainer.singletons = previousSingletons;
+      globalContainer.services = previousServices;
+    }
+  }, 120_000);
+
   it.each([
     'EXPRESSION_SETS_REVIEWED',
     'PRIVATE_INDEXES_VERIFIED',
@@ -386,6 +540,45 @@ describe('strict-test-dimension real Main private pipeline', () => {
       const base = `http://127.0.0.1:${port}/api/v1/strict-test-dimension`;
       const demandKey = 'strict-test-real-http';
       const runId = `${demandKey}-run`;
+      const contractCases: Array<{
+        readonly body: unknown;
+        readonly label: string;
+        readonly operationId: string;
+        readonly status: number;
+      }> = [];
+
+      const invalidPostResponse = await fetch(`${base}/preflight`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          demandKey,
+          projectRoot: fixture.projectRoot,
+          runId,
+          dimension: 'caller-forbidden',
+        }),
+      });
+      contractCases.push({
+        label: 'invalid POST body',
+        operationId: 'preflightStrictTestDimension',
+        status: invalidPostResponse.status,
+        body: await invalidPostResponse.json(),
+      });
+
+      const queryResponse = await fetch(`${base}/runs/${runId}?testMode=true`);
+      contractCases.push({
+        label: 'nonempty GET query',
+        operationId: 'getStrictTestDimensionRun',
+        status: queryResponse.status,
+        body: await queryResponse.json(),
+      });
+
+      const invalidRunIdResponse = await fetch(`${base}/runs/invalid!run/report`);
+      contractCases.push({
+        label: 'invalid runId',
+        operationId: 'getStrictTestDimensionReport',
+        status: invalidRunIdResponse.status,
+        body: await invalidRunIdResponse.json(),
+      });
 
       const preflightResponse = await fetch(`${base}/preflight`, {
         method: 'POST',
@@ -393,6 +586,12 @@ describe('strict-test-dimension real Main private pipeline', () => {
         body: JSON.stringify({ demandKey, projectRoot: fixture.projectRoot, runId }),
       });
       const preflightBody = (await preflightResponse.json()) as Record<string, unknown>;
+      contractCases.push({
+        label: 'normal preflight',
+        operationId: 'preflightStrictTestDimension',
+        status: preflightResponse.status,
+        body: preflightBody,
+      });
       const preflightData = readRecord(preflightBody.data);
       expect(preflightResponse.status).toBe(200);
       expect(preflightData).toMatchObject({
@@ -403,6 +602,12 @@ describe('strict-test-dimension real Main private pipeline', () => {
 
       const notReadyResponse = await fetch(`${base}/runs/${runId}/report`);
       const notReadyBody = (await notReadyResponse.json()) as Record<string, unknown>;
+      contractCases.push({
+        label: 'report before ready',
+        operationId: 'getStrictTestDimensionReport',
+        status: notReadyResponse.status,
+        body: notReadyBody,
+      });
       expect(notReadyResponse.status).toBe(409);
       expect(notReadyBody).toMatchObject({
         success: false,
@@ -421,6 +626,12 @@ describe('strict-test-dimension real Main private pipeline', () => {
 
       const missingResponse = await fetch(`${base}/runs/strict-test-missing-http-run`);
       const missingBody = (await missingResponse.json()) as Record<string, unknown>;
+      contractCases.push({
+        label: 'missing run',
+        operationId: 'getStrictTestDimensionRun',
+        status: missingResponse.status,
+        body: missingBody,
+      });
       expect(missingResponse.status).toBe(404);
       expect(missingBody).toMatchObject({
         success: false,
@@ -444,6 +655,12 @@ describe('strict-test-dimension real Main private pipeline', () => {
       });
       expect(wrongAuthorityResponse.status).toBe(422);
       const wrongAuthorityBody = (await wrongAuthorityResponse.json()) as Record<string, unknown>;
+      contractCases.push({
+        label: 'wrong authority',
+        operationId: 'startStrictTestDimensionRun',
+        status: wrongAuthorityResponse.status,
+        body: wrongAuthorityBody,
+      });
       expect(wrongAuthorityBody).toMatchObject({
         success: false,
         error: {
@@ -468,6 +685,12 @@ describe('strict-test-dimension real Main private pipeline', () => {
         }),
       });
       const startBody = (await startResponse.json()) as Record<string, unknown>;
+      contractCases.push({
+        label: 'normal start',
+        operationId: 'startStrictTestDimensionRun',
+        status: startResponse.status,
+        body: startBody,
+      });
       expect(startResponse.status).toBe(202);
       expect(readRecord(startBody.data)).toMatchObject({
         profile: 'strict-test-dimension',
@@ -482,6 +705,20 @@ describe('strict-test-dimension real Main private pipeline', () => {
       const statusBody = (await statusResponse.json()) as Record<string, unknown>;
       const reportResponse = await fetch(`${base}/runs/${runId}/report`);
       const reportBody = (await reportResponse.json()) as Record<string, unknown>;
+      contractCases.push(
+        {
+          label: 'durable completed reopen',
+          operationId: 'getStrictTestDimensionRun',
+          status: statusResponse.status,
+          body: statusBody,
+        },
+        {
+          label: 'canonical completed report',
+          operationId: 'getStrictTestDimensionReport',
+          status: reportResponse.status,
+          body: reportBody,
+        }
+      );
       expect(statusResponse.status).toBe(200);
       expect(reportResponse.status).toBe(200);
       expectProviderHttpResponse(
@@ -494,6 +731,26 @@ describe('strict-test-dimension real Main private pipeline', () => {
       expectProviderHttpResponse('getStrictTestDimensionReport', reportResponse.status, reportBody);
       for (const body of [preflightBody, startBody, statusBody, reportBody]) {
         expect(findForbiddenPublicFields(body)).toEqual([]);
+      }
+      expect(contractCases.map(({ label, status }) => [label, status])).toEqual([
+        ['invalid POST body', 400],
+        ['nonempty GET query', 400],
+        ['invalid runId', 400],
+        ['normal preflight', 200],
+        ['report before ready', 409],
+        ['missing run', 404],
+        ['wrong authority', 422],
+        ['normal start', 202],
+        ['durable completed reopen', 200],
+        ['canonical completed report', 200],
+      ]);
+      for (const contractCase of contractCases) {
+        expectProviderHttpResponse(
+          contractCase.operationId,
+          contractCase.status,
+          contractCase.body
+        );
+        expect(findForbiddenPublicFields(contractCase.body), contractCase.label).toEqual([]);
       }
 
       const legacyResponse = await fetch(`http://127.0.0.1:${port}/api/v1/jobs/bootstrap`, {

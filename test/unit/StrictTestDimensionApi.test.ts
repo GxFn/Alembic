@@ -175,9 +175,29 @@ describe('strict-test-dimension HTTP API', () => {
     expect(start.status).toBe(400);
     expect(status.status).toBe(400);
     expect(preflight.status).toBe(400);
+    expectProviderResponse('startStrictTestDimensionRun', start.status, start.body);
+    expectProviderResponse('getStrictTestDimensionRun', status.status, status.body);
+    expectProviderResponse('preflightStrictTestDimension', preflight.status, preflight.body);
     expect(service.start).not.toHaveBeenCalled();
     expect(service.preflight).not.toHaveBeenCalled();
     expect(service.status).not.toHaveBeenCalled();
+  });
+
+  test('rejects invalid status and report run ids under their advertised 400 contracts', async () => {
+    const service = createService();
+    const router = createStrictTestDimensionRouter(() => service);
+    const status = await invokeRouter(router, { method: 'GET', path: '/runs/invalid!run' });
+    const report = await invokeRouter(router, {
+      method: 'GET',
+      path: '/runs/invalid!run/report',
+    });
+
+    expect(status.status).toBe(400);
+    expect(report.status).toBe(400);
+    expectProviderResponse('getStrictTestDimensionRun', status.status, status.body);
+    expectProviderResponse('getStrictTestDimensionReport', report.status, report.body);
+    expect(service.status).not.toHaveBeenCalled();
+    expect(service.report).not.toHaveBeenCalled();
   });
 
   test('returns typed not-found and report-not-ready responses', async () => {
@@ -287,6 +307,122 @@ describe('strict-test-dimension HTTP API', () => {
     expect(JSON.stringify(response.body)).not.toMatch(
       /contentBase64|executionContext|runRoot|\/private\//u
     );
+    expectProviderResponse('startStrictTestDimensionRun', response.status, response.body);
+  });
+
+  test('rejects a resolved start result whose public run authority drifts', async () => {
+    const service = createService();
+    const status = await service.status('strict-run-1');
+    service.start.mockResolvedValueOnce({ ...status, runId: 'other-run' });
+
+    const response = await invokeRouter(
+      createStrictTestDimensionRouter(() => service),
+      {
+        method: 'POST',
+        path: '/runs',
+        body: { demandKey: 'demand-1', preflightHash: PREFLIGHT_HASH, runId: 'strict-run-1' },
+      }
+    );
+
+    expect(response.status).toBe(422);
+    expect(response.body).toMatchObject({
+      success: false,
+      error: { code: 'STRICT_TEST_START_RESULT_AUTHORITY_MISMATCH' },
+    });
+    expect(response.body).not.toHaveProperty('data');
+    expectProviderResponse('startStrictTestDimensionRun', response.status, response.body);
+  });
+
+  test('reopens a same-run durable failed checkpoint after start throws', async () => {
+    const service = createService();
+    service.start.mockRejectedValueOnce(
+      new Error('STRICT_TEST_INJECTED_PRIVATE_SERVING_VALIDATED:/private/source.ts')
+    );
+    service.status.mockResolvedValueOnce({
+      schemaVersion: 1,
+      profile: 'strict-test-dimension',
+      demandKey: 'demand-1',
+      runId: 'strict-run-1',
+      phase: 'STRICT_TEST_FAILED',
+      runRoot: '/private/control/strict-test-runs/demand-1/strict-run-1',
+      executionContext: { contentBase64: 'cHJpdmF0ZQ==' },
+      preflight: { preflightHash: PREFLIGHT_HASH },
+      automaticSelection: null,
+      projection: null,
+      terminal: {
+        terminalState: 'STRICT_TEST_FAILED',
+        terminalHash: `sha256:${'f'.repeat(64)}`,
+        failedStage: 'PRIVATE_SERVING_VALIDATED',
+        errorCode: 'STRICT_TEST_INJECTED_PRIVATE_SERVING_VALIDATED',
+        productionFinalized: false,
+        publicRouteChanged: false,
+      },
+      report: { reportHash: `sha256:${'1'.repeat(64)}` },
+      privateEvidenceRefs: ['/private/control/strict-test-runs/demand-1/strict-run-1'],
+    });
+
+    const response = await invokeRouter(
+      createStrictTestDimensionRouter(() => service),
+      {
+        method: 'POST',
+        path: '/runs',
+        body: { demandKey: 'demand-1', preflightHash: PREFLIGHT_HASH, runId: 'strict-run-1' },
+      }
+    );
+
+    expect(service.status).toHaveBeenCalledWith('strict-run-1');
+    expect(response.status).toBe(422);
+    expect(response.body).toMatchObject({
+      success: false,
+      error: { code: 'STRICT_TEST_INJECTED_PRIVATE_SERVING_VALIDATED' },
+      data: {
+        demandKey: 'demand-1',
+        runId: 'strict-run-1',
+        preflightHash: PREFLIGHT_HASH,
+        phase: 'STRICT_TEST_FAILED',
+      },
+    });
+    expect(JSON.stringify(response.body)).not.toMatch(
+      /contentBase64|executionContext|runRoot|\/private\//u
+    );
+    expectProviderResponse('startStrictTestDimensionRun', response.status, response.body);
+  });
+
+  test('does not attach durable failure data when the reopened checkpoint drifts', async () => {
+    const service = createService();
+    service.start.mockRejectedValueOnce(new Error('STRICT_TEST_FAILED'));
+    service.status.mockResolvedValueOnce({
+      schemaVersion: 1,
+      profile: 'strict-test-dimension',
+      demandKey: 'other-demand',
+      runId: 'other-run',
+      phase: 'STRICT_TEST_FAILED',
+      preflight: { preflightHash: PREFLIGHT_HASH },
+      automaticSelection: null,
+      projection: null,
+      terminal: {
+        terminalState: 'STRICT_TEST_FAILED',
+        terminalHash: `sha256:${'f'.repeat(64)}`,
+        failedStage: 'PRIVATE_SERVING_VALIDATED',
+        errorCode: 'STRICT_TEST_FAILED',
+        productionFinalized: false,
+        publicRouteChanged: false,
+      },
+      report: { reportHash: `sha256:${'1'.repeat(64)}` },
+      privateEvidenceRefs: [],
+    });
+
+    const response = await invokeRouter(
+      createStrictTestDimensionRouter(() => service),
+      {
+        method: 'POST',
+        path: '/runs',
+        body: { demandKey: 'demand-1', preflightHash: PREFLIGHT_HASH, runId: 'strict-run-1' },
+      }
+    );
+
+    expect(response.status).toBe(422);
+    expect(response.body).not.toHaveProperty('data');
     expectProviderResponse('startStrictTestDimensionRun', response.status, response.body);
   });
 
