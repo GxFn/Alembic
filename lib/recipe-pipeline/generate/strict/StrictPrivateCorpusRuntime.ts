@@ -1752,6 +1752,7 @@ export async function indexSealAndVerifyStrictPrivateCorpus(input: {
   readonly embedProvider: ConstructorParameters<
     typeof RecipeVectorGenerationRuntime
   >[0]['embedProvider'];
+  readonly onStage?: (stage: 'PRIVATE_CORPUS_SEALED' | 'PRIVATE_INDEXES_VERIFIED') => void;
 }): Promise<StrictPrivateCorpusResultV1> {
   validatePrivateCorpusRevisionCheckpointV1(
     input.content.revisionCheckpointReceipt,
@@ -1787,6 +1788,8 @@ export async function indexSealAndVerifyStrictPrivateCorpus(input: {
       knowledgeService,
       storage: vectorStorage,
     });
+    rehydrated.handle.seal(input.content.rootManifestHash);
+    input.onStage?.('PRIVATE_CORPUS_SEALED');
     const vectorBuild = await vectorRuntime.rebuild('full-build');
     if (
       (vectorBuild.status !== 'activated' && vectorBuild.status !== 'already-active') ||
@@ -1799,7 +1802,8 @@ export async function indexSealAndVerifyStrictPrivateCorpus(input: {
     vectorGenerationId = vectorBuild.generationId;
     vectorManifest = vectorBuild.manifest;
     vectorInspection = vectorBuild.inspection;
-    rehydrated.handle.seal(input.content.rootManifestHash);
+    // 只有真实向量 generation 已激活且 inspection 通过后，才能宣称 index 边界已完成。
+    input.onStage?.('PRIVATE_INDEXES_VERIFIED');
   } finally {
     rehydrated.runtime.close();
   }

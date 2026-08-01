@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
+import { writeFileSync } from 'node:fs';
 import fsp from 'node:fs/promises';
+import type { AddressInfo } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { PipelineStrategy } from '@alembic/agent';
@@ -24,18 +26,25 @@ import {
 } from '@alembic/core/production';
 import { hashCanonicalJson } from '@alembic/core/project-context-foundation';
 import { WorkspaceResolver } from '@alembic/core/workspace';
-import { afterEach, describe, expect, it } from 'vitest';
-import type { ServiceContainer } from '../../lib/injection/ServiceContainer.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { HttpServer } from '../../lib/http/HttpServer.js';
+import {
+  getServiceContainer,
+  type ServiceContainer,
+} from '../../lib/injection/ServiceContainer.js';
 import {
   type MainCertifiedProjectFactsCarrier,
   type MainCertifiedProjectionPayload,
   openMainCertifiedProjectFactsArtifact,
 } from '../../lib/project-facts/CertifiedProjectFactsRuntime.js';
+import * as PublicRouteCas from '../../lib/recipe-pipeline/generate/strict/PublicRouteCas.js';
 import {
   createMainStrictFactQueryFamiliesV1,
   executeMainStrictFactScheduleV1,
 } from '../../lib/recipe-pipeline/generate/strict/StrictFactExecutionRuntime.js';
+import * as StrictFinalizationRuntime from '../../lib/recipe-pipeline/generate/strict/StrictFinalizationRuntime.js';
 import { createStrictTestDimensionOrchestrator } from '../../lib/recipe-pipeline/generate/strict/StrictTestDimensionRuntime.js';
+import { CleanupService } from '../../lib/service/cleanup/CleanupService.js';
 import { StrictSemanticReviewRuntimeFactory } from '../../lib/service/semantic-review/StrictSemanticReviewRuntimeFactory.js';
 import { PACKAGE_ROOT } from '../../lib/shared/package-assets.js';
 import { createRuntimeArtifactManifestFixture } from '../helpers/RuntimeArtifactManifestFixture.js';
@@ -53,19 +62,25 @@ type ReceiptMutation =
   | 'cross-run'
   | 'extra-cell'
   | 'missing'
+  | 'missing-cell'
   | 'partial'
+  | 'reordered-cells'
+  | 'selected-set-hash'
   | 'review-stage';
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   restoreEnv();
   await Promise.all(roots.splice(0).map((root) => fsp.rm(root, { force: true, recursive: true })));
 });
 
 describe('strict-test-dimension real Main private pipeline', () => {
   it('consumes one real AgentService/PipelineStrategy receipt and reopens the private terminal', async () => {
-    const fixture = await createFixture();
+    const fixture = await createFixture({ multiModule: true });
+    const forbiddenSpies = createForbiddenProductionSpies();
     const service = createStrictTestDimensionOrchestrator(fixture.container);
     const before = await treeHash(fixture.dataRoot);
+    const namedProductionBefore = await snapshotNamedProductionSurface(fixture.dataRoot);
     const preflight = await service.preflight({
       demandKey: 'strict-test-pipeline',
       projectRoot: fixture.projectRoot,
@@ -84,7 +99,7 @@ describe('strict-test-dimension real Main private pipeline', () => {
     expect(completed.phase).toBe('STRICT_TEST_COMPLETED_PRIVATE');
     expect(completed.automaticSelection?.selectedDimensionId).toBe(recommendedDimensionId);
     expect(completed.projection?.dimensionStates).toHaveLength(26);
-    expect(completed.projection?.executionCellIds).toHaveLength(1);
+    expect(completed.projection?.executionCellIds).toHaveLength(2);
     if (
       !completed.automaticSelection ||
       !completed.projection ||
@@ -113,7 +128,7 @@ describe('strict-test-dimension real Main private pipeline', () => {
     expect(receipt).toMatchObject({
       runId: 'strict-test-pipeline-run',
       segmentStatus: 'completed',
-      attemptedCount: 1,
+      attemptedCount: 2,
       productionFinalized: false,
       publicRouteChanged: false,
     });
@@ -126,6 +141,8 @@ describe('strict-test-dimension real Main private pipeline', () => {
       },
     });
     expect(await treeHash(fixture.dataRoot)).toBe(before);
+    expect(await snapshotNamedProductionSurface(fixture.dataRoot)).toEqual(namedProductionBefore);
+    assertForbiddenProductionSpiesUntouched(forbiddenSpies);
 
     const reopened = createStrictTestDimensionOrchestrator(fixture.container);
     expect((await reopened.status('strict-test-pipeline-run')).terminal).toEqual(
@@ -134,64 +151,58 @@ describe('strict-test-dimension real Main private pipeline', () => {
     expect((await reopened.report('strict-test-pipeline-run')).reportHash).toBe(
       completed.report?.reportHash
     );
-    const probeOutputPath = process.env.ALEMBIC_STRICT_TEST_MAIN_PROBE_OUTPUT;
-    if (probeOutputPath) {
-      const analysisStageEvidence = readRecord(pipelineExecution.analysisStageEvidence);
-      const reviewStageEvidence = readRecord(pipelineExecution.reviewStageEvidence);
+
+    const ownerPath = path.join(runRoot, 'strict-test-workspace-owner.json');
+    const ownerSource = await fsp.readFile(ownerPath, 'utf8');
+    const owner = JSON.parse(ownerSource) as Record<string, unknown>;
+    try {
       await fsp.writeFile(
-        probeOutputPath,
-        `${JSON.stringify({
-          schemaVersion: 1,
-          profile: 'strict-test-dimension',
-          phase: completed.phase,
-          fullUniverse: {
-            dimensionCount: completed.preflight.dimensionResults.length,
-            cellCount: completed.preflight.cellUniverse.universeCount,
-            fullCellUniverseHash: completed.preflight.fullCellUniverseHash,
-          },
-          automaticSelection: {
-            selectedDimensionId: completed.automaticSelection.selectedDimensionId,
-            selectedCellIds: completed.projection.executionCellIds,
-            automaticSelectionHash: completed.automaticSelection.automaticSelectionHash,
-            projectionHash: completed.projection.projectionHash,
-          },
-          sameRunAgentReceipt: {
-            pipelineExecutionCount: fixture.agent.strictPipelineCount,
-            modelCallCount: fixture.agent.strictModelCallCount,
-            runId: receipt.runId,
-            receiptHash: receipt.receiptHash,
-            analysisStageEvidenceHash: analysisStageEvidence.analysisStageEvidenceHash,
-            reviewStageEvidenceHash: reviewStageEvidence.reviewStageEvidenceHash,
-          },
-          privateChain: {
-            checkpoint: 'strict-test-private-chain.json',
-            finalCoverageReceiptHash: readRecord(privateChain.candidateCoverage).receiptHash,
-            servingManifestHash: readRecord(readRecord(privateChain.finalization).servingManifest)
-              .manifestHash,
-          },
-          terminal: {
-            terminalState: completed.terminal.terminalState,
-            terminalHash: completed.terminal.terminalHash,
-            reportHash: completed.report.reportHash,
-            productionStateUnchanged:
-              completed.terminal.productionBeforeStateHash ===
-              completed.terminal.productionAfterStateHash,
-            publicRouteUnchanged:
-              completed.terminal.publicRouteBeforeStateHash ===
-              completed.terminal.publicRouteAfterStateHash,
-            productionFinalized: completed.terminal.productionFinalized,
-            publicRouteChanged: completed.terminal.publicRouteChanged,
-          },
-          forbiddenPathInvocations: {
-            legacyBootstrap: 0,
-            daemonJob: 0,
-            fullReset: 0,
-            publicationLock: 0,
-            publicCas: 0,
-          },
-        })}\n`
+        ownerPath,
+        `${JSON.stringify({ ...owner, policyHash: sha('tampered-owner-policy') })}\n`
       );
+      await expect(reopened.status('strict-test-pipeline-run')).rejects.toThrow(
+        /STRICT_TEST_PRIVATE_EVIDENCE_INTEGRITY_FAILED/u
+      );
+    } finally {
+      await fsp.writeFile(ownerPath, ownerSource);
     }
+
+    const privateDataRoot = path.join(runRoot, 'private-data');
+    const privateDataBackup = path.join(runRoot, 'private-data.fixture-backup');
+    try {
+      await fsp.rename(privateDataRoot, privateDataBackup);
+      await fsp.symlink(fixture.dataRoot, privateDataRoot, 'dir');
+      await expect(reopened.report('strict-test-pipeline-run')).rejects.toThrow(
+        /STRICT_TEST_PRIVATE_EVIDENCE_INTEGRITY_FAILED/u
+      );
+    } finally {
+      await fsp.unlink(privateDataRoot);
+      await fsp.rename(privateDataBackup, privateDataRoot);
+    }
+
+    const privateChainPath = path.join(runRoot, 'strict-test-private-chain.json');
+    const privateChainBackup = path.join(runRoot, 'strict-test-private-chain.fixture-backup');
+    try {
+      await fsp.rename(privateChainPath, privateChainBackup);
+      await expect(reopened.status('strict-test-pipeline-run')).rejects.toThrow(
+        /STRICT_TEST_PRIVATE_EVIDENCE_INTEGRITY_FAILED/u
+      );
+    } finally {
+      await fsp.rename(privateChainBackup, privateChainPath);
+    }
+
+    const alteredArtifactPath = path.join(privateDataRoot, 'strict-test-altered-artifact');
+    try {
+      await fsp.writeFile(alteredArtifactPath, 'tampered-after-completion\n');
+      await expect(reopened.status('strict-test-pipeline-run')).rejects.toThrow(
+        /STRICT_TEST_PRIVATE_EVIDENCE_INTEGRITY_FAILED/u
+      );
+    } finally {
+      await fsp.unlink(alteredArtifactPath);
+    }
+    expect((await reopened.status('strict-test-pipeline-run')).terminal).toEqual(
+      completed.terminal
+    );
   }, 120_000);
 
   it.each<ReceiptMutation>([
@@ -200,10 +211,13 @@ describe('strict-test-dimension real Main private pipeline', () => {
     'cross-run',
     'authority',
     'extra-cell',
+    'missing-cell',
+    'reordered-cells',
+    'selected-set-hash',
     'analysis-stage',
     'review-stage',
   ])('rejects %s receipt drift before private corpus persistence', async (receiptMutation) => {
-    const fixture = await createFixture({ receiptMutation });
+    const fixture = await createFixture({ multiModule: true, receiptMutation });
     const service = createStrictTestDimensionOrchestrator(fixture.container);
     const productionBefore = await treeHash(fixture.dataRoot);
     const preflight = await service.preflight({
@@ -242,17 +256,344 @@ describe('strict-test-dimension real Main private pipeline', () => {
     });
     expect(await treeHash(fixture.dataRoot)).toBe(productionBefore);
   }, 120_000);
+
+  it.each([
+    'EXPRESSION_SETS_REVIEWED',
+    'PRIVATE_INDEXES_VERIFIED',
+    'PRIVATE_SERVING_VALIDATED',
+  ] as const)('records the exact %s failure boundary and never emits a private completion chain', async (failedStage) => {
+    const fixture = await createFixture();
+    const service = createStrictTestDimensionOrchestrator(fixture.container, {
+      failAtStage: failedStage,
+    });
+    const demandKey = `strict-test-failure-${failedStage.toLowerCase()}`;
+    const runId = `${demandKey}-run`;
+    const productionBefore = await treeHash(fixture.dataRoot);
+    const preflight = await service.preflight({
+      demandKey,
+      projectRoot: fixture.projectRoot,
+      runId,
+    });
+
+    await expect(
+      service.start({
+        demandKey,
+        preflightHash: preflight.preflight.preflightHash,
+        runId,
+      })
+    ).rejects.toThrow(`STRICT_TEST_INJECTED_${failedStage}`);
+
+    expect(await service.status(runId)).toMatchObject({
+      phase: 'STRICT_TEST_FAILED',
+      terminal: { terminalState: 'STRICT_TEST_FAILED', failedStage },
+      report: { failure: { failedStage } },
+    });
+    await expect(
+      fsp.lstat(
+        path.join(
+          fixture.root,
+          'strict-test-runs',
+          demandKey,
+          runId,
+          'strict-test-private-chain.json'
+        )
+      )
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(await treeHash(fixture.dataRoot)).toBe(productionBefore);
+  }, 120_000);
+
+  it('preserves a sealed integrity violation instead of an ordinary private failure on production mutation', async () => {
+    const fixture = await createFixture();
+    let mutationInjected = false;
+    const service = createStrictTestDimensionOrchestrator(fixture.container, {
+      onStage(stage) {
+        if (stage === 'EXPRESSION_SETS_REVIEWED' && !mutationInjected) {
+          mutationInjected = true;
+          writeFileSync(
+            path.join(fixture.dataRoot, '.asd/strict-test-forbidden-mutation'),
+            'forbidden production mutation\n'
+          );
+        }
+      },
+    });
+    const demandKey = 'strict-test-production-mutation';
+    const runId = `${demandKey}-run`;
+    const preflight = await service.preflight({
+      demandKey,
+      projectRoot: fixture.projectRoot,
+      runId,
+    });
+
+    await expect(
+      service.start({
+        demandKey,
+        preflightHash: preflight.preflight.preflightHash,
+        runId,
+      })
+    ).rejects.toThrow('STRICT_TEST_PRODUCTION_MUTATION_DETECTED');
+
+    const runRoot = path.join(fixture.root, 'strict-test-runs', demandKey, runId);
+    expect(await service.status(runId)).toMatchObject({
+      phase: 'PRIVATE_WORKSPACE_READY',
+      terminal: null,
+      report: null,
+    });
+    const violation = JSON.parse(
+      await fsp.readFile(path.join(runRoot, 'strict-test-nonmutation-violation.json'), 'utf8')
+    ) as Record<string, unknown>;
+    expect(violation).toMatchObject({
+      profile: 'strict-test-dimension',
+      demandKey,
+      runId,
+      failedStage: 'PRIVATE_SERVING_VALIDATED',
+      violationHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+    });
+  }, 120_000);
+
+  it('serves real DI preflight/start/status/report shapes and rejects legacy activation before DaemonJob access', async () => {
+    const fixture = await createFixture({ multiModule: true });
+    const forbiddenSpies = createForbiddenProductionSpies();
+    const productionBefore = await treeHash(fixture.dataRoot);
+    const namedProductionBefore = await snapshotNamedProductionSurface(fixture.dataRoot);
+    const globalContainer = getServiceContainer();
+    const previousSingletons = globalContainer.singletons;
+    const previousServices = globalContainer.services;
+    let jobStoreAccessCount = 0;
+    let server: HttpServer | null = null;
+    try {
+      globalContainer.singletons = {
+        ...(fixture.container as unknown as { singletons: Record<string, unknown> }).singletons,
+      };
+      globalContainer.services = {};
+      globalContainer.register('agentService', () => fixture.agent.service);
+      globalContainer.register('strictTestDimensionOrchestrator', () =>
+        createStrictTestDimensionOrchestrator(globalContainer)
+      );
+      globalContainer.register('jobStore', () => {
+        jobStoreAccessCount += 1;
+        throw new Error('STRICT_TEST_LEGACY_DAEMON_JOB_ACCESSED');
+      });
+
+      server = new HttpServer({ host: '127.0.0.1', port: 0 });
+      server.setupMiddleware();
+      server.setupRoutes();
+      server.setupErrorHandling();
+      const listener = await server.start();
+      const port = (listener.address() as AddressInfo).port;
+      const base = `http://127.0.0.1:${port}/api/v1/strict-test-dimension`;
+      const demandKey = 'strict-test-real-http';
+      const runId = `${demandKey}-run`;
+
+      const preflightResponse = await fetch(`${base}/preflight`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ demandKey, projectRoot: fixture.projectRoot, runId }),
+      });
+      const preflightBody = (await preflightResponse.json()) as Record<string, unknown>;
+      const preflightData = readRecord(preflightBody.data);
+      expect(preflightResponse.status).toBe(200);
+      expect(preflightData).toMatchObject({
+        profile: 'strict-test-dimension',
+        phase: 'AUTOMATIC_SELECTION_READY',
+        fullUniverse: { dimensionCount: 26, cellCount: 52 },
+      });
+
+      const notReadyResponse = await fetch(`${base}/runs/${runId}/report`);
+      expect(notReadyResponse.status).toBe(409);
+      expect(await notReadyResponse.json()).toMatchObject({
+        success: false,
+        error: { code: 'STRICT_TEST_REPORT_NOT_READY' },
+      });
+
+      const wrongAuthorityResponse = await fetch(`${base}/runs`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          demandKey,
+          preflightHash: sha('wrong-http-preflight'),
+          runId,
+        }),
+      });
+      expect(wrongAuthorityResponse.status).toBe(422);
+      expect(await wrongAuthorityResponse.json()).toMatchObject({
+        success: false,
+        error: { code: 'STRICT_TEST_START_AUTHORITY_MISMATCH' },
+      });
+
+      const startResponse = await fetch(`${base}/runs`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          demandKey,
+          preflightHash: preflightData.preflightHash,
+          runId,
+        }),
+      });
+      const startBody = (await startResponse.json()) as Record<string, unknown>;
+      expect(startResponse.status).toBe(202);
+      expect(readRecord(startBody.data)).toMatchObject({
+        profile: 'strict-test-dimension',
+        phase: 'STRICT_TEST_COMPLETED_PRIVATE',
+        terminal: { terminalState: 'STRICT_TEST_COMPLETED_PRIVATE' },
+      });
+      expect(
+        readRecord(readRecord(startBody.data).automaticSelection).selectedCellIds
+      ).toHaveLength(2);
+
+      const statusResponse = await fetch(`${base}/runs/${runId}`);
+      const statusBody = (await statusResponse.json()) as Record<string, unknown>;
+      const reportResponse = await fetch(`${base}/runs/${runId}/report`);
+      const reportBody = (await reportResponse.json()) as Record<string, unknown>;
+      expect(statusResponse.status).toBe(200);
+      expect(reportResponse.status).toBe(200);
+      for (const body of [preflightBody, startBody, statusBody, reportBody]) {
+        expect(findForbiddenPublicFields(body)).toEqual([]);
+      }
+
+      const legacyResponse = await fetch(`http://127.0.0.1:${port}/api/v1/jobs/bootstrap`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          demandKey,
+          profile: 'strict-test-dimension',
+          runId,
+        }),
+      });
+      expect(legacyResponse.status).toBe(400);
+      expect(await legacyResponse.json()).toMatchObject({
+        success: false,
+        error: { code: 'STRICT_TEST_LEGACY_ACTIVATION_FORBIDDEN' },
+      });
+      expect(jobStoreAccessCount).toBe(0);
+      expect(await treeHash(fixture.dataRoot)).toBe(productionBefore);
+      expect(await snapshotNamedProductionSurface(fixture.dataRoot)).toEqual(namedProductionBefore);
+      assertForbiddenProductionSpiesUntouched(forbiddenSpies);
+
+      const startData = readRecord(startBody.data);
+      const terminal = readRecord(startData.terminal);
+      const reportData = readRecord(reportBody.data);
+      const probeOutputPath = process.env.ALEMBIC_STRICT_TEST_MAIN_PROBE_OUTPUT;
+      if (probeOutputPath) {
+        await fsp.writeFile(
+          probeOutputPath,
+          `${JSON.stringify({
+            schemaVersion: 2,
+            profile: 'strict-test-dimension',
+            http: {
+              preflightStatus: preflightResponse.status,
+              startStatus: startResponse.status,
+              statusStatus: statusResponse.status,
+              reportStatus: reportResponse.status,
+              reportBeforeStartStatus: notReadyResponse.status,
+              wrongAuthorityStatus: wrongAuthorityResponse.status,
+              legacyActivationStatus: legacyResponse.status,
+            },
+            fullUniverse: preflightData.fullUniverse,
+            automaticSelection: startData.automaticSelection,
+            sameRunAgentReceipt: {
+              pipelineExecutionCount: fixture.agent.strictPipelineCount,
+              modelCallCount: fixture.agent.strictModelCallCount,
+              runId,
+            },
+            terminal: {
+              terminalState: terminal.terminalState,
+              terminalHash: terminal.terminalHash,
+              reportHash: reportData.reportHash,
+              productionStateUnchanged: true,
+              publicRouteUnchanged: true,
+              productionFinalized: terminal.productionFinalized,
+              publicRouteChanged: terminal.publicRouteChanged,
+            },
+            productionSurface: namedProductionBefore,
+            publicLeakFindings: [preflightBody, startBody, statusBody, reportBody].flatMap((body) =>
+              findForbiddenPublicFields(body)
+            ),
+            forbiddenPathObservations: {
+              legacyActivationRejectedBeforeDispatch: legacyResponse.status === 400,
+              daemonJobServiceAccessCount: jobStoreAccessCount,
+              fullResetCallCount: forbiddenSpies.fullReset.mock.calls.length,
+              publicationLockCallCount: forbiddenSpies.publicationLock.mock.calls.length,
+              publicCasCallCount: forbiddenSpies.publicCas.mock.calls.length,
+            },
+          })}\n`
+        );
+      }
+    } finally {
+      await server?.stop();
+      globalContainer.singletons = previousSingletons;
+      globalContainer.services = previousServices;
+    }
+  }, 120_000);
+
+  it.each([
+    'provider',
+    'manifest',
+    'source',
+    'private-policy',
+  ] as const)('revalidates fresh %s authority before automatic selection and every Agent call', async (drift) => {
+    const fixture = await createFixture();
+    const service = createStrictTestDimensionOrchestrator(fixture.container);
+    const demandKey = `strict-test-${drift}-drift`;
+    const runId = `${demandKey}-run`;
+    const preflight = await service.preflight({
+      demandKey,
+      projectRoot: fixture.projectRoot,
+      runId,
+    });
+    const planSelectionCount = fixture.agent.planSelectionCount;
+    if (drift === 'provider') {
+      fixture.provider.model = 'fixture-reviewer-drifted';
+    } else if (drift === 'manifest') {
+      await fsp.appendFile(process.env.ALEMBIC_RUNTIME_ARTIFACT_MANIFEST_PATH as string, ' ');
+    } else if (drift === 'source') {
+      await fsp.appendFile(
+        path.join(fixture.projectRoot, 'src/index.ts'),
+        '\nexport const drift = true;'
+      );
+    } else {
+      const ownerPath = path.join(
+        fixture.root,
+        'strict-test-runs',
+        demandKey,
+        runId,
+        'strict-test-workspace-owner.json'
+      );
+      const owner = JSON.parse(await fsp.readFile(ownerPath, 'utf8')) as {
+        policyHash: string;
+      };
+      owner.policyHash = sha('private-policy-drift');
+      await fsp.writeFile(ownerPath, `${JSON.stringify(owner)}\n`);
+    }
+
+    await expect(
+      service.start({
+        demandKey,
+        preflightHash: preflight.preflight.preflightHash,
+        runId,
+      })
+    ).rejects.toThrow(/STRICT_TEST/u);
+    expect(fixture.agent.planSelectionCount).toBe(planSelectionCount);
+    expect(fixture.agent.strictPipelineCount).toBe(0);
+    expect(fixture.agent.strictModelCallCount).toBe(0);
+  }, 120_000);
 });
 
-async function createFixture(options: { receiptMutation?: ReceiptMutation } = {}) {
+interface FixtureOptions {
+  readonly multiModule?: boolean;
+  readonly receiptMutation?: ReceiptMutation;
+}
+
+async function createFixture(options: FixtureOptions = {}) {
   const createdRoot = await fsp.mkdtemp(path.join(os.tmpdir(), 'alembic-strict-test-main-'));
   // macOS 的 /var 是 /private/var 的符号链接；生产门禁比较物理项目根，因此夹具也先冻结 realpath。
   const root = await fsp.realpath(createdRoot);
   roots.push(root);
   const projectRoot = path.join(root, 'project');
+  const secondProjectRoot = path.join(root, 'second-project');
   const dataRoot = path.join(root, 'data');
   await fsp.mkdir(path.join(projectRoot, 'src'), { recursive: true });
   await fsp.mkdir(path.join(dataRoot, '.asd'), { recursive: true });
+  await seedProductionSurface(dataRoot);
   await fsp.writeFile(
     path.join(projectRoot, 'src/index.ts'),
     [
@@ -269,14 +610,28 @@ async function createFixture(options: { receiptMutation?: ReceiptMutation } = {}
       '}',
     ].join('\n')
   );
+  if (options.multiModule) {
+    await fsp.mkdir(path.join(secondProjectRoot, 'lib'), { recursive: true });
+    await fsp.writeFile(
+      path.join(secondProjectRoot, 'lib/second.ts'),
+      [
+        'export interface SecondResult<T> { readonly value: T; }',
+        'export function loadSecond(): SecondResult<number> { return { value: 2 }; }',
+      ].join('\n')
+    );
+  }
   const folderId = 'strict-test-folder';
+  const secondFolderId = 'strict-test-folder-second';
   const projectScope = createProjectDescriptor({
     controlRoot: root,
     dataRoot,
     projectId: 'strict-test-project',
     projectScopeId: 'strict-test-scope',
     currentFolderId: folderId,
-    folders: [{ id: folderId, path: projectRoot }],
+    folders: [
+      { id: folderId, path: projectRoot },
+      ...(options.multiModule ? [{ id: secondFolderId, path: secondProjectRoot }] : []),
+    ],
   });
   const resolver = new WorkspaceResolver({ projectRoot, projectScope, currentFolderId: folderId });
   const runtimeArtifacts = await createRuntimeArtifactManifestFixture({
@@ -288,7 +643,7 @@ async function createFixture(options: { receiptMutation?: ReceiptMutation } = {}
     },
   });
   const provider = new ControlledProvider();
-  const agent = createRealAgentService(provider, options.receiptMutation);
+  const agent = createRealAgentService(provider, options);
   const embedProvider = createEmbedProvider();
   const services = new Map<string, unknown>([['agentService', agent.service]]);
   const container = {
@@ -308,11 +663,11 @@ async function createFixture(options: { receiptMutation?: ReceiptMutation } = {}
   process.env.ALEMBIC_AI_PROVIDER = provider.name;
   process.env.ALEMBIC_AI_MODEL = provider.model;
   process.env.ALEMBIC_RUNTIME_ARTIFACT_MANIFEST_PATH = runtimeArtifacts.manifestPath;
-  return { root, projectRoot, dataRoot, container, agent };
+  return { root, projectRoot, dataRoot, container, agent, provider };
 }
 
-function createRealAgentService(provider: ControlledProvider, receiptMutation?: ReceiptMutation) {
-  const counters = { strictPipelineCount: 0, strictModelCallCount: 0 };
+function createRealAgentService(provider: ControlledProvider, options: FixtureOptions) {
+  const counters = { planSelectionCount: 0, strictPipelineCount: 0, strictModelCallCount: 0 };
   const service = new AgentService({
     runtimeBuilder: {
       build(profile, buildOptions) {
@@ -322,6 +677,7 @@ function createRealAgentService(provider: ControlledProvider, receiptMutation?: 
           return {
             id: runtimeId,
             execute: async (message, runOptions) => {
+              counters.planSelectionCount += 1;
               const metadata = readRecord(message.metadata);
               const reply =
                 metadata.task === 'strict-independent-value-review'
@@ -398,12 +754,12 @@ function createRealAgentService(provider: ControlledProvider, receiptMutation?: 
                 { cause: error }
               );
             }
-            if (!receiptMutation || !result.strictTestExecutionReceipt) {
+            if (!options.receiptMutation || !result.strictTestExecutionReceipt) {
               return result;
             }
             const mutated = mutateStrictTestReceipt(
               result.strictTestExecutionReceipt,
-              receiptMutation
+              options.receiptMutation
             );
             if (!mutated) {
               const { strictTestExecutionReceipt: _receipt, ...withoutReceipt } = result;
@@ -420,6 +776,9 @@ function createRealAgentService(provider: ControlledProvider, receiptMutation?: 
   });
   return {
     service,
+    get planSelectionCount() {
+      return counters.planSelectionCount;
+    },
     get strictPipelineCount() {
       return counters.strictPipelineCount;
     },
@@ -447,6 +806,15 @@ function mutateStrictTestReceipt(
   }
   if (mutation === 'extra-cell') {
     return { ...receipt, selectedCellIds: [...receipt.selectedCellIds, 'module:extra::extra'] };
+  }
+  if (mutation === 'missing-cell') {
+    return { ...receipt, selectedCellIds: receipt.selectedCellIds.slice(1) };
+  }
+  if (mutation === 'reordered-cells') {
+    return { ...receipt, selectedCellIds: [...receipt.selectedCellIds].reverse() };
+  }
+  if (mutation === 'selected-set-hash') {
+    return { ...receipt, selectedCellSetHash: sha('tampered-selected-cell-set') };
   }
   const pipelineExecution = receipt.pipelineExecution;
   if (!pipelineExecution) {
@@ -479,7 +847,12 @@ function mutateStrictTestReceipt(
 interface StrictPort {
   readAnalysisEpoch(): StrictSnapshot;
   buildProducerInput(): {
-    readonly evidence: { readonly entries: readonly { readonly evidenceEntryId: string }[] };
+    readonly evidence: {
+      readonly entries: readonly {
+        readonly evidenceEntryId: string;
+        readonly relativePath: string;
+      }[];
+    };
     readonly lineages: readonly { readonly hypothesis: { readonly hypothesisId: string } }[];
   };
   readonly eligibleCells: readonly {
@@ -719,9 +1092,7 @@ function buildFixtureAnalystEpoch(snapshot: StrictSnapshot, authority: FixtureAn
 function buildFixtureProducerOutput(port: StrictPort) {
   const producer = port.buildProducerInput();
   const lineage = producer.lineages[0];
-  const cell = port.eligibleCells[0];
-  const evidenceEntryId = producer.evidence.entries[0]?.evidenceEntryId;
-  if (!lineage || !cell || !evidenceEntryId) {
+  if (!lineage || port.eligibleCells.length === 0 || producer.evidence.entries.length === 0) {
     throw new Error('STRICT_TEST_FIXTURE_PRODUCER_AUTHORITY_REQUIRED');
   }
   const exclusion = 'Do not bypass the strict result boundary.';
@@ -729,8 +1100,8 @@ function buildFixtureProducerOutput(port: StrictPort) {
     expressionSets: [
       {
         hypothesisId: lineage.hypothesis.hypothesisId,
-        proposals: [
-          {
+        proposals: port.eligibleCells.map((cell) => {
+          return {
             expressionId: `expression-${cell.moduleId}-${cell.dimensionId}`,
             kind: 'draft',
             authored: {
@@ -756,10 +1127,10 @@ function buildFixtureProducerOutput(port: StrictPort) {
               },
               negativeIntent: [exclusion],
               scope: { moduleIds: [cell.moduleId], dimensionIds: [cell.dimensionId] },
-              evidenceEntryIds: [evidenceEntryId],
+              evidenceEntryIds: producer.evidence.entries.map((entry) => entry.evidenceEntryId),
             },
-          },
-        ],
+          };
+        }),
         zeroDisposition: null,
       },
     ],
@@ -807,7 +1178,7 @@ function independentReview(prompt: string) {
 
 class ControlledProvider {
   readonly name = 'fixture';
-  readonly model = 'fixture-reviewer';
+  model = 'fixture-reviewer';
 
   async chatWithTools(prompt: string) {
     const parsed = JSON.parse(prompt) as {
@@ -969,6 +1340,76 @@ function createEmbedProvider() {
   };
 }
 
+async function seedProductionSurface(dataRoot: string): Promise<void> {
+  const files = new Map<string, string>([
+    ['.asd/alembic.db', 'seeded-production-sqlite-bytes\n'],
+    ['.asd/alembic.db-wal', 'seeded-production-wal-bytes\n'],
+    ['.asd/alembic.db-shm', 'seeded-production-shm-bytes\n'],
+    ['.asd/config.json', '{"profile":"production-seed"}\n'],
+    ['.asd/context/recipe-publications/active.json', '{"snapshotId":"seed-public"}\n'],
+    ['.asd/context/recipe-publications/marker.json', '{"status":"seeded"}\n'],
+    [
+      '.asd/context/recipe-publications/snapshots/seed-public/manifest.json',
+      '{"schemaVersion":1,"snapshotId":"seed-public"}\n',
+    ],
+    [
+      '.asd/context/recipe-publications/snapshots/seed-public/public-bundle.json',
+      '{"recipes":["seed-recipe"]}\n',
+    ],
+    ['.asd/vector-index/current.json', '{"generationId":"seed-index"}\n'],
+    ['.asd/sessions/seed-session.json', '{"sessionId":"seed-session"}\n'],
+    ['Alembic/Recipe/seed-recipe.md', '# Seed production recipe\n'],
+    ['Alembic/ref/seed-recipe.json', '{"recipeId":"seed-recipe"}\n'],
+  ]);
+  for (const [relativePath, bytes] of files) {
+    const target = path.join(dataRoot, relativePath);
+    await fsp.mkdir(path.dirname(target), { recursive: true });
+    await fsp.writeFile(target, bytes);
+  }
+}
+
+const NAMED_PRODUCTION_PATHS = [
+  '.asd/alembic.db',
+  '.asd/alembic.db-wal',
+  '.asd/alembic.db-shm',
+  '.asd/config.json',
+  '.asd/context/recipe-publications/active.json',
+  '.asd/context/recipe-publications/marker.json',
+  '.asd/context/recipe-publications/snapshots/seed-public/manifest.json',
+  '.asd/context/recipe-publications/snapshots/seed-public/public-bundle.json',
+  '.asd/vector-index/current.json',
+  '.asd/sessions/seed-session.json',
+  'Alembic/Recipe/seed-recipe.md',
+  'Alembic/ref/seed-recipe.json',
+] as const;
+
+async function snapshotNamedProductionSurface(dataRoot: string) {
+  return Promise.all(
+    NAMED_PRODUCTION_PATHS.map(async (relativePath) => ({
+      relativePath,
+      byteHash: createHash('sha256')
+        .update(await fsp.readFile(path.join(dataRoot, relativePath)))
+        .digest('hex'),
+    }))
+  );
+}
+
+function createForbiddenProductionSpies() {
+  return {
+    fullReset: vi.spyOn(CleanupService.prototype, 'fullReset'),
+    publicationLock: vi.spyOn(StrictFinalizationRuntime, 'acquireStrictPublicationOperationLock'),
+    publicCas: vi.spyOn(PublicRouteCas, 'commitPreparedPublicRoute'),
+  };
+}
+
+function assertForbiddenProductionSpiesUntouched(
+  spies: ReturnType<typeof createForbiddenProductionSpies>
+): void {
+  expect(spies.fullReset).not.toHaveBeenCalled();
+  expect(spies.publicationLock).not.toHaveBeenCalled();
+  expect(spies.publicCas).not.toHaveBeenCalled();
+}
+
 async function treeHash(root: string) {
   const rows: Array<{ path: string; hash: string }> = [];
   async function visit(relativePath: string): Promise<void> {
@@ -997,6 +1438,40 @@ function readRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
+}
+
+function findForbiddenPublicFields(value: unknown, location = '$'): string[] {
+  const forbidden: string[] = [];
+  if (typeof value === 'string') {
+    if (value.startsWith('/Users/') || value.startsWith('/private/') || value.startsWith('/tmp/')) {
+      forbidden.push(location);
+    }
+    return forbidden;
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap((row, index) => findForbiddenPublicFields(row, `${location}[${index}]`));
+  }
+  if (!value || typeof value !== 'object') {
+    return forbidden;
+  }
+  const forbiddenKeys = new Set([
+    'contentBase64',
+    'credentialLocationSymbol',
+    'executionContext',
+    'privateDataRoot',
+    'projectRoot',
+    'runRoot',
+    'semanticReviewTrust',
+    'trustPolicy',
+  ]);
+  for (const [key, nested] of Object.entries(value)) {
+    const next = `${location}.${key}`;
+    if (forbiddenKeys.has(key)) {
+      forbidden.push(next);
+    }
+    forbidden.push(...findForbiddenPublicFields(nested, next));
+  }
+  return forbidden;
 }
 
 function sha(value: string): `sha256:${string}` {

@@ -4,7 +4,11 @@ import path from 'node:path';
 import type { AgentService } from '@alembic/agent/service';
 import { readAlembicMigrationBundleManifest } from '@alembic/core/database';
 import { baseDimensions } from '@alembic/core/host-agent-workflows';
-import type { StrictColdStartConfigProjectionInputV1 } from '@alembic/core/plans';
+import {
+  createResolvedStrictColdStartConfigReceiptV1,
+  type StrictColdStartConfigProjectionInputV1,
+  validateStrictTestPreflightV1,
+} from '@alembic/core/plans';
 import type { StrictTestFailureStageV1 } from '@alembic/core/production';
 import {
   type CanonicalSha256,
@@ -91,14 +95,36 @@ interface StrictTestPreparedExecutionContextV1 {
   readonly credentialLocationSymbol: string;
 }
 
+interface StrictTestPreflightAuthorityObservationV1 {
+  readonly baseResolver: WorkspaceResolver;
+  readonly carrier: MainCertifiedProjectFactsState;
+  readonly currentBindings: StrictTestPreparedPreflightV1['currentBindings'];
+  readonly modelHash: CanonicalSha256;
+  readonly policy: Awaited<ReturnType<typeof resolveStrictTestPrivateWorkspacePolicy>>;
+  readonly projection: MainCertifiedProjectionPayload;
+  readonly reviewer: StrictTestPreparedExecutionContextV1['reviewer'];
+  readonly runtimeArtifactReceipt: StrictTestPreparedExecutionContextV1['runtimeArtifactReceipt'];
+  readonly runtimeConfigReceipt: RuntimeConfigLoadReceiptV1;
+  readonly strictConfig: StrictColdStartConfigProjectionInputV1;
+}
+
 export function createStrictTestDimensionOrchestrator(
-  container: ServiceContainer
+  container: ServiceContainer,
+  instrumentation?: StrictTestRuntimeInstrumentationV1
 ): StrictTestDimensionOrchestrator {
-  return new StrictTestDimensionOrchestrator(createStrictTestDependencies(container));
+  return new StrictTestDimensionOrchestrator(
+    createStrictTestDependencies(container, instrumentation)
+  );
+}
+
+export interface StrictTestRuntimeInstrumentationV1 {
+  readonly failAtStage?: StrictTestFailureStageV1;
+  readonly onStage?: (stage: StrictTestFailureStageV1) => void;
 }
 
 export function createStrictTestDependencies(
-  container: ServiceContainer
+  container: ServiceContainer,
+  instrumentation?: StrictTestRuntimeInstrumentationV1
 ): StrictTestDimensionOrchestratorDependencies {
   const analysisScope = resolveProjectScopeAnalysisContext(container);
   const controlRoot = path.resolve(analysisScope.controlRoot ?? analysisScope.projectRoot);
@@ -109,7 +135,8 @@ export function createStrictTestDependencies(
     findRunRoot: async (runId) => findRunRoot(controlRoot, runId),
     preparePreflight: (input) => prepareStrictTestPreflight(container, input),
     revalidate: (checkpoint) => revalidateStrictTestPreflight(container, checkpoint),
-    execute: (input) => executeStrictTestPrivateChain(container, input),
+    execute: (input) => executeStrictTestPrivateChain(container, input, instrumentation),
+    verifyCompletedRun: (checkpoint) => verifyStrictTestCompletedRun(container, checkpoint),
     observeNonMutation: async () => ({
       productionStateHash: await snapshotProductionState(analysisScope.dataRoot),
       publicRouteStateHash: await snapshotPublicRouteState(analysisScope.dataRoot),
@@ -126,6 +153,89 @@ async function prepareStrictTestPreflight(
   container: ServiceContainer,
   input: StrictTestPreflightRequestV1
 ): Promise<StrictTestPreparedPreflightV1> {
+  const observed = await observeStrictTestPreflightAuthority(container, input);
+  const planning = await compileStrictColdStartPlanning({
+    agentService: container.get('agentService') as Pick<AgentService, 'run'>,
+    authorization: {
+      factQueryFamilies: createMainStrictFactQueryFamiliesV1(),
+      modelHash: observed.modelHash,
+      promptHash: observed.currentBindings.promptSopHash,
+      strictConfig: observed.strictConfig,
+    },
+    carrier: observed.carrier,
+    projection: observed.projection,
+  });
+  const executionContext: StrictTestPreparedExecutionContextV1 = {
+    schemaVersion: 1,
+    carrier: observed.carrier,
+    projection: observed.projection,
+    certifiedPlanningFacts: planning.certifiedPlanningFacts,
+    // Agent strict-test authority绑定的是 Core 编译计划中已验收的 cognition lineage，
+    // 不是 Main 对原始 cognition envelope 的旁路摘要。
+    planCognitionHash: planning.compiledPlan.execution.planCognitionHash as CanonicalSha256,
+    configReceipt: planning.configReceipt,
+    runtimeConfigReceipt: observed.runtimeConfigReceipt,
+    runtimeArtifactReceipt: observed.runtimeArtifactReceipt,
+    modelHash: observed.modelHash,
+    reviewer: observed.reviewer,
+    acceptedMigrationBundleSemanticHash: hashCanonicalJson(readAlembicMigrationBundleManifest()),
+    credentialLocationSymbol: 'config-ref:strict-test-private-reviewer',
+  };
+  return {
+    compiledPlan: planning.compiledPlan,
+    currentBindings: observed.currentBindings,
+    executionContext,
+    privateEvidenceRefs: [
+      'strict-test:certified-project-facts',
+      'strict-test:runtime-artifact-receipt',
+      'strict-test:private-workspace-policy',
+    ],
+  };
+}
+
+async function revalidateStrictTestPreflight(
+  container: ServiceContainer,
+  checkpoint: StrictTestDimensionCheckpointV1
+) {
+  try {
+    const observed = await observeStrictTestPreflightAuthority(
+      container,
+      {
+        demandKey: checkpoint.demandKey,
+        projectRoot: checkpoint.projectRoot,
+        runId: checkpoint.runId,
+      },
+      {
+        generatedAt: checkpoint.currentBindings.generatedAt,
+        validUntil: checkpoint.currentBindings.validUntil,
+      }
+    );
+    const current = validateStrictTestPreflightV1(
+      checkpoint.compiledPlan,
+      observed.currentBindings
+    );
+    if (
+      current.bindingHash !== checkpoint.preflight.bindingHash ||
+      current.driftInvalidationHash !== checkpoint.preflight.driftInvalidationHash ||
+      current.preflightHash !== checkpoint.preflight.preflightHash
+    ) {
+      throw new Error('semantic-binding-mismatch');
+    }
+    return observed.currentBindings;
+  } catch (error: unknown) {
+    const detail = error instanceof Error ? error.message.split(':', 1)[0] : 'unknown';
+    throw new Error(`STRICT_TEST_PREFLIGHT_RUNTIME_DRIFT:${detail}`, { cause: error });
+  }
+}
+
+async function observeStrictTestPreflightAuthority(
+  container: ServiceContainer,
+  input: StrictTestPreflightRequestV1,
+  timestamps: { readonly generatedAt: string; readonly validUntil: string | null } = {
+    generatedAt: new Date().toISOString(),
+    validUntil: null,
+  }
+): Promise<StrictTestPreflightAuthorityObservationV1> {
   const analysisScope = resolveProjectScopeAnalysisContext(container);
   const projectRoot = await fsp.realpath(path.resolve(input.projectRoot));
   if (projectRoot !== (await fsp.realpath(analysisScope.projectRoot))) {
@@ -145,10 +255,8 @@ async function prepareStrictTestPreflight(
     authority: workspaceAuthority,
     baseResolver,
   });
-
-  const privateAnalysisScope = { ...analysisScope, dataRoot: workspace.privateDataRoot };
   const carrier = await captureMainCertifiedProjectFacts({
-    analysisScope: privateAnalysisScope,
+    analysisScope: { ...analysisScope, dataRoot: workspace.privateDataRoot },
     dimensions: [...baseDimensions],
     projectRoot,
     source: 'alembic-main-strict-test',
@@ -170,25 +278,7 @@ async function prepareStrictTestPreflight(
   const promptHash = runtimeArtifacts.artifactBindings
     .promptSopEvaluatorBundleHash as CanonicalSha256;
   const strictConfig = strictTestConfig(runtimeArtifacts.receipt.receiptHash as CanonicalSha256);
-  const reviewer = {
-    calibrationReceiptHash: hashCanonicalJson({ promptHash, rubric: 'strict-test-private-v1' }),
-    identity: {
-      provider: provider.name,
-      model: provider.model,
-      method: 'durable-semantic-review-v5',
-    },
-  };
-  const planning = await compileStrictColdStartPlanning({
-    agentService: container.get('agentService') as Pick<AgentService, 'run'>,
-    authorization: {
-      factQueryFamilies: createMainStrictFactQueryFamiliesV1(),
-      modelHash,
-      promptHash,
-      strictConfig,
-    },
-    carrier,
-    projection: reopened.projection,
-  });
+  const configReceipt = createResolvedStrictColdStartConfigReceiptV1(strictConfig);
   const runtimeConfigReceipt = createRuntimeConfigLoadReceiptV1({
     projectRoot,
     workspaceResolver: baseResolver,
@@ -204,6 +294,14 @@ async function prepareStrictTestPreflight(
   }
   const languages = unique(reopened.projection.files.map((file) => file.language));
   const factFamilies = createMainStrictFactQueryFamiliesV1();
+  const reviewer = {
+    calibrationReceiptHash: hashCanonicalJson({ promptHash, rubric: 'strict-test-private-v1' }),
+    identity: {
+      provider: provider.name,
+      model: provider.model,
+      method: 'durable-semantic-review-v5',
+    },
+  };
   const currentBindings = {
     schemaVersion: 1 as const,
     profile: 'strict-test-dimension' as const,
@@ -225,7 +323,7 @@ async function prepareStrictTestPreflight(
     certifiedProjectFactsSourceArtifactHash: carrier.certificationBindingHash as CanonicalSha256,
     certifiedProjectFactsSourceVectorHash: carrier.sourceVectorHash as CanonicalSha256,
     certifiedProjectFactsConsumerReceiptHash: consumerReceipt.receiptHash as CanonicalSha256,
-    strictConfigReceiptHash: planning.configReceipt.loadHash,
+    strictConfigReceiptHash: configReceipt.loadHash,
     providerModelHash: modelHash,
     promptSopHash: promptHash,
     factQueryBackendHash: hashCanonicalJson(factFamilies),
@@ -238,70 +336,27 @@ async function prepareStrictTestPreflight(
     publicRouteBeforeStateHash,
     officialRecipeBeforeStateHash,
     privateWorkspacePolicyHash: policy.policyHash as CanonicalSha256,
-    generatedAt: new Date().toISOString(),
-    validUntil: null,
-  };
-  const executionContext: StrictTestPreparedExecutionContextV1 = {
-    schemaVersion: 1,
-    carrier,
-    projection: reopened.projection,
-    certifiedPlanningFacts: planning.certifiedPlanningFacts,
-    // Agent strict-test authority绑定的是 Core 编译计划中已验收的 cognition lineage，
-    // 不是 Main 对原始 cognition envelope 的旁路摘要。
-    planCognitionHash: planning.compiledPlan.execution.planCognitionHash as CanonicalSha256,
-    configReceipt: planning.configReceipt,
-    runtimeConfigReceipt,
-    runtimeArtifactReceipt: runtimeArtifacts.receipt,
-    modelHash,
-    reviewer,
-    acceptedMigrationBundleSemanticHash: hashCanonicalJson(readAlembicMigrationBundleManifest()),
-    credentialLocationSymbol: 'config-ref:strict-test-private-reviewer',
+    generatedAt: timestamps.generatedAt,
+    validUntil: timestamps.validUntil,
   };
   return {
-    compiledPlan: planning.compiledPlan,
+    baseResolver,
+    carrier,
     currentBindings,
-    executionContext,
-    privateEvidenceRefs: [
-      'strict-test:certified-project-facts',
-      'strict-test:runtime-artifact-receipt',
-      'strict-test:private-workspace-policy',
-    ],
+    modelHash,
+    policy,
+    projection: reopened.projection,
+    reviewer,
+    runtimeArtifactReceipt: runtimeArtifacts.receipt,
+    runtimeConfigReceipt,
+    strictConfig,
   };
-}
-
-async function revalidateStrictTestPreflight(
-  container: ServiceContainer,
-  checkpoint: StrictTestDimensionCheckpointV1
-) {
-  const analysisScope = resolveProjectScopeAnalysisContext(container);
-  const productionStateHash = await snapshotProductionState(analysisScope.dataRoot);
-  const publicRouteStateHash = await snapshotPublicRouteState(analysisScope.dataRoot);
-  const policy = await resolveStrictTestPrivateWorkspacePolicy(
-    await strictTestWorkspaceAuthority(analysisScope, checkpoint.demandKey, checkpoint.runId)
-  );
-  const context = readExecutionContext(checkpoint.executionContext);
-  const captured = await captureMainCertifiedProjectFacts({
-    analysisScope: { ...analysisScope, dataRoot: policy.privateDataRoot },
-    dimensions: [...baseDimensions],
-    projectRoot: checkpoint.projectRoot,
-    source: 'alembic-main-strict-test',
-  });
-  if (
-    productionStateHash !== checkpoint.preflight.productionBeforeStateHash ||
-    publicRouteStateHash !== checkpoint.preflight.publicRouteBeforeStateHash ||
-    policy.policyHash !== checkpoint.preflight.privateWorkspacePolicyHash ||
-    captured.sourceVectorHash !== checkpoint.preflight.sourceRevisionVectorHash ||
-    captured.factsContentHash !== checkpoint.preflight.certifiedProjectFactsContentHash ||
-    captured.certificationBindingHash !== context.carrier.certificationBindingHash
-  ) {
-    throw new Error('STRICT_TEST_PREFLIGHT_RUNTIME_DRIFT');
-  }
-  return checkpoint.currentBindings;
 }
 
 async function executeStrictTestPrivateChain(
   container: ServiceContainer,
-  input: Parameters<StrictTestDimensionOrchestratorDependencies['execute']>[0]
+  input: Parameters<StrictTestDimensionOrchestratorDependencies['execute']>[0],
+  instrumentation?: StrictTestRuntimeInstrumentationV1
 ) {
   const context = readExecutionContext(input.executionContext);
   const analysisScope = resolveProjectScopeAnalysisContext(container);
@@ -339,6 +394,8 @@ async function executeStrictTestPrivateChain(
     sourceRevisionVectorHash: input.compiledPlan.execution.sourceRevisionVectorHash,
   });
   const semanticReviewCheckpoint = await createPrivateSemanticReviewCheckpoint(input.runRoot);
+  enterStrictTestStage(input, instrumentation, 'PLAN_COMPILED');
+  enterStrictTestStage(input, instrumentation, 'FACT_SCHEDULE_FROZEN');
   const analysis = await executeStrictAnalysisAndProduction({
     agentService: container.get('agentService') as Pick<AgentService, 'run'>,
     artifact,
@@ -364,6 +421,7 @@ async function executeStrictTestPrivateChain(
     },
   });
   const agentReceipt = analysis.strictTestExecutionReceipt;
+  enterStrictTestStage(input, instrumentation, 'ANALYSIS_FIXPOINT_CLOSED');
   if (!agentReceipt || agentReceipt.segmentStatus !== 'completed') {
     throw stageError('ANALYSIS_FIXPOINT_CLOSED', 'STRICT_TEST_AGENT_RECEIPT_NOT_COMPLETED');
   }
@@ -383,6 +441,7 @@ async function executeStrictTestPrivateChain(
       return Boolean(moduleId && dimensionId && receiptCellIds.has(`${moduleId}::${dimensionId}`));
     })
   );
+  enterStrictTestStage(input, instrumentation, 'EXPRESSION_SETS_REVIEWED');
   const journalRoot = path.join(input.runRoot, 'private-chain-journal');
   const journal = await StrictProductionJournal.open({
     operationRoot: journalRoot,
@@ -446,6 +505,7 @@ async function executeStrictTestPrivateChain(
       embedProvider: container.singletons._embedProvider as Parameters<
         typeof indexSealAndVerifyStrictPrivateCorpus
       >[0]['embedProvider'],
+      onStage: (stage) => enterStrictTestStage(input, instrumentation, stage),
     });
     const candidateDataManifestHash = hashCanonicalJson({
       profile: 'strict-test-dimension',
@@ -457,6 +517,7 @@ async function executeStrictTestPrivateChain(
       agentReceiptHash: agentReceipt.receiptHash,
     });
     const snapshotId = `snapshot-${candidateDataManifestHash.slice('sha256:'.length)}`;
+    enterStrictTestStage(input, instrumentation, 'PRIVATE_G4_READY');
     const finalization = finalizeStrictPrivateCandidate({
       analysis,
       candidateCoverage,
@@ -468,13 +529,24 @@ async function executeStrictTestPrivateChain(
       runId: input.preflight.runId,
       snapshotId,
     });
-    const durable = {
+    enterStrictTestStage(input, instrumentation, 'PRIVATE_SERVING_VALIDATED');
+    const privateDataSnapshotHash = await snapshotPaths(
+      workspace.privateDataRoot,
+      ['.'],
+      () => false
+    );
+    const durableSemantic = {
       schemaVersion: 1,
       profile: 'strict-test-dimension',
       agentReceipt,
       candidateCoverage,
       privateCorpus,
       finalization,
+      privateDataSnapshotHash,
+    };
+    const durable = {
+      ...durableSemantic,
+      privateChainHash: hashCanonicalJson(durableSemantic),
     };
     await writeJsonAtomic(path.join(input.runRoot, PRIVATE_CHAIN_CHECKPOINT), durable);
     assertStrictTestPrivateCompletionHashes({
@@ -493,11 +565,104 @@ async function executeStrictTestPrivateChain(
         `strict-test:agent-receipt:${agentReceipt.receiptHash}`,
         `strict-test:private-corpus:${privateCorpus.sealedCorpusVerification.verificationHash}`,
         `strict-test:serving:${finalization.servingSnapshotValidation.receiptHash}`,
+        `strict-test:private-data:${privateDataSnapshotHash}`,
+        `strict-test:private-chain:${durable.privateChainHash}`,
       ],
     };
   } finally {
     await journal.close();
   }
+}
+
+function enterStrictTestStage(
+  input: Parameters<StrictTestDimensionOrchestratorDependencies['execute']>[0],
+  instrumentation: StrictTestRuntimeInstrumentationV1 | undefined,
+  stage: StrictTestFailureStageV1
+): void {
+  input.reportStage(stage);
+  instrumentation?.onStage?.(stage);
+  if (instrumentation?.failAtStage === stage) {
+    throw stageError(stage, `STRICT_TEST_INJECTED_${stage}`);
+  }
+}
+
+async function verifyStrictTestCompletedRun(
+  container: ServiceContainer,
+  checkpoint: StrictTestDimensionCheckpointV1
+): Promise<void> {
+  try {
+    const terminal = checkpoint.terminal;
+    if (!terminal || terminal.terminalState !== 'STRICT_TEST_COMPLETED_PRIVATE') {
+      throw new Error('terminal-not-completed');
+    }
+    const analysisScope = resolveProjectScopeAnalysisContext(container);
+    const workspace = await createStrictTestPrivateWorkspace({
+      authority: await strictTestWorkspaceAuthority(
+        analysisScope,
+        checkpoint.demandKey,
+        checkpoint.runId
+      ),
+      baseResolver: requireWorkspaceResolver(container, checkpoint.projectRoot),
+    });
+    const value = JSON.parse(
+      await fsp.readFile(path.join(checkpoint.runRoot, PRIVATE_CHAIN_CHECKPOINT), 'utf8')
+    ) as Record<string, unknown>;
+    const privateChainHash = requireCanonicalHash(value.privateChainHash, 'private-chain-hash');
+    const { privateChainHash: _privateChainHash, ...semantic } = value;
+    if (
+      value.schemaVersion !== 1 ||
+      value.profile !== 'strict-test-dimension' ||
+      hashCanonicalJson(semantic) !== privateChainHash
+    ) {
+      throw new Error('private-chain-seal');
+    }
+    const privateDataSnapshotHash = requireCanonicalHash(
+      value.privateDataSnapshotHash,
+      'private-data-snapshot'
+    );
+    if (
+      (await snapshotPaths(workspace.privateDataRoot, ['.'], () => false)) !==
+      privateDataSnapshotHash
+    ) {
+      throw new Error('private-data-snapshot');
+    }
+    const finalization = requireRecord(value.finalization, 'finalization');
+    const finalCoverage = requireRecord(finalization.finalCoverage, 'final-coverage');
+    const servingManifest = requireRecord(finalization.servingManifest, 'serving-manifest');
+    const servingValidation = requireRecord(
+      finalization.servingSnapshotValidation,
+      'serving-validation'
+    );
+    if (
+      hashCanonicalJson(finalCoverage) !== hashCanonicalJson(terminal.finalCoverageBinding) ||
+      hashCanonicalJson(servingManifest) !== hashCanonicalJson(terminal.servingSnapshotManifest) ||
+      finalization.g4ReceiptHash !== terminal.privateG4ReceiptHash ||
+      servingValidation.receiptHash !== terminal.privateServingValidationHash ||
+      !terminal.privateEvidenceRefs.includes(`strict-test:private-chain:${privateChainHash}`) ||
+      !terminal.privateEvidenceRefs.includes(`strict-test:private-data:${privateDataSnapshotHash}`)
+    ) {
+      throw new Error('terminal-private-chain-binding');
+    }
+  } catch (error: unknown) {
+    const detail = error instanceof Error ? error.message.split(':', 1)[0] : 'unknown';
+    throw new Error(`STRICT_TEST_PRIVATE_EVIDENCE_INTEGRITY_FAILED:${detail}`, {
+      cause: error,
+    });
+  }
+}
+
+function requireRecord(value: unknown, label: string): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(label);
+  }
+  return value as Record<string, unknown>;
+}
+
+function requireCanonicalHash(value: unknown, label: string): CanonicalSha256 {
+  if (typeof value !== 'string' || !/^sha256:[0-9a-f]{64}$/u.test(value)) {
+    throw new Error(label);
+  }
+  return value as CanonicalSha256;
 }
 
 function canonicalizeStrictTestPrivateCorpus(

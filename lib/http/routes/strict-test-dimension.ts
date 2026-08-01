@@ -2,6 +2,11 @@ import express, { type Request, type Response } from 'express';
 import { ZodError } from 'zod';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import {
+  toStrictTestPreflightPublicDtoV1,
+  toStrictTestReportPublicDtoV1,
+  toStrictTestRunStatusPublicDtoV1,
+} from '../../recipe-pipeline/generate/strict/StrictTestPublicContracts.js';
+import {
   assertStrictTestEmptyQuery,
   parseStrictTestPreflightRequest,
   parseStrictTestRunId,
@@ -27,7 +32,7 @@ export function createStrictTestDimensionRouter(getService: StrictTestDimensionS
     try {
       assertStrictTestEmptyQuery(req.query);
       const result = await getService().preflight(parseStrictTestPreflightRequest(req.body));
-      res.json({ success: true, data: result });
+      res.json({ success: true, data: toStrictTestPreflightPublicDtoV1(result) });
     } catch (error: unknown) {
       respondStrictTestError(res, error);
     }
@@ -37,7 +42,7 @@ export function createStrictTestDimensionRouter(getService: StrictTestDimensionS
     try {
       assertStrictTestEmptyQuery(req.query);
       const result = await getService().start(parseStrictTestRunRequest(req.body));
-      res.status(202).json({ success: true, data: result });
+      res.status(202).json({ success: true, data: toStrictTestRunStatusPublicDtoV1(result) });
     } catch (error: unknown) {
       respondStrictTestError(res, error);
     }
@@ -47,7 +52,7 @@ export function createStrictTestDimensionRouter(getService: StrictTestDimensionS
     try {
       assertStrictTestEmptyQuery(req.query);
       const result = await getService().status(parseStrictTestRunId(singleParam(req.params.runId)));
-      res.json({ success: true, data: result });
+      res.json({ success: true, data: toStrictTestRunStatusPublicDtoV1(result) });
     } catch (error: unknown) {
       respondStrictTestError(res, error);
     }
@@ -57,7 +62,7 @@ export function createStrictTestDimensionRouter(getService: StrictTestDimensionS
     try {
       assertStrictTestEmptyQuery(req.query);
       const result = await getService().report(parseStrictTestRunId(singleParam(req.params.runId)));
-      res.json({ success: true, data: result });
+      res.json({ success: true, data: toStrictTestReportPublicDtoV1(result) });
     } catch (error: unknown) {
       respondStrictTestError(res, error);
     }

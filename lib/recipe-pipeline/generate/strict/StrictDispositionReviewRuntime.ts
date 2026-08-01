@@ -158,7 +158,7 @@ export function createStrictSemanticReviewEvidenceV1(input: {
     if (!entry?.file) {
       throw new Error(`STRICT_SEMANTIC_REVIEW_EVIDENCE_ENTRY_MISSING:${evidenceEntryId}`);
     }
-    const bindings = input.executionReceipts.map((receipt) => {
+    const bindings = input.executionReceipts.flatMap((receipt) => {
       const executions = receipt.fileExecutions.filter(
         (execution) =>
           execution.evidenceEntryId === evidenceEntryId &&
@@ -167,19 +167,20 @@ export function createStrictSemanticReviewEvidenceV1(input: {
           execution.truncated === false &&
           execution.continuation === null
       );
-      if (executions.length !== 1) {
+      if (executions.length > 1) {
         throw new Error(
           `STRICT_SEMANTIC_REVIEW_EVIDENCE_RECEIPT_UNION_MISMATCH:${evidenceEntryId}:${receipt.obligationId}`
         );
       }
       const execution = executions[0];
       if (!execution) {
-        throw new Error(
-          `STRICT_SEMANTIC_REVIEW_EVIDENCE_RECEIPT_UNION_MISMATCH:${evidenceEntryId}:${receipt.obligationId}`
-        );
+        return [];
       }
-      return { receipt, execution };
+      return [{ receipt, execution }];
     });
+    if (bindings.length === 0) {
+      throw new Error(`STRICT_SEMANTIC_REVIEW_EVIDENCE_RECEIPT_UNION_MISSING:${evidenceEntryId}`);
+    }
     const canonicalSubjectRefs = new Set(
       bindings.map(({ receipt }) => receipt.canonicalSubjectRef)
     );

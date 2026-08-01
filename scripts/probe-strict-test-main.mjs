@@ -13,7 +13,7 @@ try {
       'run',
       'test/integration/StrictTestDimensionPipeline.integration.test.ts',
       '-t',
-      'consumes one real',
+      'serves real DI',
       '--reporter=dot',
     ],
     {

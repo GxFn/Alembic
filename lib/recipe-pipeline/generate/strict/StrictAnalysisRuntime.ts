@@ -136,6 +136,7 @@ interface StrictAnalysisState {
   lastGateFailure: string | null;
   strictTestAnalysisStageEvidence: StrictTestDimensionAgentAnalysisStageEvidenceV1 | null;
   strictTestProducerStageResultHash: string | null;
+  strictTestReviewStageEvidence: StrictTestDimensionAgentReviewStageEvidenceV1 | null;
 }
 
 interface StrictAnalystEnvelopeV1 {
@@ -603,6 +604,7 @@ export async function executeStrictAnalysisAndProduction(
     lastGateFailure: null,
     strictTestAnalysisStageEvidence: null,
     strictTestProducerStageResultHash: null,
+    strictTestReviewStageEvidence: null,
   };
   const baseRuntimePort = createStrictProductionRuntimePort(input, prepared, state);
   const strictTestAuthority = input.strictTest
@@ -868,10 +870,14 @@ async function createStrictTestReviewStageEvidence(
     expectedTrustPolicies: investigatedEmpty ? [input.semanticReviewSession.policy] : [],
     completedAt: input.strictTest.clock(),
   };
-  return Object.freeze({
+  const evidence = Object.freeze({
     ...semantic,
     reviewStageEvidenceHash: hashCanonicalJson(semantic) as `sha256:${string}`,
   });
+  // Main 后续只能用同一个 G2 artifact 中冻结的 policy 与 receipt 对照，不能把
+  // investigated-empty 所需的 durable trust authority 降成空数组。
+  state.strictTestReviewStageEvidence = evidence;
+  return evidence;
 }
 
 async function executeStrictTestInvestigatedEmptyReview(
@@ -975,14 +981,47 @@ function requireStrictTestExecutionReceipt(
   if (!receipt || !authority || !state.strictTestAnalysisStageEvidence) {
     throw new Error('STRICT_TEST_AGENT_EXECUTION_RECEIPT_REQUIRED');
   }
-  assertStrictTestDimensionAgentExecutionReceiptV1(receipt, []);
+  const reviewStage = state.strictTestReviewStageEvidence;
+  if (!reviewStage) {
+    throw new Error('STRICT_TEST_AGENT_REVIEW_STAGE_EVIDENCE_REQUIRED');
+  }
+  assertStrictTestDimensionAgentExecutionReceiptV1(receipt, reviewStage.expectedTrustPolicies);
+  const authorityFields = [
+    'demandKey',
+    'runId',
+    'authorityHash',
+    'currentBindingsHash',
+    'preflightHash',
+    'bindingHash',
+    'driftInvalidationHash',
+    'automaticSelectionHash',
+    'projectionHash',
+    'compiledPlanHash',
+    'planCognitionHash',
+    'fullCatalogHash',
+    'fullCatalogSourceArtifactHash',
+    'fullCellUniverseHash',
+    'fullEligibleCellsHash',
+    'fullExcludedCellsHash',
+    'fullApplicabilityUniverseHash',
+    'fullFactQueryCatalogHash',
+    'fullBaselineScheduleHash',
+    'selectedDimensionId',
+    'selectedCellSetHash',
+  ] as const;
+  const authorityDrift = authorityFields.filter((field) => receipt[field] !== authority[field]);
   if (
     receipt.segmentStatus !== 'completed' ||
-    receipt.runId !== authority.runId ||
-    receipt.authorityHash !== authority.authorityHash ||
-    receipt.selectedCellSetHash !== authority.selectedCellSetHash ||
+    authorityDrift.length > 0 ||
+    hashCanonicalJson(receipt.authority) !== hashCanonicalJson(authority) ||
+    receipt.factExecutionManifestHash !== state.execution.manifest.manifestHash ||
+    receipt.factHarvestScheduleHash !== state.schedule.factHarvestScheduleHash ||
+    receipt.finalExpandedScheduleHash !== state.fixpoint?.finalExpandedScheduleHash ||
+    receipt.analysisFixpointHash !== state.fixpoint?.fixpointHash ||
     receipt.pipelineExecution?.analysisStageEvidence.analysisStageEvidenceHash !==
       state.strictTestAnalysisStageEvidence.analysisStageEvidenceHash ||
+    receipt.pipelineExecution?.reviewStageEvidence.reviewStageEvidenceHash !==
+      reviewStage.reviewStageEvidenceHash ||
     receipt.pipelineExecution?.reviewStageEvidence.producerStageResultHash !==
       state.strictTestProducerStageResultHash ||
     hashCanonicalJson(receipt.selectedCellIds) !== hashCanonicalJson(authority.selectedCellIds)
