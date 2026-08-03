@@ -150,19 +150,6 @@ export interface StrictFinalizationResultV1 {
   readonly servingManifest: ServingSnapshotManifestV1;
 }
 
-/**
- * strict-test 只消费到私有 serving 校验为止。这里有意不包含 PreparedPublicKnowledgeRouteV1，
- * 避免测试 profile 即使在调用方失误时也获得 public route 的构造能力。
- */
-export interface StrictPrivateFinalizationResultV1 {
-  readonly candidateCoverage: CandidateCoverageReceiptV1;
-  readonly candidateDataManifestHash: string;
-  readonly finalCoverage: FinalCoverageBindingReceiptV1;
-  readonly g4ReceiptHash: string;
-  readonly servingSnapshotValidation: ServingSnapshotValidationReceiptV1;
-  readonly servingManifest: ServingSnapshotManifestV1;
-}
-
 export interface StrictPublicDataFileV1 {
   readonly relativePath: string;
   readonly byteHash: string;
@@ -347,38 +334,6 @@ export function finalizeStrictCandidate(input: {
   readonly snapshotId: string;
   readonly runId: string;
 }): StrictFinalizationResultV1 {
-  const privateFinalization = finalizeStrictPrivateCandidate(input);
-  const lineage = servingValidationLineage(privateFinalization.servingSnapshotValidation);
-  const preparedPublicRoute = preparePublicKnowledgeRouteV1({
-    schemaVersion: 1,
-    sessionId: input.runId,
-    snapshotId: privateFinalization.servingSnapshotValidation.snapshotId,
-    servingSnapshotManifestHash: privateFinalization.servingManifest.manifestHash,
-    vectorGenerationId: input.privateCorpus.vectorGenerationId,
-    vectorManifestHash: input.privateCorpus.vectorManifestHash,
-    ...lineage,
-    committedAt: input.committedAt,
-  });
-  if (
-    preparedPublicRoute.route.schemaVersion !==
-    privateFinalization.servingSnapshotValidation.coreRouteSchemaVersion
-  ) {
-    failServingSnapshotValidation('core-schema-conservation');
-  }
-  return Object.freeze({ ...privateFinalization, preparedPublicRoute });
-}
-
-export function finalizeStrictPrivateCandidate(input: {
-  readonly analysis: StrictAnalysisExecutionResultV1;
-  readonly certifiedProjectFactsHash: string;
-  readonly compiledPlan: CompiledColdStartPlanV2;
-  readonly planCognitionHash: string;
-  readonly privateCorpus: StrictPrivateCorpusResultV1;
-  readonly candidateCoverage: CandidateCoverageReceiptV1;
-  readonly candidateDataManifestHash: string;
-  readonly snapshotId: string;
-  readonly runId: string;
-}): StrictPrivateFinalizationResultV1 {
   const candidateCoverage = input.candidateCoverage;
   const candidateDataManifestHash = requireSha(input.candidateDataManifestHash);
   const snapshotId = assertSnapshotId(input.snapshotId);
@@ -460,33 +415,30 @@ export function finalizeStrictPrivateCandidate(input: {
   ) {
     failServingSnapshotValidation('core-schema-conservation');
   }
+  const preparedPublicRoute = preparePublicKnowledgeRouteV1({
+    schemaVersion: 1,
+    sessionId: input.runId,
+    snapshotId,
+    servingSnapshotManifestHash: servingManifest.manifestHash,
+    vectorGenerationId: input.privateCorpus.vectorGenerationId,
+    vectorManifestHash: input.privateCorpus.vectorManifestHash,
+    ...lineage,
+    committedAt: input.committedAt,
+  });
+  if (
+    preparedPublicRoute.route.schemaVersion !== servingSnapshotValidation.coreRouteSchemaVersion
+  ) {
+    failServingSnapshotValidation('core-schema-conservation');
+  }
   return Object.freeze({
     candidateCoverage,
     candidateDataManifestHash,
     finalCoverage,
     g4ReceiptHash,
+    preparedPublicRoute,
     servingSnapshotValidation,
     servingManifest,
   });
-}
-
-function servingValidationLineage(
-  validation: ServingSnapshotValidationReceiptV1
-): ServingSnapshotValidationLineageV1 {
-  return {
-    certifiedProjectFactsHash: validation.certifiedProjectFactsHash,
-    sourceRevisionVectorHash: validation.sourceRevisionVectorHash,
-    planCognitionLineageHash: validation.planCognitionLineageHash,
-    compiledPlanHash: validation.compiledPlanHash,
-    factQueryCatalogHash: validation.factQueryCatalogHash,
-    requiredApplicabilityUniverseHash: validation.requiredApplicabilityUniverseHash,
-    baselineScheduleHash: validation.baselineScheduleHash,
-    expansionLedgerHeadHash: validation.expansionLedgerHeadHash,
-    finalExpandedScheduleHash: validation.finalExpandedScheduleHash,
-    analysisFixpointHash: validation.analysisFixpointHash,
-    hypothesisExpressionSetManifestHash: validation.hypothesisExpressionSetManifestHash,
-    finalCodeFactGenerationManifestHash: validation.finalCodeFactGenerationManifestHash,
-  };
 }
 
 export async function installAndVerifyStrictPublicationMarker(input: {
@@ -1809,8 +1761,6 @@ interface StrictCandidateCoverageInputV1 {
   readonly runId: string;
   readonly semanticReviewCheckpoint: StrictSemanticReviewCheckpointPortV1;
   readonly semanticReviewSession: StrictSemanticReviewSessionV1;
-  /** 省略时保持 production V1 全 eligible cell 行为；strict-test 必须传 projection 精确集合。 */
-  readonly executionCellIds?: readonly string[];
 }
 
 interface StrictG3ResidueV1 {
@@ -1848,7 +1798,9 @@ export async function buildStrictCandidateCoverage(
   const setsByCell = expressionSetsByCell(input.expressionSets);
   assertStrictG3TerminalConservation(input, terminalByExpression);
   const residue = resolveStrictG3Residue(input, terminalByExpression);
-  const requiredCells = resolveStrictCoverageCells(input);
+  const requiredCells = input.compiledPlan.universe.cells
+    .filter((cell) => cell.status === 'eligible')
+    .sort((left, right) => left.cellId.localeCompare(right.cellId));
   const reviewer = new InvestigatedEmptyReviewer({ identity: input.reviewerIdentity });
   const buildContext: StrictCandidateCoverageBuildContextV1 = {
     bindingByCell,
@@ -1876,25 +1828,6 @@ export async function buildStrictCandidateCoverage(
     requiredCellIds: requiredCells.map((cell) => cell.cellId),
     cells,
   });
-}
-
-function resolveStrictCoverageCells(
-  input: StrictCandidateCoverageInputV1
-): CompiledColdStartPlanV2['universe']['cells'] {
-  const eligible = input.compiledPlan.universe.cells.filter((cell) => cell.status === 'eligible');
-  if (!input.executionCellIds) {
-    return eligible.sort((left, right) => left.cellId.localeCompare(right.cellId));
-  }
-  const requested = [...input.executionCellIds];
-  if (requested.length === 0 || new Set(requested).size !== requested.length) {
-    throw new Error('STRICT_CANDIDATE_COVERAGE_EXECUTION_CELL_SET_INVALID');
-  }
-  const eligibleById = new Map(eligible.map((cell) => [cell.cellId, cell] as const));
-  const selected = requested.map((cellId) => eligibleById.get(cellId));
-  if (selected.some((cell) => !cell)) {
-    throw new Error('STRICT_CANDIDATE_COVERAGE_EXECUTION_CELL_SET_INVALID');
-  }
-  return selected as CompiledColdStartPlanV2['universe']['cells'];
 }
 
 function resolveStrictG3Residue(

@@ -74,7 +74,6 @@
     "test:coverage:all": "vitest run --coverage",
     "test:watch": "vitest",
     "smoke:multi-project-control": "node scripts/smoke-multi-project-control.mjs",
-    "probe:strict-test-main": "node scripts/probe-strict-test-main.mjs",
     "dev:link": "node scripts/dev-link.mjs",
     "dev:verify": "node scripts/dev-link.mjs --verify-only",
     "release:package-guard": "node scripts/verify-release-package-boundary.mjs",

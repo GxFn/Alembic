@@ -35,7 +35,6 @@ import {
 } from '../../daemon/observability/JobDisplaySnapshotStore.js';
 import { readJobProcessEventArtifact } from '../../daemon/observability/JobProcessEventArtifacts.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
-import { assertNoLegacyStrictTestActivation } from '../../recipe-pipeline/generate/strict/StrictTestRequestContracts.js';
 import { validate } from '../middleware/validate.js';
 
 const router = express.Router();
@@ -287,48 +286,30 @@ router.get('/:jobId', (req: Request, res: Response): void => {
   });
 });
 
-router.post(
-  '/bootstrap',
-  (req: Request, res: Response, next): void => {
-    try {
-      assertNoLegacyStrictTestActivation(req.body);
-      next();
-    } catch (error: unknown) {
-      res.status(400).json({
-        success: false,
-        error: {
-          code: 'STRICT_TEST_LEGACY_ACTIVATION_FORBIDDEN',
-          message: error instanceof Error ? error.message : String(error),
-        },
-      });
-    }
-  },
-  validate(BootstrapJobBody),
-  (req: Request, res: Response): void => {
-    if (!rejectInvalidProvidedDaemonToken(req, res)) {
-      return;
-    }
-    const container = getServiceContainer();
-    const job = enqueueDaemonJob({
-      args: req.body as z.infer<typeof BootstrapJobBody>,
-      container,
-      kind: 'bootstrap',
-      logger,
-      source: inferJobSource(req),
-    });
-    res.status(202).json({
-      success: true,
-      data: {
-        job: decorateJobForResponse(job, getLiveBootstrapSession(container)),
-        jobId: job.id,
-        statusUrl: buildJobStatusUrl(req, job.id),
-        eventsUrl: buildJobProcessEventsUrl(req, job.id),
-        displaySnapshotUrl: buildJobDisplaySnapshotUrl(req, job.id),
-        dashboardUrl: buildJobsApiOrigin(req),
-      },
-    });
+router.post('/bootstrap', validate(BootstrapJobBody), (req: Request, res: Response): void => {
+  if (!rejectInvalidProvidedDaemonToken(req, res)) {
+    return;
   }
-);
+  const container = getServiceContainer();
+  const job = enqueueDaemonJob({
+    args: req.body as z.infer<typeof BootstrapJobBody>,
+    container,
+    kind: 'bootstrap',
+    logger,
+    source: inferJobSource(req),
+  });
+  res.status(202).json({
+    success: true,
+    data: {
+      job: decorateJobForResponse(job, getLiveBootstrapSession(container)),
+      jobId: job.id,
+      statusUrl: buildJobStatusUrl(req, job.id),
+      eventsUrl: buildJobProcessEventsUrl(req, job.id),
+      displaySnapshotUrl: buildJobDisplaySnapshotUrl(req, job.id),
+      dashboardUrl: buildJobsApiOrigin(req),
+    },
+  });
+});
 
 router.post('/rescan', validate(RescanJobBody), (req: Request, res: Response): void => {
   if (!rejectInvalidProvidedDaemonToken(req, res)) {

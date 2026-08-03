@@ -42,7 +42,6 @@ import recipesRouter from './routes/recipes.js';
 import searchRouter from './routes/search.js';
 import signalsRouter from './routes/signals.js';
 import skillsRouter from './routes/skills.js';
-import strictTestDimensionRouter from './routes/strict-test-dimension.js';
 import violationsRouter from './routes/violations.js';
 import wikiRouter from './routes/wiki.js';
 
@@ -195,7 +194,6 @@ export class HttpServer {
         req.path.includes('/spm/bootstrap') ||
         req.path.includes('/modules/scan') ||
         req.path.includes('/modules/bootstrap') ||
-        req.path.includes('/strict-test-dimension/') ||
         req.path.includes('/extract/');
       const isStreaming = req.path.includes('/stream') || req.path.includes('/events/');
       req.setTimeout(isLongRunning ? 600000 : isStreaming ? 300000 : 60000); // AI 扫描 10分钟, SSE/EventSource 5分钟, 其他 60秒
@@ -259,9 +257,6 @@ export class HttpServer {
 
     // daemon job 状态与投递
     this.app.use(`${apiPrefix}/jobs`, jobsRouter);
-
-    // 独立 strict-test profile；不经过 bootstrap DaemonJob 或 production route。
-    this.app.use(`${apiPrefix}/strict-test-dimension`, strictTestDimensionRouter);
 
     // 多项目 runtime control foundation（只读 summary / selected state）
     this.app.use(`${apiPrefix}/projects`, projectsRouter);

@@ -79,7 +79,6 @@ import type AuditLogger from '../infrastructure/audit/AuditLogger.js';
 import type AuditStore from '../infrastructure/audit/AuditStore.js';
 import type { CacheCoordinator } from '../infrastructure/cache/CacheCoordinator.js';
 import type { GenerateTaskManager } from '../recipe-pipeline/generate/runtime/GenerateTaskManager.js';
-import type { StrictTestDimensionOrchestrator } from '../recipe-pipeline/generate/strict/StrictTestDimensionOrchestrator.js';
 import type { AuditRepositoryImpl } from '../repository/AuditRepository.js';
 import type { ModuleService } from '../service/module/ModuleService.js';
 import type { StrictSemanticReviewRuntimeFactory } from '../service/semantic-review/StrictSemanticReviewRuntimeFactory.js';
@@ -174,7 +173,6 @@ export interface ServiceMap {
   agentRuntimeBuilder: AgentRuntimeBuilder;
   agentService: AgentService;
   strictSemanticReviewRuntimeFactory: StrictSemanticReviewRuntimeFactory;
-  strictTestDimensionOrchestrator: StrictTestDimensionOrchestrator;
   skillHooks: SkillHooks;
 
   // ═══ SignalModule ═══

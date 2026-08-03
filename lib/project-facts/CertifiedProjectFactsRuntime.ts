@@ -210,7 +210,7 @@ interface MainCertifiedProjectScopeInput {
 
 interface CaptureMainCertifiedProjectFactsInput extends MainCertifiedProjectScopeInput {
   dimensions: DimensionDef[];
-  source: 'alembic-main-bootstrap' | 'alembic-main-rescan' | 'alembic-main-strict-test';
+  source: 'alembic-main-bootstrap' | 'alembic-main-rescan';
 }
 
 export function resolveMainCertifiedProjectScopeHash(
@@ -383,7 +383,7 @@ export function buildStrictProjectContextWorkflowFacts(input: {
   dimensions: DimensionDef[];
   projection: MainCertifiedProjectionPayload;
   projectRoot: string;
-  source: 'alembic-main-bootstrap' | 'alembic-main-rescan' | 'alembic-main-strict-test';
+  source: 'alembic-main-bootstrap' | 'alembic-main-rescan';
 }): ProjectContextWorkflowFacts {
   assertMainCertifiedProjectFactsCarrier(input.certified);
   const recipe = input.projection;
