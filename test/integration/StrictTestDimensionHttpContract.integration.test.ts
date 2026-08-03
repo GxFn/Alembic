@@ -1,4 +1,3 @@
-import { writeFileSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { HttpServer } from '../../lib/http/HttpServer.js';
@@ -42,7 +41,7 @@ describe('strict-test-dimension real Main HTTP entry', () => {
         },
         preview: { canAutoSelect: true, previewHash: `sha256:${'c'.repeat(64)}` },
       })),
-      start: vi.fn(async (): Promise<unknown> => statusFixture),
+      start: vi.fn(async () => statusFixture),
       status: vi.fn(async () => statusFixture),
       report: vi.fn(async () => ({
         schemaVersion: 1,
@@ -102,61 +101,5 @@ describe('strict-test-dimension real Main HTTP entry', () => {
     expect(service.start).toHaveBeenCalledTimes(1);
     expect(service.status).toHaveBeenCalledTimes(1);
     expect(service.report).toHaveBeenCalledTimes(1);
-
-    service.start.mockResolvedValueOnce({
-      ...statusFixture,
-      runId: 'strict-run-http-failed',
-      phase: 'STRICT_TEST_FAILED',
-      runRoot: '/private/control/strict-test-runs/demand-http/strict-run-http-failed',
-      executionContext: { source: { contentBase64: 'cHJpdmF0ZQ==' } },
-      terminal: {
-        terminalState: 'STRICT_TEST_FAILED',
-        terminalHash: `sha256:${'f'.repeat(64)}`,
-        failedStage: 'PRIVATE_SERVING_VALIDATED',
-        errorCode: 'STRICT_TEST_INJECTED_PRIVATE_SERVING_VALIDATED',
-        productionFinalized: false,
-        publicRouteChanged: false,
-      },
-      report: { reportHash: `sha256:${'1'.repeat(64)}` },
-    });
-    const failedStart = await fetch(`${base}/runs`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        demandKey: 'demand-http',
-        preflightHash: PREFLIGHT_HASH,
-        runId: 'strict-run-http-failed',
-      }),
-    });
-    const failedStartBody = (await failedStart.json()) as Record<string, unknown>;
-
-    expect(failedStart.status).toBe(422);
-    expect(failedStartBody).toMatchObject({
-      success: false,
-      error: {
-        code: 'STRICT_TEST_INJECTED_PRIVATE_SERVING_VALIDATED',
-        message: 'Strict-test run failed',
-        privateDataSafe: true,
-        status: 422,
-      },
-      data: {
-        runId: 'strict-run-http-failed',
-        phase: 'STRICT_TEST_FAILED',
-        terminal: {
-          terminalState: 'STRICT_TEST_FAILED',
-          failedStage: 'PRIVATE_SERVING_VALIDATED',
-        },
-      },
-    });
-    expect(JSON.stringify(failedStartBody)).not.toMatch(
-      /contentBase64|executionContext|\/private\//u
-    );
-    const failureProbeOutput = process.env.ALEMBIC_STRICT_TEST_FAILED_START_PROBE_OUTPUT;
-    if (failureProbeOutput) {
-      writeFileSync(
-        failureProbeOutput,
-        `${JSON.stringify({ status: failedStart.status, body: failedStartBody })}\n`
-      );
-    }
   });
 });

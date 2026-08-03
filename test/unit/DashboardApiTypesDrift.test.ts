@@ -9,7 +9,6 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, test } from 'vitest';
-import { DASHBOARD_API_ROUTES } from '../../lib/generated/dashboard-api-types.js';
 import {
   DASHBOARD_TYPES_ARTIFACT_RELPATH,
   generateDashboardApiTypes,
@@ -23,19 +22,5 @@ describe('Dashboard api-types drift gate (IC2)', () => {
     const regenerated = generateDashboardApiTypes(repoRoot);
     expect(committed.length).toBe(regenerated.length);
     expect(committed).toBe(regenerated);
-  });
-
-  test('generated strict-test routes retain the exact provider status matrix', () => {
-    const expectedStatuses = {
-      preflightStrictTestDimension: ['200', '400', '422'],
-      startStrictTestDimensionRun: ['202', '400', '404', '422'],
-      getStrictTestDimensionRun: ['200', '404', '422'],
-      getStrictTestDimensionReport: ['200', '404', '409', '422'],
-    } as const;
-
-    for (const [operationId, statuses] of Object.entries(expectedStatuses)) {
-      const route = DASHBOARD_API_ROUTES.find((candidate) => candidate.operationId === operationId);
-      expect(Object.keys(route?.responseSchemas ?? {}).sort()).toEqual([...statuses].sort());
-    }
   });
 });

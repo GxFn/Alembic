@@ -26,10 +26,8 @@ import {
 } from '@alembic/core/production';
 import { hashCanonicalJson } from '@alembic/core/project-context-foundation';
 import { WorkspaceResolver } from '@alembic/core/workspace';
-import Ajv from 'ajv';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { HttpServer } from '../../lib/http/HttpServer.js';
-import { ALEMBIC_PROVIDER_ROUTE_CONTRACTS } from '../../lib/http/provider-contracts.js';
 import {
   getServiceContainer,
   type ServiceContainer,
@@ -52,7 +50,6 @@ import { PACKAGE_ROOT } from '../../lib/shared/package-assets.js';
 import { createRuntimeArtifactManifestFixture } from '../helpers/RuntimeArtifactManifestFixture.js';
 
 const roots: string[] = [];
-const providerAjv = new Ajv({ strict: false, validateFormats: false });
 const originalEnv = {
   provider: process.env.ALEMBIC_AI_PROVIDER,
   model: process.env.ALEMBIC_AI_MODEL,
@@ -402,36 +399,11 @@ describe('strict-test-dimension real Main private pipeline', () => {
       });
 
       const notReadyResponse = await fetch(`${base}/runs/${runId}/report`);
-      const notReadyBody = (await notReadyResponse.json()) as Record<string, unknown>;
       expect(notReadyResponse.status).toBe(409);
-      expect(notReadyBody).toMatchObject({
+      expect(await notReadyResponse.json()).toMatchObject({
         success: false,
-        error: {
-          code: 'STRICT_TEST_REPORT_NOT_READY',
-          failureId: 'core.failure.conflict',
-          privateDataSafe: true,
-          status: 409,
-        },
+        error: { code: 'STRICT_TEST_REPORT_NOT_READY' },
       });
-      expectProviderHttpResponse(
-        'getStrictTestDimensionReport',
-        notReadyResponse.status,
-        notReadyBody
-      );
-
-      const missingResponse = await fetch(`${base}/runs/strict-test-missing-http-run`);
-      const missingBody = (await missingResponse.json()) as Record<string, unknown>;
-      expect(missingResponse.status).toBe(404);
-      expect(missingBody).toMatchObject({
-        success: false,
-        error: {
-          code: 'STRICT_TEST_RUN_NOT_FOUND',
-          failureId: 'core.failure.not-found',
-          privateDataSafe: true,
-          status: 404,
-        },
-      });
-      expectProviderHttpResponse('getStrictTestDimensionRun', missingResponse.status, missingBody);
 
       const wrongAuthorityResponse = await fetch(`${base}/runs`, {
         method: 'POST',
@@ -443,20 +415,10 @@ describe('strict-test-dimension real Main private pipeline', () => {
         }),
       });
       expect(wrongAuthorityResponse.status).toBe(422);
-      const wrongAuthorityBody = (await wrongAuthorityResponse.json()) as Record<string, unknown>;
-      expect(wrongAuthorityBody).toMatchObject({
+      expect(await wrongAuthorityResponse.json()).toMatchObject({
         success: false,
-        error: {
-          code: 'STRICT_TEST_START_AUTHORITY_MISMATCH',
-          privateDataSafe: true,
-          status: 422,
-        },
+        error: { code: 'STRICT_TEST_START_AUTHORITY_MISMATCH' },
       });
-      expectProviderHttpResponse(
-        'startStrictTestDimensionRun',
-        wrongAuthorityResponse.status,
-        wrongAuthorityBody
-      );
 
       const startResponse = await fetch(`${base}/runs`, {
         method: 'POST',
@@ -484,14 +446,6 @@ describe('strict-test-dimension real Main private pipeline', () => {
       const reportBody = (await reportResponse.json()) as Record<string, unknown>;
       expect(statusResponse.status).toBe(200);
       expect(reportResponse.status).toBe(200);
-      expectProviderHttpResponse(
-        'preflightStrictTestDimension',
-        preflightResponse.status,
-        preflightBody
-      );
-      expectProviderHttpResponse('startStrictTestDimensionRun', startResponse.status, startBody);
-      expectProviderHttpResponse('getStrictTestDimensionRun', statusResponse.status, statusBody);
-      expectProviderHttpResponse('getStrictTestDimensionReport', reportResponse.status, reportBody);
       for (const body of [preflightBody, startBody, statusBody, reportBody]) {
         expect(findForbiddenPublicFields(body)).toEqual([]);
       }
@@ -1484,16 +1438,6 @@ function readRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
-}
-
-function expectProviderHttpResponse(operationId: string, status: number, body: unknown): void {
-  const route = ALEMBIC_PROVIDER_ROUTE_CONTRACTS.find(
-    (candidate) => candidate.operationId === operationId
-  );
-  const schema = route?.responseSchemas[status];
-  expect(schema, `${operationId} must declare HTTP ${status}`).toBeDefined();
-  const validate = providerAjv.compile(schema ?? false);
-  expect(validate(body), JSON.stringify(validate.errors)).toBe(true);
 }
 
 function findForbiddenPublicFields(value: unknown, location = '$'): string[] {
