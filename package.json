@@ -56,7 +56,7 @@
   "scripts": {
     "build": "npm run build:core && npm run clean:dist && tsc",
     "build:self": "npm run clean:dist && tsc && npm run postbuild",
-    "build:check": "npm run build:core && npm run typecheck",
+    "build:check": "npm run build:core && tsc --noEmit",
     "build:core": "node scripts/core-source-command.mjs build",
     "clean:dist": "node scripts/clean-dist.mjs",
     "postbuild": "node scripts/postbuild.mjs",
@@ -97,8 +97,7 @@
     "lint:naming": "node scripts/lint-naming.mjs",
     "check:shared-asset-drift": "node scripts/check-shared-asset-drift.mjs",
     "format": "biome format --write lib/ bin/ config/ scripts/",
-    "typecheck": "tsc --noEmit && npm run typecheck:strict-test-consumer",
-    "typecheck:strict-test-consumer": "tsc --noEmit -p test/typecheck/tsconfig.json",
+    "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm run lint && npm run lint:repo-boundary && npm run check:space-edges && npm run lint:layer-contract && npm run lint:doctrine && npm run lint:naming && npm run lint:agent-extraction-boundary && npm run lint:core-import-boundary && npm run lint:consumer-core-imports && npm run test:unit && npm run test:integration && npm run test:coverage && npm run check:shared-asset-drift && npm run lint:retired-symbols && npm run lint:ring-direction",
     "prepare": "husky",
     "lint:retired-symbols": "node ../AlembicCore/scripts/lint-retired-symbols.mjs . --dirs=lib,bin,test",

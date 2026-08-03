@@ -3,7 +3,6 @@ import { z } from 'zod';
 
 const STRICT_TEST_IDENTITY_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,255}$/u;
 const CANONICAL_SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/u;
-export const STRICT_TEST_CANONICAL_ABSOLUTE_PATH_FORMAT = 'alembic-canonical-absolute-path-v1';
 const LEGACY_STRICT_TEST_ACTIVATION_KEYS = new Set([
   'confirmation',
   'demandKey',
@@ -16,29 +15,11 @@ const LEGACY_STRICT_TEST_ACTIVATION_KEYS = new Set([
 
 const StrictTestIdentity = z.string().min(1).max(256).regex(STRICT_TEST_IDENTITY_PATTERN);
 const CanonicalSha256 = z.string().regex(CANONICAL_SHA256_PATTERN);
-
-/**
- * Main 的 canonical path authority 使用当前宿主 Node path dialect。Provider 与生成消费者
- * 只能通过这个稳定 format id 复用同一判定器；禁止把它降级成 POSIX-only regex，或在
- * Dashboard 侧猜测 Main 所在平台。
- */
-export function isStrictTestCanonicalAbsolutePath(value: string): boolean {
-  return path.isAbsolute(value) && path.normalize(value) === value;
-}
-
-export const STRICT_TEST_INPUT_STRING_FORMAT_VALIDATORS = Object.freeze({
-  [STRICT_TEST_CANONICAL_ABSOLUTE_PATH_FORMAT]: isStrictTestCanonicalAbsolutePath,
-});
-
 const CanonicalAbsolutePath = z
   .string()
   .min(1)
-  .refine(isStrictTestCanonicalAbsolutePath, {
+  .refine((value) => path.isAbsolute(value) && path.normalize(value) === value, {
     message: 'projectRoot must be a normalized absolute path',
-  })
-  .meta({
-    format: STRICT_TEST_CANONICAL_ABSOLUTE_PATH_FORMAT,
-    'x-alembic-validator': STRICT_TEST_CANONICAL_ABSOLUTE_PATH_FORMAT,
   });
 
 /**

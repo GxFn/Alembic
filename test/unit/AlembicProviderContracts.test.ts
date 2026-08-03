@@ -19,11 +19,6 @@ import {
   buildAlembicProviderOpenApiSpec,
   summarizeAlembicProviderContracts,
 } from '../../lib/http/provider-contracts.js';
-import {
-  parseStrictTestPreflightRequest,
-  STRICT_TEST_CANONICAL_ABSOLUTE_PATH_FORMAT,
-  STRICT_TEST_INPUT_STRING_FORMAT_VALIDATORS,
-} from '../../lib/recipe-pipeline/generate/strict/StrictTestRequestContracts.js';
 
 describe('Alembic provider contracts', () => {
   test('covers D3 provider registry rows with route schemas and fixtures', () => {
@@ -167,48 +162,6 @@ describe('Alembic provider contracts', () => {
       expect.objectContaining({ in: 'path', name: 'runId', required: true }),
     ]);
     expect(preflightOperation['x-alembic-query-schema']).toEqual(preflight?.querySchema);
-  });
-
-  test.each([
-    ['/workspace/project', true],
-    ['/workspace/project/', true],
-    ['/', true],
-    ['/workspace/project with spaces', true],
-    ['/workspace/.project', true],
-    ['/workspace/project\0', true],
-    ['workspace/project', false],
-    ['/workspace/project/./child', false],
-    ['/workspace/project/../project', false],
-    ['/workspace//project', false],
-    ['//workspace/project', false],
-    ['C:\\workspace\\project', false],
-    ['', false],
-  ])('keeps provider projectRoot authority lossless for %j', (projectRoot, expected) => {
-    const preflight = ALEMBIC_PROVIDER_ROUTE_CONTRACTS.find(
-      (candidate) => candidate.operationId === 'preflightStrictTestDimension'
-    );
-    const ajv = new Ajv({ strict: false });
-    ajv.addFormat(
-      STRICT_TEST_CANONICAL_ABSOLUTE_PATH_FORMAT,
-      STRICT_TEST_INPUT_STRING_FORMAT_VALIDATORS[STRICT_TEST_CANONICAL_ABSOLUTE_PATH_FORMAT]
-    );
-    const validate = ajv.compile(preflight?.requestBodySchema ?? false);
-
-    let runtimeAccepted = true;
-    try {
-      parseStrictTestPreflightRequest({
-        demandKey: 'demand-1',
-        projectRoot,
-        runId: 'strict-run-1',
-      });
-    } catch (_error: unknown) {
-      runtimeAccepted = false;
-    }
-
-    expect(validate({ demandKey: 'demand-1', projectRoot, runId: 'strict-run-1' })).toBe(
-      runtimeAccepted
-    );
-    expect(runtimeAccepted).toBe(expected);
   });
 
   test('generates OpenAPI from the provider manifest and keeps route operations unique', () => {

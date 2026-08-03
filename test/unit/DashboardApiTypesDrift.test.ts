@@ -12,14 +12,7 @@ import { describe, expect, test } from 'vitest';
 import {
   DASHBOARD_API_INPUT_SCHEMAS,
   DASHBOARD_API_ROUTES,
-  validateDashboardStrictTestOperationRequest,
-  validateDashboardStrictTestOperationResponse,
 } from '../../lib/generated/dashboard-api-types.js';
-import { buildAlembicHttpProblem } from '../../lib/http/problem-taxonomy.js';
-import {
-  STRICT_TEST_CANONICAL_ABSOLUTE_PATH_FORMAT,
-  STRICT_TEST_INPUT_STRING_FORMAT_VALIDATORS,
-} from '../../lib/recipe-pipeline/generate/strict/StrictTestRequestContracts.js';
 import {
   DASHBOARD_TYPES_ARTIFACT_RELPATH,
   generateDashboardApiTypes,
@@ -86,91 +79,5 @@ describe('Dashboard api-types drift gate (IC2)', () => {
         pattern: expect.any(String),
       });
     }
-  });
-
-  test('generated consumers validate exact requests with injected Main path authority', () => {
-    const validPreflight = {
-      body: {
-        demandKey: 'demand-1',
-        projectRoot: '/workspace/project',
-        runId: 'strict-run-1',
-      },
-      pathParameters: {},
-      query: {},
-    };
-    expect(
-      validateDashboardStrictTestOperationRequest(
-        'preflightStrictTestDimension',
-        validPreflight,
-        STRICT_TEST_INPUT_STRING_FORMAT_VALIDATORS
-      )
-    ).toBe(true);
-    expect(
-      validateDashboardStrictTestOperationRequest(
-        'preflightStrictTestDimension',
-        { ...validPreflight, body: { ...validPreflight.body, projectRoot: 'workspace/project' } },
-        STRICT_TEST_INPUT_STRING_FORMAT_VALIDATORS
-      )
-    ).toBe(false);
-    expect(
-      validateDashboardStrictTestOperationRequest(
-        'preflightStrictTestDimension',
-        validPreflight,
-        {}
-      )
-    ).toBe(false);
-    expect(
-      validateDashboardStrictTestOperationRequest(
-        'preflightStrictTestDimension',
-        { ...validPreflight, body: { ...validPreflight.body, dimension: 'architecture' } },
-        STRICT_TEST_INPUT_STRING_FORMAT_VALIDATORS
-      )
-    ).toBe(false);
-
-    const route = DASHBOARD_API_ROUTES.find(
-      (candidate) => candidate.operationId === 'preflightStrictTestDimension'
-    );
-    const schema = DASHBOARD_API_INPUT_SCHEMAS[route?.requestBodySchema ?? 'missing'];
-    expect(
-      (schema.properties as Record<string, unknown>).projectRoot as Record<string, unknown>
-    ).toMatchObject({
-      format: STRICT_TEST_CANONICAL_ABSOLUTE_PATH_FORMAT,
-      'x-alembic-validator': STRICT_TEST_CANONICAL_ABSOLUTE_PATH_FORMAT,
-    });
-  });
-
-  test('generated consumers validate declared strict-test response cells without shape reconstruction', () => {
-    const problem = {
-      success: false,
-      error: buildAlembicHttpProblem(
-        'STRICT_TEST_INVALID_REQUEST',
-        'Strict-test request rejected',
-        'invalid-input',
-        { status: 400 }
-      ),
-    };
-    expect(
-      validateDashboardStrictTestOperationResponse('preflightStrictTestDimension', 400, problem)
-    ).toBe(true);
-    expect(
-      validateDashboardStrictTestOperationResponse('preflightStrictTestDimension', 404, problem)
-    ).toBe(false);
-    expect(
-      validateDashboardStrictTestOperationResponse('startStrictTestDimensionRun', 422, {
-        ...problem,
-        data: {
-          schemaVersion: 1,
-          profile: 'strict-test-dimension',
-          demandKey: 'demand-1',
-          runId: 'strict-run-1',
-          phase: 'STRICT_TEST_FAILED',
-          preflightHash: `sha256:${'a'.repeat(64)}`,
-          automaticSelection: null,
-          terminal: null,
-          reportHash: null,
-          evidenceRefs: [],
-        },
-      })
-    ).toBe(true);
   });
 });
