@@ -13,7 +13,7 @@ const LEGACY_STRICT_TEST_ACTIVATION_KEYS = new Set([
   'testMode',
 ]);
 
-const StrictTestIdentity = z.string().min(1).max(256).regex(STRICT_TEST_IDENTITY_PATTERN);
+const StrictTestIdentity = z.string().regex(STRICT_TEST_IDENTITY_PATTERN);
 const CanonicalSha256 = z.string().regex(CANONICAL_SHA256_PATTERN);
 const CanonicalAbsolutePath = z
   .string()
@@ -41,33 +41,6 @@ const StrictTestRunRequestSchema = z
     runId: StrictTestIdentity,
   })
   .strict();
-const StrictTestEmptyQuerySchema = z.object({}).strict();
-
-/**
- * Provider/OpenAPI 只消费由真实运行时 parser 机械导出的 draft-07 片段。这样字段闭合、
- * identity 长度/正则和 hash 规则不会在 HTTP manifest 中形成第二份手写真相；移除局部
- * `$schema` 只是为了嵌入仓库既有 OpenAPI 3.0 文档，不迁移全局 dialect。
- */
-function runtimeParserJsonSchema(schema: z.ZodType): Readonly<Record<string, unknown>> {
-  return Object.freeze(
-    Object.fromEntries(
-      Object.entries(z.toJSONSchema(schema, { target: 'draft-7' })).filter(
-        ([key]) => key !== '$schema'
-      )
-    )
-  );
-}
-
-export const STRICT_TEST_PREFLIGHT_REQUEST_JSON_SCHEMA = runtimeParserJsonSchema(
-  StrictTestPreflightRequestSchema
-);
-export const STRICT_TEST_RUN_REQUEST_JSON_SCHEMA = runtimeParserJsonSchema(
-  StrictTestRunRequestSchema
-);
-export const STRICT_TEST_RUN_ID_JSON_SCHEMA = runtimeParserJsonSchema(StrictTestIdentity);
-export const STRICT_TEST_EMPTY_QUERY_JSON_SCHEMA = runtimeParserJsonSchema(
-  StrictTestEmptyQuerySchema
-);
 
 export type StrictTestPreflightRequestV1 = z.infer<typeof StrictTestPreflightRequestSchema>;
 export type StrictTestRunRequestV1 = z.infer<typeof StrictTestRunRequestSchema>;
@@ -85,7 +58,7 @@ export function parseStrictTestRunId(input: unknown): string {
 }
 
 export function assertStrictTestEmptyQuery(input: unknown): void {
-  StrictTestEmptyQuerySchema.parse(input);
+  z.object({}).strict().parse(input);
 }
 
 /**

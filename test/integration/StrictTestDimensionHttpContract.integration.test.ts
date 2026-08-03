@@ -1,3 +1,4 @@
+import { writeFileSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { HttpServer } from '../../lib/http/HttpServer.js';
@@ -150,5 +151,12 @@ describe('strict-test-dimension real Main HTTP entry', () => {
     expect(JSON.stringify(failedStartBody)).not.toMatch(
       /contentBase64|executionContext|\/private\//u
     );
+    const failureProbeOutput = process.env.ALEMBIC_STRICT_TEST_FAILED_START_PROBE_OUTPUT;
+    if (failureProbeOutput) {
+      writeFileSync(
+        failureProbeOutput,
+        `${JSON.stringify({ status: failedStart.status, body: failedStartBody })}\n`
+      );
+    }
   });
 });

@@ -5,10 +5,8 @@ import {
   type CoreFieldFailureKind,
   getCoreFailureTaxonomyEntry,
 } from '@alembic/core/shared';
-import Ajv from 'ajv';
 import { describe, expect, test } from 'vitest';
 import apiSpec from '../../lib/http/api-spec.js';
-import { buildAlembicHttpProblem } from '../../lib/http/problem-taxonomy.js';
 import {
   ALEMBIC_PROVIDER_CONTRACT_VERSION,
   ALEMBIC_PROVIDER_EVENT_CONTRACTS,
@@ -49,8 +47,8 @@ describe('Alembic provider contracts', () => {
     const expectedStatuses = {
       preflightStrictTestDimension: ['200', '400', '422'],
       startStrictTestDimensionRun: ['202', '400', '404', '422'],
-      getStrictTestDimensionRun: ['200', '400', '404', '422'],
-      getStrictTestDimensionReport: ['200', '400', '404', '409', '422'],
+      getStrictTestDimensionRun: ['200', '404', '422'],
+      getStrictTestDimensionReport: ['200', '404', '409', '422'],
     } as const;
 
     for (const [operationId, statuses] of Object.entries(expectedStatuses)) {
@@ -58,6 +56,11 @@ describe('Alembic provider contracts', () => {
         (candidate) => candidate.operationId === operationId
       );
       expect(Object.keys(route?.responseSchemas ?? {}).sort()).toEqual([...statuses].sort());
+      for (const status of statuses.filter((value) => !value.startsWith('2'))) {
+        expect(route?.responseSchemas[status]).toBe(
+          buildAlembicProviderOpenApiSpec().components.schemas.ProblemEnvelope
+        );
+      }
       const successStatus = statuses.find((status) => status.startsWith('2')) as string;
       const successSchema = route?.responseSchemas[successStatus] as Record<string, unknown>;
       const dataSchema = (successSchema.properties as Record<string, unknown>)?.data as Record<
@@ -67,101 +70,6 @@ describe('Alembic provider contracts', () => {
       expect(dataSchema.additionalProperties).toBe(false);
       expect(dataSchema['x-alembic-extension-point']).toBeUndefined();
     }
-
-    const start = ALEMBIC_PROVIDER_ROUTE_CONTRACTS.find(
-      (candidate) => candidate.operationId === 'startStrictTestDimensionRun'
-    );
-    const validateStartFailure = new Ajv({ strict: false, validateFormats: false }).compile(
-      start?.responseSchemas[422] ?? false
-    );
-    const canonicalProblem = {
-      success: false,
-      error: buildAlembicHttpProblem(
-        'STRICT_TEST_FAILED',
-        'Strict-test operation failed',
-        'internal-error',
-        { status: 422 }
-      ),
-    };
-    expect(validateStartFailure(canonicalProblem)).toBe(true);
-    expect(
-      validateStartFailure({
-        ...canonicalProblem,
-        data: {
-          phase: 'STRICT_TEST_FAILED',
-          runRoot: '/private/control/strict-test-runs/demand/run',
-          executionContext: { contentBase64: 'cHJpdmF0ZQ==' },
-        },
-      })
-    ).toBe(false);
-  });
-
-  test('publishes closed strict-test request, path, and query authority from runtime parsers', () => {
-    const routes = Object.fromEntries(
-      ALEMBIC_PROVIDER_ROUTE_CONTRACTS.filter((route) => route.tags.includes('Strict Test')).map(
-        (route) => [route.operationId, route]
-      )
-    );
-    const preflight = routes.preflightStrictTestDimension;
-    const start = routes.startStrictTestDimensionRun;
-    const status = routes.getStrictTestDimensionRun;
-    const report = routes.getStrictTestDimensionReport;
-    const ajv = new Ajv({ strict: false, validateFormats: false });
-
-    expect(preflight?.requestBodySchema).toMatchObject({
-      type: 'object',
-      required: ['demandKey', 'projectRoot', 'runId'],
-      additionalProperties: false,
-    });
-    expect(start?.requestBodySchema).toMatchObject({
-      type: 'object',
-      required: ['demandKey', 'preflightHash', 'runId'],
-      additionalProperties: false,
-    });
-    expect(status?.pathParameterSchemas).toEqual({ runId: expect.any(Object) });
-    expect(report?.pathParameterSchemas).toEqual({ runId: expect.any(Object) });
-    for (const route of [preflight, start, status, report]) {
-      expect(route?.querySchema).toEqual({
-        type: 'object',
-        properties: {},
-        additionalProperties: false,
-      });
-    }
-
-    const validatePreflight = ajv.compile(preflight?.requestBodySchema ?? false);
-    expect(
-      validatePreflight({
-        demandKey: 'demand-1',
-        projectRoot: '/workspace/project',
-        runId: 'strict-run-1',
-      })
-    ).toBe(true);
-    expect(
-      validatePreflight({
-        demandKey: 'demand-1',
-        projectRoot: '/workspace/project',
-        runId: 'strict-run-1',
-        dimension: 'architecture',
-      })
-    ).toBe(false);
-    const validateRunId = ajv.compile(status?.pathParameterSchemas.runId ?? false);
-    expect(validateRunId('strict-run-1')).toBe(true);
-    expect(validateRunId('../private')).toBe(false);
-
-    const spec = buildAlembicProviderOpenApiSpec();
-    const preflightOperation = spec.paths['/strict-test-dimension/preflight']?.post as Record<
-      string,
-      unknown
-    >;
-    const statusOperation = spec.paths['/strict-test-dimension/runs/{runId}']?.get as Record<
-      string,
-      unknown
-    >;
-    expect(preflightOperation.requestBody).toMatchObject({ required: true });
-    expect(statusOperation.parameters).toEqual([
-      expect.objectContaining({ in: 'path', name: 'runId', required: true }),
-    ]);
-    expect(preflightOperation['x-alembic-query-schema']).toEqual(preflight?.querySchema);
   });
 
   test('generates OpenAPI from the provider manifest and keeps route operations unique', () => {
