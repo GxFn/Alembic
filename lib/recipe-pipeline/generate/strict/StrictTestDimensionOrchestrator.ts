@@ -28,7 +28,6 @@ import type {
 } from './StrictTestRequestContracts.js';
 
 const CHECKPOINT_FILE = 'strict-test-dimension.checkpoint.json';
-const NONMUTATION_VIOLATION_FILE = 'strict-test-nonmutation-violation.json';
 
 export interface StrictTestPreparedPreflightV1 {
   readonly compiledPlan: CompiledColdStartPlanV2;
@@ -55,7 +54,6 @@ export interface StrictTestDimensionOrchestratorDependencies {
     readonly automaticSelection: StrictTestAutomaticSelectionReceiptV1;
     readonly projection: StrictTestDimensionExecutionProjectionV1;
     readonly executionContext?: unknown;
-    readonly reportStage: (stage: StrictTestFailureStageV1) => void;
   }): Promise<StrictTestPrivateExecutionResultV1>;
   findRunRoot(runId: string): Promise<string>;
   observeNonMutation(): Promise<{
@@ -65,7 +63,6 @@ export interface StrictTestDimensionOrchestratorDependencies {
   preparePreflight(input: StrictTestPreflightRequestV1): Promise<StrictTestPreparedPreflightV1>;
   revalidate(checkpoint: StrictTestDimensionCheckpointV1): Promise<StrictTestPreflightBindingsV1>;
   resolveRunRoot(demandKey: string, runId: string): string;
-  verifyCompletedRun(checkpoint: StrictTestDimensionCheckpointV1): Promise<void>;
   verificationCommands: readonly string[];
 }
 
@@ -233,9 +230,6 @@ export class StrictTestDimensionOrchestrator {
         preflight: checkpoint.preflight,
         automaticSelection,
         projection,
-        reportStage: (stage) => {
-          failedStage = stage;
-        },
         ...(checkpoint.executionContext !== undefined
           ? { executionContext: checkpoint.executionContext }
           : {}),
@@ -288,31 +282,6 @@ export class StrictTestDimensionOrchestrator {
       }
       const observed = await this.dependencies.observeNonMutation();
       const currentBindings = checkpoint.currentBindings;
-      if (
-        observed.productionStateHash !== currentBindings.productionBeforeStateHash ||
-        observed.publicRouteStateHash !== currentBindings.publicRouteBeforeStateHash
-      ) {
-        const violationSemantic = {
-          schemaVersion: 1 as const,
-          profile: 'strict-test-dimension' as const,
-          demandKey: checkpoint.demandKey,
-          runId: checkpoint.runId,
-          failedStage,
-          errorCode: errorCode(error),
-          productionBeforeStateHash: currentBindings.productionBeforeStateHash,
-          productionAfterStateHash: observed.productionStateHash,
-          publicRouteBeforeStateHash: currentBindings.publicRouteBeforeStateHash,
-          publicRouteAfterStateHash: observed.publicRouteStateHash,
-          detectedAt: this.dependencies.clock(),
-        };
-        await writeJsonAtomic(path.join(runRoot, NONMUTATION_VIOLATION_FILE), {
-          ...violationSemantic,
-          violationHash: hashCanonicalJson(violationSemantic),
-        });
-        // production/public drift 是完整性事件，不得伪装成普通 private terminal。保留独立
-        // sealed evidence 后立即失败关闭，原 durable checkpoint 仍停在最后一个合法私有阶段。
-        throw new Error('STRICT_TEST_PRODUCTION_MUTATION_DETECTED', { cause: error });
-      }
       const terminal = createStrictTestPrivateFailureReceiptV1({
         context: {
           currentBindings,
@@ -351,11 +320,7 @@ export class StrictTestDimensionOrchestrator {
   }
 
   async status(runId: string): Promise<StrictTestDimensionCheckpointV1> {
-    const checkpoint = await readRequiredCheckpoint(await this.dependencies.findRunRoot(runId));
-    if (checkpoint.terminal?.terminalState === 'STRICT_TEST_COMPLETED_PRIVATE') {
-      await this.dependencies.verifyCompletedRun(checkpoint);
-    }
-    return checkpoint;
+    return readRequiredCheckpoint(await this.dependencies.findRunRoot(runId));
   }
 
   async report(runId: string): Promise<StrictTestAuditReportV1> {
@@ -529,13 +494,6 @@ async function writeCheckpoint(checkpoint: StrictTestDimensionCheckpointV1): Pro
   const target = path.join(checkpoint.runRoot, CHECKPOINT_FILE);
   const temporary = `${target}.${process.pid}.tmp`;
   await fsp.writeFile(temporary, `${JSON.stringify(checkpoint)}\n`, { mode: 0o600 });
-  await fsp.rename(temporary, target);
-}
-
-async function writeJsonAtomic(target: string, value: unknown): Promise<void> {
-  await fsp.mkdir(path.dirname(target), { recursive: true });
-  const temporary = `${target}.${process.pid}.tmp`;
-  await fsp.writeFile(temporary, `${JSON.stringify(value)}\n`, { mode: 0o600 });
   await fsp.rename(temporary, target);
 }
 

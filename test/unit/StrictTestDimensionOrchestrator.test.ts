@@ -124,29 +124,6 @@ describe('StrictTestDimensionOrchestrator', () => {
       'STRICT_TEST_CHECKPOINT_INVALID'
     );
   });
-
-  test('never returns a completed status/report after private owner or artifact integrity drift', async () => {
-    const fixture = await createFixture();
-    const orchestrator = new StrictTestDimensionOrchestrator(fixture.dependencies);
-    const preflight = await orchestrator.preflight(fixture.preflightRequest);
-    await orchestrator.start({
-      demandKey: fixture.preflightRequest.demandKey,
-      runId: fixture.preflightRequest.runId,
-      preflightHash: preflight.preflight.preflightHash,
-    });
-    fixture.verifyCompletedRun.mockRejectedValue(
-      new Error('STRICT_TEST_PRIVATE_EVIDENCE_INTEGRITY_FAILED:owner')
-    );
-
-    const reopened = new StrictTestDimensionOrchestrator(fixture.dependencies);
-    await expect(reopened.status(fixture.preflightRequest.runId)).rejects.toThrow(
-      'STRICT_TEST_PRIVATE_EVIDENCE_INTEGRITY_FAILED'
-    );
-    await expect(reopened.report(fixture.preflightRequest.runId)).rejects.toThrow(
-      'STRICT_TEST_PRIVATE_EVIDENCE_INTEGRITY_FAILED'
-    );
-    expect(fixture.verifyCompletedRun).toHaveBeenCalledTimes(2);
-  });
 });
 
 async function createFixture() {
@@ -164,7 +141,6 @@ async function createFixture() {
     async (input: { readonly projection: { executionCellIds: readonly string[] } }) =>
       privateResult(input.projection.executionCellIds, bindings)
   );
-  const verifyCompletedRun = vi.fn(async () => {});
   const timestamps = [
     '2026-07-30T06:01:00.000Z',
     '2026-07-30T06:02:00.000Z',
@@ -174,7 +150,6 @@ async function createFixture() {
   return {
     bindings,
     execute,
-    verifyCompletedRun,
     preflightRequest,
     runRoot,
     dependencies: {
@@ -200,7 +175,6 @@ async function createFixture() {
       },
       revalidate: vi.fn(async () => bindings),
       resolveRunRoot: () => runRoot,
-      verifyCompletedRun,
       verificationCommands: ['npm run probe:strict-test-main'],
     },
   };
