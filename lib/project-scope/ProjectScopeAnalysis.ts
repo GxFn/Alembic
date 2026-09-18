@@ -1,4 +1,10 @@
-import type { ProjectDescriptor } from '@alembic/core/shared';
+import { stripSourceRangeSuffix } from '@alembic/core/knowledge';
+import {
+  buildProjectScopeSourceRefIndex,
+  type ProjectDescriptor,
+  type ProjectScopeSourceRefIndex,
+  resolveProjectScopeSourceRef,
+} from '@alembic/core/shared';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import { resolveAlembicWorkspace } from './ProjectScopeRegistry.js';
 
@@ -62,8 +68,12 @@ export interface ProjectScopeSourceIdentityMap {
   sourceCount: number;
 }
 
-export type ProjectScopeSourceRefNormalizationReason = 'qualified-path' | 'not-found';
-export type ProjectScopeSourceRefNormalizationStatus = 'active' | 'missing';
+export type ProjectScopeSourceRefNormalizationReason =
+  | 'qualified-path'
+  | 'absolute-path'
+  | 'ambiguous-path'
+  | 'not-found';
+export type ProjectScopeSourceRefNormalizationStatus = 'active' | 'missing' | 'ambiguous';
 
 export interface NormalizedProjectScopeSourceRef {
   absolutePath: string | null;
@@ -235,10 +245,17 @@ function normalizeProjectScopeSourceRefForRuntime(
   sourceRef: string,
   index: ProjectScopeSourceIdentityIndex
 ): NormalizedProjectScopeSourceRef {
-  const normalized = normalizeComparableSourcePath(sourceRef);
-  const qualified = index.byQualifiedPath.get(normalized);
-  if (qualified) {
-    return normalizedActiveSourceRef(sourceRef, qualified, 'qualified-path');
+  const resolution = resolveProjectScopeSourceRef(sourceRef, index);
+  // Main既有政策只接受qualified ref；新增明确绝对identity不能退回歧义显示名。
+  // 不使用Core的单folder relative fallback，避免改变旧宿主准入规则。
+  if (
+    resolution.identity &&
+    (resolution.reason === 'qualified-path' || resolution.reason === 'absolute-path')
+  ) {
+    return normalizedActiveSourceRef(sourceRef, resolution.identity, resolution.reason);
+  }
+  if (resolution.status === 'ambiguous') {
+    return normalizedRejectedSourceRef(sourceRef, 'ambiguous-path', 'ambiguous');
   }
   return normalizedRejectedSourceRef(sourceRef, 'not-found', 'missing');
 }
@@ -340,30 +357,31 @@ function isProjectScopeSourceIdentity(value: unknown): value is ProjectScopeSour
 function dedupeSourceIdentities(
   identities: readonly ProjectScopeSourceIdentity[]
 ): ProjectScopeSourceIdentity[] {
-  const byQualifiedPath = new Map<string, ProjectScopeSourceIdentity>();
+  const byIdentity = new Map<string, ProjectScopeSourceIdentity>();
   for (const identity of identities) {
     if (!identity.qualifiedPath.trim()) {
       continue;
     }
-    byQualifiedPath.set(identity.qualifiedPath, identity);
+    // 显示名不是folder身份；两个common目录必须都抵达Core，不能先在adapter丢失一个。
+    const key = JSON.stringify([
+      identity.projectScopeId,
+      identity.folderId ?? identity.folderPath,
+      identity.relativePath,
+      identity.absolutePath,
+    ]);
+    byIdentity.set(key, identity);
   }
-  return [...byQualifiedPath.values()].sort((left, right) =>
+  return [...byIdentity.values()].sort((left, right) =>
     left.qualifiedPath.localeCompare(right.qualifiedPath)
   );
 }
 
-interface ProjectScopeSourceIdentityIndex {
-  byQualifiedPath: Map<string, ProjectScopeSourceIdentity>;
-}
+type ProjectScopeSourceIdentityIndex = ProjectScopeSourceRefIndex;
 
 function buildProjectScopeSourceIdentityIndex(
   identities: readonly ProjectScopeSourceIdentity[]
 ): ProjectScopeSourceIdentityIndex {
-  const byQualifiedPath = new Map<string, ProjectScopeSourceIdentity>();
-  for (const identity of identities) {
-    byQualifiedPath.set(normalizeComparableSourcePath(identity.qualifiedPath), identity);
-  }
-  return { byQualifiedPath };
+  return buildProjectScopeSourceRefIndex(identities);
 }
 
 function uniqueStrings(values: readonly string[]): string[] {
@@ -372,13 +390,11 @@ function uniqueStrings(values: readonly string[]): string[] {
 
 function splitSourceRefLocation(sourceRef: string): { pathPart: string; suffix: string } {
   const trimmed = sourceRef.trim();
-  const match = /^(.*?)(:\d+(?::\d+)?)$/.exec(trimmed);
-  if (!match || !match[1]) {
-    return { pathPart: trimmed, suffix: '' };
-  }
+  // 与Core仓储/漂移检查共用同一范围语义，保留原行号/片段后缀，不把歧义误写成missing。
+  const pathPart = stripSourceRangeSuffix(trimmed);
   return {
-    pathPart: match[1],
-    suffix: match[2] ?? '',
+    pathPart,
+    suffix: trimmed.slice(pathPart.length),
   };
 }
 
@@ -393,7 +409,7 @@ function normalizedActiveSourceRef(
     folderId: identity.folderId,
     folderPath: identity.folderPath,
     input,
-    normalizedRef: identity.qualifiedPath,
+    normalizedRef: reason === 'absolute-path' ? input : identity.qualifiedPath,
     projectScopeId: identity.projectScopeId,
     qualifiedPath: identity.qualifiedPath,
     reason,
@@ -420,10 +436,6 @@ function normalizedRejectedSourceRef(
     relativePath: null,
     status,
   };
-}
-
-function normalizeComparableSourcePath(value: string): string {
-  return value.trim().replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+/g, '/');
 }
 
 function stringValue(value: unknown): string | null {

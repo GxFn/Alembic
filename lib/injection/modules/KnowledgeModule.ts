@@ -235,12 +235,14 @@ export function register(c: ServiceContainer) {
   // ═══ Governance / Evolution ═══
 
   c.singleton('sourceRefReconciler', (ct: ServiceContainer) => {
-    const projectRoot = resolveProjectRoot();
+    const projectRoot = resolveProjectRoot(ct);
     const sourceRefRepo = ct.get('recipeSourceRefRepository') as SourceRefRepository;
     const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepository;
     // P-C:注入 gitReader,配合调用方传 baselineCommit 后 drifted 可细分
     // line-shift/content-change(与 Plugin KnowledgeModule 同款,parity)。
     return new SourceRefReconciler(projectRoot, sourceRefRepo, knowledgeRepo, {
+      // RuntimeInitializer按每轮generate替换身份集合，singleton不能缓存构造时的空/旧scope。
+      sourceIdentityProvider: () => resolveProjectScopeSourceIdentitiesFromContainer(ct),
       signalBus: ct.singletons.signalBus || undefined,
       gitReader: createMainDriftGitReader(projectRoot),
     } as ConstructorParameters<typeof SourceRefReconciler>[3]);
@@ -249,6 +251,7 @@ export function register(c: ServiceContainer) {
   c.singleton('stagingManager', (ct: ServiceContainer) => {
     const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepository;
     return new StagingManager(knowledgeRepo, {
+      fileStore: ct.get('knowledgeFileWriter'),
       lifecycle: ct.services.lifecycleStateMachine
         ? (ct.get('lifecycleStateMachine') as LifecycleStateMachine)
         : undefined,
@@ -301,6 +304,7 @@ export function register(c: ServiceContainer) {
     // P-B:注入 projectRoot,update 提案执行后 refs 立即带 region 指纹落锚。
     return new ContentPatcher(knowledgeRepo, sourceRefRepo, {
       projectRoot: resolveProjectRoot(ct),
+      fileStore: ct.get('knowledgeFileWriter'),
     });
   });
 
@@ -315,7 +319,17 @@ export function register(c: ServiceContainer) {
       typeof LifecycleStateMachine
     >[2];
     const proposalRepo = ct.get('proposalRepository') as ProposalRepository;
-    return new LifecycleStateMachine(knowledgeRepo, lifecycleEventRepo, signalBus, proposalRepo);
+    // 进化与人工知识写入共用 Markdown 真相源，后续 sync 不得回滚状态。
+    return new LifecycleStateMachine(
+      knowledgeRepo,
+      lifecycleEventRepo,
+      signalBus,
+      proposalRepo,
+      undefined,
+      {
+        fileStore: ct.get('knowledgeFileWriter'),
+      }
+    );
   });
 
   c.singleton('proposalExecutor', (ct: ServiceContainer) => {

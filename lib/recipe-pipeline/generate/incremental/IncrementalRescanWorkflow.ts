@@ -329,6 +329,7 @@ export async function runIncrementalRescanWorkflow(
       // 可细分 line-shift/content-change(Plugin knowledge-index-rebuild 链已接;
       // 基线读不到 → 退回无精判的 drifted 标记,行为与旧版一致)。
       const sourceRefReconcilerOptions: SourceRefReconcilerOptions = {
+        sourceIdentities,
         signalBus,
         gitReader: createMainDriftGitReader(projectRoot),
       };
@@ -363,6 +364,8 @@ export async function runIncrementalRescanWorkflow(
         projectScopeId: analysisScope.projectScopeId,
         sourceIdentities: sourceIdentities.length,
         stale: reconcileReport.stale,
+        failed: reconcileReport.failed ?? 0,
+        blockers: reconcileReport.blockers ?? [],
       });
     }
   } catch (err: unknown) {

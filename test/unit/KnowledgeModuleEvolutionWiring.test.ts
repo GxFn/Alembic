@@ -51,14 +51,17 @@ describe('KnowledgeModule evolution wiring', () => {
     KnowledgeModule.register(container as never);
 
     const lifecycleStateMachine = { transition: vi.fn() };
+    const fileStore = { persist: vi.fn() };
     container.services.knowledgeRepository = () => ({});
     container.services.lifecycleStateMachine = () => lifecycleStateMachine;
+    container.services.knowledgeFileWriter = () => fileStore;
 
     container.get('stagingManager');
 
     expect(evolutionMock.StagingManager).toHaveBeenCalledTimes(1);
     expect(evolutionMock.stagingManagerOptions[0]).toMatchObject({
       lifecycle: lifecycleStateMachine,
+      fileStore,
     });
   });
 });
