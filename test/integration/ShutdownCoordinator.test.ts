@@ -21,13 +21,13 @@ describe('Integration: ShutdownCoordinator', () => {
   // 由于 ShutdownCoordinator class 未直接导出，我们需要每个测试一个新 module
   // 使用动态 import 搭配 vi.resetModules 来获取独立实例
 
-  let shutdown: typeof import('../../lib/shared/shutdown.js').shutdown;
+  let shutdown: typeof import('@alembic/core/shared').shutdown;
   let exitSpy: ReturnType<typeof vi.spyOn>;
   let stderrSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(async () => {
     vi.resetModules();
-    const mod = await import('../../lib/shared/shutdown.js');
+    const mod = await import('@alembic/core/shared');
     shutdown = mod.shutdown;
 
     // Mock process.exit to prevent test runner from exiting

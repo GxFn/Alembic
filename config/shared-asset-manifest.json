@@ -100,48 +100,6 @@
         ]
       },
       "notes": "README + _template.md per-host: _template.md heading variant (RC5 p1) plus three README tool-table rows that are host-divergent tool surfaces (main/codex alembic_search mode-routing + alembic_knowledge(confirm_usage|insights) ↔ plugin/cc compact alembic_search operation routing + Dashboard Candidates + alembic_project_matrix/alembic_graph). All other files must match exactly."
-    },
-    {
-      "id": "w2-shell-cacheservice",
-      "path": "lib/infrastructure/cache/CacheService.ts",
-      "mode": "exact",
-      "authority": "core (re-export shell; implementation lives in @alembic/core)",
-      "notes": "W2 2026-07-02: dual-host duplicate consolidated into Core; both hosts keep byte-identical re-export shells. Fork registry: AlembicCore/docs/fork-registry.md."
-    },
-    {
-      "id": "w2-shell-unifiedcacheadapter",
-      "path": "lib/infrastructure/cache/UnifiedCacheAdapter.ts",
-      "mode": "exact",
-      "authority": "core (re-export shell; implementation lives in @alembic/core)",
-      "notes": "W2 2026-07-02: dual-host duplicate consolidated into Core; both hosts keep byte-identical re-export shells. Fork registry: AlembicCore/docs/fork-registry.md."
-    },
-    {
-      "id": "w2-shell-graphcache",
-      "path": "lib/infrastructure/cache/GraphCache.ts",
-      "mode": "exact",
-      "authority": "core (re-export shell; implementation lives in @alembic/core)",
-      "notes": "W2 2026-07-02: dual-host duplicate consolidated into Core; both hosts keep byte-identical re-export shells. Fork registry: AlembicCore/docs/fork-registry.md."
-    },
-    {
-      "id": "w2-shell-graph-shared",
-      "path": "lib/types/graph-shared.ts",
-      "mode": "exact",
-      "authority": "core (re-export shell; implementation lives in @alembic/core)",
-      "notes": "W2 2026-07-02: dual-host duplicate consolidated into Core; both hosts keep byte-identical re-export shells. Fork registry: AlembicCore/docs/fork-registry.md."
-    },
-    {
-      "id": "w2-shell-search-wire",
-      "path": "lib/types/search-wire.ts",
-      "mode": "exact",
-      "authority": "core (re-export shell; implementation lives in @alembic/core)",
-      "notes": "W2 2026-07-02: dual-host duplicate consolidated into Core; both hosts keep byte-identical re-export shells. Fork registry: AlembicCore/docs/fork-registry.md."
-    },
-    {
-      "id": "w2-shell-shutdown",
-      "path": "lib/shared/shutdown.ts",
-      "mode": "exact",
-      "authority": "core (re-export shell; implementation lives in @alembic/core)",
-      "notes": "W2 2026-07-02: dual-host duplicate consolidated into Core; both hosts keep byte-identical re-export shells. Fork registry: AlembicCore/docs/fork-registry.md."
     }
   ]
 }

@@ -324,6 +324,21 @@ Each repository ships its own architecture README: `AlembicCore` (kernel layers,
 1. Run `npm test` before submitting
 2. Follow existing code patterns (ESM, domain-driven structure); `npm run check` runs the full gate chain
 
+### Shared Core imports
+
+Shared implementations are consumed directly through `@alembic/core` package entry points. The host forwarding files below have been retired; integrations using their source aliases or `dist/lib/...` deep paths should migrate to the corresponding Core entry point.
+
+| Former host path under `lib/` | Replacement import |
+| --- | --- |
+| `infrastructure/cache/{CacheService,GraphCache,UnifiedCacheAdapter}.js` | `@alembic/core/infrastructure/cache` |
+| `shared/shutdown.js` | `@alembic/core/shared` (`shutdown`) |
+| `types/graph-shared.js`, `types/search-wire.js` | `@alembic/core/types/graph-shared`, `@alembic/core/types/search-wire` |
+| Plugin: `host-runtime/mcp/handlers/{TargetClassifier,evolution-prescreen}.js` | `@alembic/core/host-agent-workflows` |
+| Plugin: `recipe-pipeline/generate/coverage-ledger-write.js` | `@alembic/core/host-agent-workflows` |
+| Plugin: `recipe-pipeline/generate/runtime/generate-event-types.js` | `@alembic/core/knowledge` |
+
+The existing Core exports, DTOs, shared shutdown instance and workflow implementations remain the integration contract. Each host continues to own its transport, service assembly and resource lifecycle.
+
 ## License
 
 [MIT](LICENSE) © gaoxuefeng

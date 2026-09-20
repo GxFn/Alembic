@@ -9,8 +9,8 @@
 import path from 'node:path';
 import { SignalAggregator, SignalBridge, SignalBus, SignalTraceWriter } from '@alembic/core/events';
 import type { ReportStore } from '@alembic/core/report';
+import { shutdown } from '@alembic/core/shared';
 import { resolveDataRoot } from '@alembic/core/workspace';
-import { shutdown } from '../../shared/shutdown.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
 
 export function register(c: ServiceContainer) {

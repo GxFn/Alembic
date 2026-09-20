@@ -6,12 +6,12 @@
 
 import { createServer, type Server } from 'node:http';
 import { join } from 'node:path';
+import { initCacheAdapter } from '@alembic/core/infrastructure/cache';
 import Logger from '@alembic/core/logging';
 import cors from 'cors';
 import express, { type Application, type NextFunction, type Request, type Response } from 'express';
 import helmet from 'helmet';
 import { registerGatewayActions } from '../governance/gateway/GatewayActionRegistry.js';
-import { initCacheAdapter } from '../infrastructure/cache/UnifiedCacheAdapter.js';
 import { initRealtimeService } from '../infrastructure/realtime/RealtimeService.js';
 import { getServiceContainer } from '../injection/ServiceContainer.js';
 import apiSpec from './api-spec.js';

@@ -30,6 +30,7 @@ import {
   maskAiEnvConfig,
   PROVIDER_KEY_ENV,
   type ProjectScopeSummary,
+  shutdown,
   WorkspaceSettingsStore,
 } from '@alembic/core/shared';
 import { DEFAULT_FOLDER_NAMES } from '@alembic/core/workspace';
@@ -43,7 +44,6 @@ import type {
 } from '../lib/daemon/runtime/ProjectRuntimeControl.js';
 import { resolveAlembicWorkspace } from '../lib/project-scope/ProjectScopeRegistry.js';
 import { DASHBOARD_DIR, PACKAGE_ROOT } from '../lib/shared/package-assets.js';
-import { shutdown } from '../lib/shared/shutdown.js';
 
 const pkgPath = join(PACKAGE_ROOT, 'package.json');
 const pkg = existsSync(pkgPath) ? JSON.parse(readFileSync(pkgPath, 'utf8')) : { version: '2.0.0' };

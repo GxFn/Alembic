@@ -17,6 +17,7 @@ import {
 import { timerRegistry } from '@alembic/core/events';
 import Logger from '@alembic/core/logging';
 import { hashCanonicalJson } from '@alembic/core/project-context-foundation';
+import { shutdown } from '@alembic/core/shared';
 import AppRuntime from '../lib/Bootstrap.js';
 import { markInterruptedDaemonJobs } from '../lib/daemon/jobs/DaemonJobRunner.js';
 import { createDisabledFileMonitorStatus } from '../lib/daemon/runtime/FileMonitorStatus.js';
@@ -33,7 +34,6 @@ import {
   resolveEvolutionMaintenanceSweepIntervalMs,
 } from '../lib/recipe-pipeline/sustain/evolution/EvolutionMaintenanceSweep.js';
 import { DASHBOARD_DIR } from '../lib/shared/package-assets.js';
-import { shutdown } from '../lib/shared/shutdown.js';
 
 shutdown.install();
 
