@@ -56,7 +56,7 @@ export class Gateway extends EventEmitter {
   auditLogger: AuditLogger | null;
   config: GatewayConfig | undefined;
   eventBus: EventBus | null;
-  logger;
+  logger: ReturnType<typeof Logger.getInstance>;
   routes: Map<string, (ctx: GatewayContext) => Promise<unknown>>;
   constructor(config?: GatewayConfig) {
     super();

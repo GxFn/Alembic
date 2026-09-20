@@ -40,7 +40,8 @@ export function safeInt(value: unknown, defaultValue: number, min = 1, max = 100
  * @param entryOrJson 实体或 toJSON 输出
  * @returns 过滤后的 JSON
  */
-export function sanitizeForAPI(entryOrJson: KnowledgeEntry | Record<string, unknown>) {
+// DB-only 更新可返回 null；保留既有对象展开得到空对象的 wire 行为。
+export function sanitizeForAPI(entryOrJson: KnowledgeEntry | Record<string, unknown> | null) {
   const json =
     typeof entryOrJson?.toJSON === 'function' ? entryOrJson.toJSON() : { ...entryOrJson };
   if (Array.isArray(json.tags)) {

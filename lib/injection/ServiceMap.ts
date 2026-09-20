@@ -1,3 +1,18 @@
+import type {
+  ConsolidationAdvisor,
+  ContentPatcher,
+  DecayDetector,
+  EnhancementSuggester,
+  LifecycleStateMachine,
+  ProposalExecutor,
+  ProposalGateway,
+  RedundancyAnalyzer,
+  StagingManager,
+} from '@alembic/core/evolution';
+import type { SourceRefReconciler } from '@alembic/core/knowledge';
+import type { LifecycleEventRepository } from '@alembic/core/repositories';
+import type { InProcessFileChangeHandler } from '../recipe-pipeline/sustain/evolution/InProcessFileChangeHandler.js';
+import type { FileChangeDispatcher } from '../service/FileChangeDispatcher.js';
 /**
  * ServiceMap — DI 容器类型安全映射
  *
@@ -118,6 +133,7 @@ export interface ServiceMap {
   sessionRepository: SessionRepository;
   proposalRepository: ProposalRepository;
   warningRepository: WarningRepository;
+  lifecycleEventRepository: LifecycleEventRepository;
   coverageLedgerRepository: CoverageLedgerRepository;
   recipeSourceRefRepository: SourceRefRepository;
   knowledgeFileWriter: KnowledgeFileWriter;
@@ -132,11 +148,17 @@ export interface ServiceMap {
   tokenUsageStore: TokenUsageStore;
   moduleService: ModuleService;
 
-  // ═══ KnowledgeModule ═══
+  // ═══ KnowledgeModule: 知识用例与共享服务 ═══
   confidenceRouter: ConfidenceRouter;
   knowledgeService: KnowledgeService;
-  recipeProductionGateway: RecipeProductionGateway;
   knowledgeGraphService: KnowledgeGraphService;
+  enhancementRegistry: unknown; // dynamic registry, type varies
+  languageService: typeof LanguageService;
+  dimensionCopy: typeof DimensionCopy;
+  aiProvider: AiProvider | null;
+  aiProviderManager: AiProviderManager | null;
+
+  // ═══ KnowledgeRetrievalModule ═══
   searchEngine: SearchEngine;
   baseVectorStore: VectorStore;
   vectorStore: VectorStore;
@@ -145,11 +167,22 @@ export interface ServiceMap {
   recipeVectorGenerationRuntime: RecipeVectorGenerationRuntime;
   indexingPipeline: IndexingPipeline;
   hybridRetriever: HybridRetriever;
-  enhancementRegistry: unknown; // dynamic registry, type varies
-  languageService: typeof LanguageService;
-  dimensionCopy: typeof DimensionCopy;
-  aiProvider: AiProvider | null;
-  aiProviderManager: AiProviderManager | null;
+
+  // ═══ KnowledgeEvolutionModule ═══
+  recipeProductionGateway: RecipeProductionGateway;
+  sourceRefReconciler: SourceRefReconciler;
+  stagingManager: StagingManager;
+  decayDetector: DecayDetector;
+  redundancyAnalyzer: RedundancyAnalyzer;
+  enhancementSuggester: EnhancementSuggester;
+  contentPatcher: ContentPatcher;
+  lifecycleStateMachine: LifecycleStateMachine;
+  proposalExecutor: ProposalExecutor;
+  consolidationAdvisor: ConsolidationAdvisor;
+  proposalGateway: ProposalGateway;
+
+  fileChangeHandler: InProcessFileChangeHandler;
+  fileChangeDispatcher: FileChangeDispatcher;
 
   // ═══ VectorModule ═══
   vectorService: VectorService;
