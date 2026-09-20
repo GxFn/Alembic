@@ -18,6 +18,8 @@ function makeSystemRunContext(): SystemRunContext {
     sharedState: {
       _dimensionScopeId: 'overview:analyst',
       submittedTitles: new Set(),
+      evidenceLedger: { entries: new Map() },
+      _sessionCounters: { repairs: 0 },
     },
     source: 'system',
     outputType: 'analysis',
@@ -25,6 +27,7 @@ function makeSystemRunContext(): SystemRunContext {
     dimensionId: 'overview',
     dimensionLabel: 'Overview',
     projectLanguage: 'ts',
+    _computedBudget: { maxIterations: 6 },
   };
 }
 
@@ -136,5 +139,23 @@ describe('buildGenerateDimensionRunInput', () => {
       },
       _pcvChainNodes: {},
     });
+    // Bootstrap compaction 只裁剪字段；状态、台账和预算不能序列化/深拷贝。
+    const compact = input.context.systemRunContext;
+    expect(compact).not.toBe(systemRunContext);
+    expect(compact?.contextWindow).toBe(systemRunContext.contextWindow);
+    expect(compact?.trace).toBe(systemRunContext.trace);
+    expect(compact?.activeContext).toBe(systemRunContext.activeContext);
+    expect(compact?.memoryCoordinator).toBe(systemRunContext.memoryCoordinator);
+    expect(compact?.sharedState).toBe(systemRunContext.sharedState);
+    expect(compact?._computedBudget).toBe(systemRunContext._computedBudget);
+    expect(input.context.sharedState?.submittedTitles).toBe(
+      systemRunContext.sharedState.submittedTitles
+    );
+    expect(input.context.sharedState?.evidenceLedger).toBe(
+      systemRunContext.sharedState.evidenceLedger
+    );
+    expect(input.context.sharedState?._sessionCounters).toBe(
+      systemRunContext.sharedState._sessionCounters
+    );
   });
 });

@@ -18,6 +18,7 @@ import type {
   ProjectScopeSourceIdentity,
   ProjectScopeSourceIdentityMap,
 } from '../../../project-scope/ProjectScopeAnalysis.js';
+import { compactBootstrapSystemRunContext } from './BootstrapSystemRunContext.js';
 import { buildGeneratePcvStageNodeContext } from './PcvStageNodeMap.js';
 
 // ── Dimension input builder ──────────────────────────────
@@ -146,30 +147,6 @@ export function buildGenerateDimensionRunInput({
       abortSignal: sessionAbortSignal || undefined,
     },
     presentation: { responseShape: 'system-task-result' },
-  };
-}
-
-function compactBootstrapSystemRunContext(systemRunContext: SystemRunContext): SystemRunContext {
-  return {
-    scopeId: systemRunContext.scopeId,
-    contextWindow: systemRunContext.contextWindow || null,
-    tracker: systemRunContext.tracker || null,
-    trace: systemRunContext.trace,
-    activeContext: systemRunContext.activeContext,
-    memoryCoordinator: systemRunContext.memoryCoordinator,
-    sharedState: systemRunContext.sharedState,
-    source: systemRunContext.source,
-    outputType: systemRunContext.outputType,
-    dimId: systemRunContext.dimId,
-    dimensionId: systemRunContext.dimensionId,
-    dimensionLabel: systemRunContext.dimensionLabel,
-    projectLanguage: systemRunContext.projectLanguage,
-    submitToolName: systemRunContext.submitToolName,
-    pipelineType: systemRunContext.pipelineType,
-    _computedBudget: systemRunContext._computedBudget,
-    pcvStageNodeMap: systemRunContext.pcvStageNodeMap,
-    pcvChainNodes: systemRunContext.pcvChainNodes,
-    pcvStageNodeMapContract: systemRunContext.pcvStageNodeMapContract,
   };
 }
 

@@ -100,6 +100,7 @@ describe('bootstrap dimension runtime builder', () => {
     expect(plan.prescreenDone).toBe(true);
 
     const memoryCoordinator = new MemoryCoordinator({ mode: 'bootstrap' });
+    const bootstrapDedup = { ledger: new Map(), counters: { hits: 0 } };
     const projectScopeSourceIdentityMap = buildProjectScopeSourceIdentityMap([
       {
         absolutePath: '/workspace/AlembicCore/lib/index.ts',
@@ -133,7 +134,7 @@ describe('bootstrap dimension runtime builder', () => {
       globalSubmittedTitles,
       globalSubmittedPatterns,
       globalSubmittedTriggers,
-      bootstrapDedup: {},
+      bootstrapDedup,
       sessionId: 'session-1',
       allFiles: [],
       projectScopeSourceIdentityMap,
@@ -218,6 +219,19 @@ describe('bootstrap dimension runtime builder', () => {
     expect(systemRunContext).not.toHaveProperty('evidenceStarters');
     expect(systemRunContext).not.toHaveProperty('existingRecipes');
     expect(systemRunContext).not.toHaveProperty('projectOverview');
+    const sharedState = systemRunContext.sharedState as Record<string, unknown>;
+    expect(sharedState.submittedTitles).toBe(globalSubmittedTitles);
+    expect(sharedState.submittedPatterns).toBe(globalSubmittedPatterns);
+    expect(sharedState.submittedTriggers).toBe(globalSubmittedTriggers);
+    expect(sharedState._bootstrapDedup).toBe(bootstrapDedup);
+    expect(result.runInput.context.sharedState?._bootstrapDedup).toBe(bootstrapDedup);
+    expect(systemRunContext.memoryCoordinator).toBe(memoryCoordinator);
+    expect(systemRunContext.contextWindow).toBe(strategyContext.contextWindow);
+    expect(systemRunContext.trace).toBe(strategyContext.trace);
+    expect(systemRunContext.activeContext).toBe(strategyContext.activeContext);
+    expect(systemRunContext._computedBudget).toBe(strategyContext._computedBudget);
+    expect(sharedState._pcvStageNodeMap).toBe(systemRunContext.pcvStageNodeMap);
+    expect(systemRunContext.pcvStageNodeMap).toEqual(strategyContext.pcvStageNodeMap);
   });
 
   test('carries ProjectScope source identity map through dimension run input surfaces', () => {

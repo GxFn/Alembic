@@ -1,55 +1,25 @@
 /**
- * ToolContextFactory — 为每次 V2 工具调用组装 ToolContext。
+ * ToolContextFactory — 绑定 Core 受控服务与可信身份，为每次工具调用组装 ToolContext。
  *
- * 长生命周期资源 (DeltaCache/SearchCache/Compressor/SessionStore)
- * 在 Factory 构造时创建一次，跨调用复用。
+ * 无状态 compressor/sandbox bridge 随宿主复用；会话和缓存由显式 run/view 管理。
  * 重量级 DI 服务 (searchEngine 等) 按需从容器获取。
  */
 
-import type { ToolCallRequest } from '@alembic/agent';
+import type { ToolCallRequest, ToolScopeRelease } from '@alembic/agent';
 import {
-  DeltaCache,
   type MemoryCoordinatorLike,
   OutputCompressor,
-  SearchCache,
   type ToolAuditSinkLike,
   type ToolContext,
 } from '@alembic/agent/tools/runtime';
+import {
+  createKnowledgeServiceAdapter,
+  type KnowledgeServiceHostPort,
+} from './KnowledgeServiceAdapter.js';
+import { ToolScopeResources } from './ToolScopeResources.js';
 
 interface ServiceContainer {
   get(name: string): unknown;
-}
-
-interface SimpleEntry {
-  key: string;
-  content: string;
-  meta?: Record<string, unknown>;
-  timestamp: number;
-}
-
-class SimpleSessionStore {
-  #entries: SimpleEntry[] = [];
-
-  save(key: string, content: string, meta?: Record<string, unknown>) {
-    this.#entries.push({ key, content, meta, timestamp: Date.now() });
-  }
-
-  recall(query?: string, opts?: { tags?: string[]; limit?: number }) {
-    let results = [...this.#entries];
-    if (query) {
-      const q = query.toLowerCase();
-      results = results.filter(
-        (e) => e.key.toLowerCase().includes(q) || e.content.toLowerCase().includes(q)
-      );
-    }
-    if (opts?.tags?.length) {
-      results = results.filter((e) =>
-        opts.tags?.some((t) => (e.meta?.tags as string[] | undefined)?.includes(t))
-      );
-    }
-    const limit = opts?.limit ?? 20;
-    return results.slice(-limit).map(({ key, content, meta }) => ({ key, content, meta }));
-  }
 }
 
 /**
@@ -120,18 +90,13 @@ export interface ToolContextFactoryDeps {
 
 export class ToolContextFactory {
   readonly #deps: ToolContextFactoryDeps;
-  readonly #deltaCache: DeltaCache;
-  readonly #searchCache: SearchCache;
+  readonly #resources = new ToolScopeResources();
   readonly #compressor: OutputCompressor;
-  readonly #sessionStore: SimpleSessionStore;
   readonly #sandboxBridge: SandboxExecutorBridge;
 
   constructor(deps: ToolContextFactoryDeps) {
     this.#deps = deps;
-    this.#deltaCache = new DeltaCache(200);
-    this.#searchCache = new SearchCache(100);
     this.#compressor = new OutputCompressor();
-    this.#sessionStore = new SimpleSessionStore();
     this.#sandboxBridge = new SandboxExecutorBridge();
   }
 
@@ -141,6 +106,12 @@ export class ToolContextFactory {
 
   create(request: ToolCallRequest): ToolContext {
     const c = this.#deps.container;
+    const resources = this.#resources.forRequest(request);
+    const service = tryGet(c, 'knowledgeService');
+    // 不能把 raw repository 强转成管理服务；缺服务时让 handler 明确报告缺失端口。
+    const knowledge = isKnowledgeService(service)
+      ? createKnowledgeServiceAdapter(service, request.actor?.user || 'anonymous')
+      : undefined;
 
     return {
       projectRoot: this.#deps.projectRoot,
@@ -148,7 +119,8 @@ export class ToolContextFactory {
       projectGraph: null,
       searchEngine: tryGet(c, 'searchEngine'),
       recipeGateway: tryGet(c, 'recipeProductionGateway'),
-      knowledgeRepo: tryGet(c, 'knowledgeRepository'),
+      knowledgeRead: knowledge,
+      knowledgeManagement: knowledge,
       // staging 复核通道（2026-07-06）：knowledge.manage review 经此提交复核结论。
       stagingManager: tryGet(c, 'stagingManager'),
       proposalGateway: tryGet(c, 'proposalGateway'),
@@ -157,10 +129,10 @@ export class ToolContextFactory {
       sandboxExecutor: this.#sandboxBridge,
       auditSink: tryGetAuditSink(c, 'auditLogger'),
 
-      deltaCache: this.#deltaCache,
-      searchCache: this.#searchCache,
+      deltaCache: resources.deltaCache,
+      searchCache: resources.searchCache,
       compressor: this.#compressor,
-      sessionStore: this.#sessionStore,
+      sessionStore: resources.sessionStore,
 
       tokenBudget: this.#deps.defaultTokenBudget ?? 8000,
       abortSignal: request.abortSignal ?? undefined,
@@ -168,6 +140,19 @@ export class ToolContextFactory {
       runtime: request.runtime ?? undefined,
     };
   }
+
+  releaseScope(scope: ToolScopeRelease): void {
+    this.#resources.releaseScope(scope);
+  }
+}
+
+function isKnowledgeService(value: unknown): value is KnowledgeServiceHostPort {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  return ['get', 'update', 'reject'].every(
+    (key) => typeof (value as Record<string, unknown>)[key] === 'function'
+  );
 }
 
 function tryGet(container: ServiceContainer, name: string): unknown {

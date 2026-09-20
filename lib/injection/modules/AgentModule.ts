@@ -29,7 +29,7 @@ export function register(c: ServiceContainer) {
   // capabilityCatalog: RuntimeCapabilityCatalog 直接从 TOOL_REGISTRY 生成 schema
   c.singleton('capabilityCatalog', () => new RuntimeCapabilityCatalog());
 
-  // ToolContextFactory: 长生命周期，持有 DeltaCache/SearchCache/Compressor
+  // 工厂随宿主复用；可变工具状态由 runtime 的 run/view scope 创建并在 finally 释放。
   c.singleton(
     'toolContextFactory',
     (ct: ServiceContainer) =>

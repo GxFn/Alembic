@@ -314,7 +314,12 @@
     "publicEntrypoint": "@alembic/agent",
     "publicV2Entrypoint": "@alembic/agent/tools/v2",
     "localDeletionCandidates": [],
-    "hostOwnedToolV2Paths": ["lib/tools/ToolContextFactory.ts", "lib/tools/adapters/**"],
+    "hostOwnedToolV2Paths": [
+      "lib/tools/ToolContextFactory.ts",
+      "lib/tools/KnowledgeServiceAdapter.ts",
+      "lib/tools/ToolScopeResources.ts",
+      "lib/tools/adapters/**"
+    ],
     "scanRoots": ["lib", "bin", "scripts", "test"],
     "ignoredPathPrefixes": [],
     "deferredLocalImports": [
@@ -332,6 +337,16 @@
         "path": "test/unit/ToolContextFactory.test.ts",
         "expectedSpecifiers": ["../../lib/tools/ToolContextFactory.js"],
         "reason": "ToolContextFactory has a dedicated host bridge test because it owns Alembic DI, audit sink, project-root, and sandbox executor wiring around the Agent V2 router."
+      },
+      {
+        "path": "test/unit/KnowledgeServiceAdapter.test.ts",
+        "expectedSpecifiers": ["../../lib/tools/ToolContextFactory.js"],
+        "reason": "Exercises the real host composition root with Agent's public router and Core services to verify controlled knowledge writes, trusted identity, and partial persistence receipts."
+      },
+      {
+        "path": "test/unit/ToolContextScope.test.ts",
+        "expectedSpecifiers": ["../../lib/tools/ToolContextFactory.js"],
+        "reason": "Verifies host-owned run/view resource lifetime and identity isolation around Agent's public router and caches."
       }
     ],
     "notes": [
@@ -427,6 +442,18 @@
     "allowedCallSites": []
   },
   "toolBoundaryRules": [
+    {
+      "path": "lib/tools/KnowledgeServiceAdapter.ts",
+      "classification": "alembic-main-knowledge-service-adapter",
+      "switchAfter": "do-not-migrate-by-default",
+      "reason": "Binds trusted host identity and configured Core KnowledgeService methods to Agent read/management ports; it does not implement Agent handlers or Core persistence."
+    },
+    {
+      "path": "lib/tools/ToolScopeResources.ts",
+      "classification": "alembic-main-tool-resource-lifecycle",
+      "switchAfter": "do-not-migrate-by-default",
+      "reason": "Owns per-run/session/view storage lifetime at the host composition root while consuming DeltaCache and SearchCache implementations from Agent."
+    },
     {
       "path": "lib/tools/ToolContextFactory.ts",
       "classification": "alembic-main-tool-v2-context-factory",

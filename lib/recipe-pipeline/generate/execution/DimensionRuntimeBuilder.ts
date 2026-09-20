@@ -24,6 +24,7 @@ import type {
 } from '@alembic/core/types';
 import type { ProjectScopeSourceIdentityMap } from '../../../project-scope/ProjectScopeAnalysis.js';
 import { buildGenerateDimensionRunInput, type GenerateFileEntry } from './AgentRunInputBuilders.js';
+import { compactBootstrapSystemRunContext } from './BootstrapSystemRunContext.js';
 import { buildGeneratePcvStageNodeContext } from './PcvStageNodeMap.js';
 import {
   type GenerateExistingRecipe,
@@ -331,30 +332,6 @@ export function createGenerateDimensionRuntimeInput({
       projectScopeSourceIdentityMap,
       sessionAbortSignal,
     }),
-  };
-}
-
-function compactBootstrapSystemRunContext(systemRunContext: SystemRunContext): SystemRunContext {
-  return {
-    scopeId: systemRunContext.scopeId,
-    contextWindow: systemRunContext.contextWindow || null,
-    tracker: systemRunContext.tracker || null,
-    trace: systemRunContext.trace,
-    activeContext: systemRunContext.activeContext,
-    memoryCoordinator: systemRunContext.memoryCoordinator,
-    sharedState: systemRunContext.sharedState,
-    source: systemRunContext.source,
-    outputType: systemRunContext.outputType,
-    dimId: systemRunContext.dimId,
-    dimensionId: systemRunContext.dimensionId,
-    dimensionLabel: systemRunContext.dimensionLabel,
-    projectLanguage: systemRunContext.projectLanguage,
-    submitToolName: systemRunContext.submitToolName,
-    pipelineType: systemRunContext.pipelineType,
-    _computedBudget: systemRunContext._computedBudget,
-    pcvStageNodeMap: systemRunContext.pcvStageNodeMap,
-    pcvChainNodes: systemRunContext.pcvChainNodes,
-    pcvStageNodeMapContract: systemRunContext.pcvStageNodeMapContract,
   };
 }
 
