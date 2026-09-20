@@ -325,7 +325,7 @@
     "deferredLocalImports": [
       {
         "path": "lib/injection/modules/AgentModule.ts",
-        "expectedSpecifiers": ["#tools/ToolContextFactory.js"],
+        "expectedSpecifiers": ["../../tools/ToolContextFactory.js"],
         "reason": "Alembic consumes Agent V2 catalog/router contracts from @alembic/agent/tools/v2 but keeps concrete ToolContextFactory as the host DI/repository/search/data-root bridge."
       },
       {
@@ -347,6 +347,11 @@
         "path": "test/unit/ToolContextScope.test.ts",
         "expectedSpecifiers": ["../../lib/tools/ToolContextFactory.js"],
         "reason": "Verifies host-owned run/view resource lifetime and identity isolation around Agent's public router and caches."
+      },
+      {
+        "path": "test/unit/MainToolAvailability.test.ts",
+        "expectedSpecifiers": ["../../lib/tools/ToolContextFactory.js"],
+        "reason": "Verifies Main's real service capability projection, side-effect-free discovery, and HTTP consumption through Agent public schema contracts."
       }
     ],
     "notes": [

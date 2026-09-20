@@ -3,7 +3,12 @@
  * AI 提供商管理、摘要、翻译、对话、工作区 LLM 配置
  */
 
-import type { ToolCapabilityManifest, ToolResultEnvelope } from '@alembic/agent';
+import type {
+  ToolCapabilityManifest,
+  ToolResultEnvelope,
+  ToolSchemaProjection,
+  ToolSchemaQueryPort,
+} from '@alembic/agent';
 import { createProvider, getModelRegistry, PROVIDER_CONFIGS } from '@alembic/agent/ai';
 import { ConversationStore } from '@alembic/agent/context';
 import { PRESETS } from '@alembic/agent/profiles';
@@ -706,13 +711,17 @@ router.post(
 router.get('/agent/capabilities', async (req: Request, res: Response): Promise<void> => {
   const container = getContainer();
   const capabilityCatalog = container.get('capabilityCatalog') as {
-    toToolSchemas(): Array<{
-      name: string;
-      description: string;
-      parameters: Record<string, unknown>;
-    }>;
+    querySchemas?: ToolSchemaQueryPort['querySchemas'];
+    toToolSchemas(): ToolSchemaProjection[];
   };
-  const tools = capabilityCatalog.toToolSchemas();
+  let tools: ToolSchemaProjection[];
+  if (typeof capabilityCatalog.querySchemas === 'function') {
+    // 此 HTTP 查询没有维度运行的 ledger/coordinator；显式空 runtime 不冒充运行期资源。
+    tools = capabilityCatalog.querySchemas({ runtime: {} }).schemas;
+  } else {
+    logger.debug('Agent capability listing uses legacy schema-only host compatibility');
+    tools = capabilityCatalog.toToolSchemas();
+  }
   const presets = Object.entries(PRESETS).map(([name, p]) => ({
     name,
     description: p.description,

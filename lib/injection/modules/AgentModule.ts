@@ -19,15 +19,22 @@ import { RuntimeCapabilityCatalog, ToolRouterAdapter } from '@alembic/agent/tool
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import { DASHBOARD_OPERATION_MANIFESTS } from '#tools/adapters/DashboardOperations.js';
 import { SKILL_CAPABILITY_MANIFESTS } from '#tools/adapters/SkillCapabilities.js';
-import { ToolContextFactory } from '#tools/ToolContextFactory.js';
 import { StrictSemanticReviewRuntimeFactory } from '../../service/semantic-review/StrictSemanticReviewRuntimeFactory.js';
 import { SkillHooks } from '../../service/skills/SkillHooks.js';
+import { ToolContextFactory } from '../../tools/ToolContextFactory.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
 
 export function register(c: ServiceContainer) {
   // ── Tool System ─────────────────────────────────────────────────
-  // capabilityCatalog: RuntimeCapabilityCatalog 直接从 TOOL_REGISTRY 生成 schema
-  c.singleton('capabilityCatalog', () => new RuntimeCapabilityCatalog());
+  // schema 与实际宿主端口使用同一能力快照；查询不创建工具会话，也不执行探测调用。
+  c.singleton(
+    'capabilityCatalog',
+    (ct: ServiceContainer) =>
+      new RuntimeCapabilityCatalog({
+        availability: (runtime) =>
+          (ct.get('toolContextFactory') as ToolContextFactory).getAvailability(runtime),
+      })
+  );
 
   // 工厂随宿主复用；可变工具状态由 runtime 的 run/view scope 创建并在 finally 释放。
   c.singleton(

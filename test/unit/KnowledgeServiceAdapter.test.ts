@@ -7,10 +7,14 @@ import { StagingManager } from '@alembic/core/evolution';
 import { pathGuard } from '@alembic/core/io';
 import { KnowledgeEntry, KnowledgeFileWriter, KnowledgeService } from '@alembic/core/knowledge';
 import { createAlembicRepositories } from '@alembic/core/repositories';
+import { SearchEngine } from '@alembic/core/search';
 import { ConflictError, NotFoundError, ValidationError } from '@alembic/core/shared';
 import { WorkspaceResolver } from '@alembic/core/workspace';
-import { expect, test } from 'vitest';
-import { createKnowledgeServiceAdapter } from '../../lib/tools/KnowledgeServiceAdapter.js';
+import { expect, test, vi } from 'vitest';
+import {
+  createKnowledgeSearchAdapter,
+  createKnowledgeServiceAdapter,
+} from '../../lib/tools/KnowledgeServiceAdapter.js';
 import { ToolContextFactory } from '../../lib/tools/ToolContextFactory.js';
 
 interface Fixture {
@@ -20,6 +24,7 @@ interface Fixture {
   projectRoot: string;
   router: ToolRouterAdapter;
   runtime: Awaited<ReturnType<typeof openAlembicDatabase>>;
+  searchEngine: SearchEngine;
   service: KnowledgeService;
   stagingManager: StagingManager;
 }
@@ -63,9 +68,11 @@ async function withService(run: (fixture: Fixture) => Promise<void>) {
     const stagingManager = new StagingManager(repositories.knowledgeRepository, {
       fileStore: fileWriter,
     });
+    const searchEngine = new SearchEngine(runtime.connection.getDb());
     const services: Record<string, unknown> = {
       knowledgeService: service,
       knowledgeRepository: repositories.knowledgeRepository,
+      searchEngine,
       stagingManager,
     };
     const router = new ToolRouterAdapter({
@@ -81,6 +88,7 @@ async function withService(run: (fixture: Fixture) => Promise<void>) {
       projectRoot,
       router,
       runtime,
+      searchEngine,
       service,
       stagingManager,
     });
@@ -93,7 +101,7 @@ async function withService(run: (fixture: Fixture) => Promise<void>) {
 
 function executeKnowledge(
   router: ToolRouterAdapter,
-  action: 'detail' | 'manage',
+  action: 'detail' | 'manage' | 'search' | 'prime',
   params: Record<string, unknown>,
   abortSignal?: AbortSignal
 ) {
@@ -402,10 +410,14 @@ test('factory/router/Core refuses invalid-only updates, missing scoring, and pre
     });
     expect(score.ok).toBe(false);
     expect(score.structuredContent).toMatchObject({
-      code: 'KNOWLEDGE_MANAGEMENT_PORT_UNAVAILABLE',
-      port: 'knowledgeManagement',
-      method: 'score',
+      code: 'TOOL_UNAVAILABLE',
+      status: 'blocked',
+      tool: 'knowledge',
+      action: 'manage',
+      writeState: 'not-started',
+      requiresReadback: false,
     });
+    expect(score.text).toContain('score');
     const controller = new AbortController();
     controller.abort();
     const cancelled = await executeKnowledge(
@@ -420,5 +432,119 @@ test('factory/router/Core refuses invalid-only updates, missing scoring, and pre
     });
     expect(audits).toEqual([]);
     expect((await service.get(entry.id)).toJSON()).toEqual(before);
+  });
+});
+
+test.each([
+  { category: 'guard', query: 'adapter', count: 1 },
+  { category: 'architecture', query: 'adapter', count: 0 },
+  { category: 'guard', query: 'zzqxv91872', count: 0 },
+])('factory/router/Core search response preserves results and filters: $category / $query', async ({
+  category,
+  query,
+  count,
+}) => {
+  await withService(async ({ entry, router, searchEngine }) => {
+    const core = await searchEngine.search(query, { type: 'all', category, limit: 5 });
+    expect(Array.isArray(core.items)).toBe(true);
+    expect(core.items).toHaveLength(count);
+    const result = await executeKnowledge(router, 'search', {
+      query,
+      category,
+      kind: 'all',
+      limit: 5,
+    });
+    expect(result.ok).toBe(true);
+    expect(result.structuredContent).toMatchObject({ count, items: expect.any(Array) });
+    if (count > 0) {
+      expect(result.structuredContent).toMatchObject({
+        items: [
+          expect.objectContaining({ id: entry.id, title: entry.title, score: expect.any(Number) }),
+        ],
+      });
+    }
+  });
+});
+
+test('factory/router/Core prime response consumes search items and enriches from the read port', async () => {
+  await withService(async ({ entry, router }) => {
+    const result = await executeKnowledge(router, 'prime', { taskGoal: 'adapter', limit: 5 });
+    expect(result.ok).toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      count: 1,
+      knowledge: [expect.objectContaining({ id: entry.id, title: entry.title })],
+    });
+  });
+});
+
+test.each([
+  'recipe',
+  'candidate',
+])('factory/router/Core refuses unsupported search kind %s before retrieval', async (kind) => {
+  await withService(async ({ router, searchEngine }) => {
+    const search = vi.spyOn(searchEngine, 'search');
+    const adapter = createKnowledgeSearchAdapter(searchEngine);
+    expect(adapter.supportedKinds).toEqual(['all']);
+    const error = await adapter.search('adapter', { kind, limit: 5 }).catch((err: unknown) => err);
+    expect(error).toMatchObject({
+      code: 'KNOWLEDGE_SEARCH_FILTER_UNSUPPORTED',
+      details: { kind, supportedKinds: ['all'] },
+    });
+    const result = await executeKnowledge(router, 'search', { query: 'adapter', kind, limit: 5 });
+    expect(result).toMatchObject({ ok: false, status: 'blocked' });
+    expect(result.structuredContent).toMatchObject({
+      code: 'TOOL_UNAVAILABLE',
+      status: 'blocked',
+      tool: 'knowledge',
+      action: 'search',
+      writeState: 'not-started',
+      requiresReadback: false,
+    });
+    expect(result.text).toContain(`kind=${kind}`);
+    expect(search).not.toHaveBeenCalled();
+  });
+});
+
+test.each([
+  'update',
+  'reject',
+] as const)('keeps a nullable host %s receipt as an unknown write requiring readback', async (operation) => {
+  // 仅验证 Core 新公开 nullable 回执的宿主边界；不把它当真实持久化结果。
+  const nullableService = {
+    async get(): Promise<KnowledgeEntry> {
+      throw new Error('Read was not expected');
+    },
+    async update() {
+      return null;
+    },
+    async reject() {
+      return null;
+    },
+  };
+  const router = new ToolRouterAdapter({
+    contextFactory: new ToolContextFactory({
+      container: { get: (name) => (name === 'knowledgeService' ? nullableService : undefined) },
+      projectRoot: process.cwd(),
+    }),
+  });
+  const result = await executeKnowledge(router, 'manage', {
+    operation,
+    id: 'receipt-missing',
+    data: { title: 'Attempted update' },
+    reason: 'Attempted rejection',
+  });
+  expect(result.ok).toBe(false);
+  expect(result.structuredContent).toMatchObject({
+    code: 'KNOWLEDGE_WRITE_RECEIPT_UNAVAILABLE',
+    writeState: 'unknown',
+    requiresReadback: true,
+    details: {
+      operation,
+      id: 'receipt-missing',
+      coreReceipt: null,
+      writeState: 'unknown',
+      requiresReadback: true,
+      retryable: false,
+    },
   });
 });
