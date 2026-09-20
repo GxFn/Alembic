@@ -74,6 +74,7 @@ import {
   FileRecipeVectorGenerationStorage,
   RecipeVectorGenerationRuntime,
 } from '../../../service/vector/RecipeVectorGenerationRuntime.js';
+import { requireKnowledgeWriteReceipt } from '../../../shared/knowledge-write-receipt.js';
 import type { StrictAnalysisExecutionResultV1 } from './StrictAnalysisRuntime.js';
 import {
   createStrictSemanticReviewEvidenceV1,
@@ -418,9 +419,7 @@ function createStrictPrivateCorpusGateway(options: {
   readonly acceptedCorpus: StrictAcceptedCorpusEntryV1[];
 }): RecipeProductionGateway {
   return new RecipeProductionGateway({
-    knowledgeService: options.knowledgeService as unknown as ConstructorParameters<
-      typeof RecipeProductionGateway
-    >[0]['knowledgeService'],
+    knowledgeService: options.knowledgeService,
     projectRoot: options.input.baseResolver.projectRoot,
     consolidationAdvisor: new ConsolidationAdvisor(
       options.repositories.knowledgeRepository
@@ -795,7 +794,11 @@ async function persistStrictContentReadyProposal(
   const active =
     persisted.recipe.lifecycle === 'active'
       ? persisted.recipe
-      : await context.gateway.publish(persisted.recipe.id, { userId: 'strict-production' });
+      : requireKnowledgeWriteReceipt(
+          await context.gateway.publish(persisted.recipe.id, { userId: 'strict-production' }),
+          'publish',
+          persisted.recipe.id
+        );
   if (active.lifecycle !== 'active') {
     throw new Error('STRICT_PRIVATE_CORPUS_G3_ACTIVE_FAILED');
   }
@@ -1457,7 +1460,7 @@ async function resolveStrictPreparedBinding(
 }
 
 async function createStrictReadyMemberProof(input: {
-  readonly active: Awaited<ReturnType<RecipeProductionGateway['publish']>>;
+  readonly active: NonNullable<Awaited<ReturnType<RecipeProductionGateway['publish']>>>;
   readonly binding: RecipeProductionBindingV1;
   readonly fileWriter: KnowledgeFileWriter;
   readonly persistence: StrictPersistenceReceiptV1;

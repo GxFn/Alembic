@@ -5,7 +5,7 @@
  */
 
 import { ioLimit } from '@alembic/core/shared';
-import express, { type Request, type Response } from 'express';
+import express, { type NextFunction, type Request, type Response } from 'express';
 import {
   BatchDeleteBody,
   BatchDeprecateBody,
@@ -15,6 +15,10 @@ import {
   UpdateKnowledgeBody,
 } from '#shared/schemas/http-requests.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
+import {
+  KnowledgeWriteReceiptUnavailableError,
+  requireKnowledgeWriteReceipt,
+} from '../../shared/knowledge-write-receipt.js';
 import { rejectUnlessConfirmed } from '../entrypoint-safety.js';
 import { validate } from '../middleware/validate.js';
 import {
@@ -293,7 +297,11 @@ router.patch('/:id', validate(UpdateKnowledgeBody), async (req: Request, res: Re
   const knowledgeService = container.get('knowledgeService');
   const context = getContext(req);
 
-  const entry = await knowledgeService.update(id, req.body, context);
+  const entry = requireKnowledgeWriteReceipt(
+    await knowledgeService.update(id, req.body, context),
+    'update',
+    id
+  );
   res.json({ success: true, data: sanitizeForAPI(entry) });
 });
 
@@ -329,7 +337,11 @@ router.patch('/:id/publish', async (req: Request, res: Response) => {
   const recipeProductionGateway = container.get('recipeProductionGateway');
   const context = getContext(req);
 
-  const entry = await recipeProductionGateway.publish(id, context);
+  const entry = requireKnowledgeWriteReceipt(
+    await recipeProductionGateway.publish(id, context),
+    'publish',
+    id
+  );
   const searchFreshness = await refreshKnowledgeSearchSurface(container, 'knowledge publish');
   res.json({
     success: true,
@@ -360,7 +372,11 @@ router.patch(
     const knowledgeService = container.get('knowledgeService');
     const context = getContext(req);
 
-    const entry = await knowledgeService.deprecate(id, reason, context);
+    const entry = requireKnowledgeWriteReceipt(
+      await knowledgeService.deprecate(id, reason, context),
+      'deprecate',
+      id
+    );
     res.json({ success: true, data: sanitizeForAPI(entry) });
   }
 );
@@ -375,7 +391,11 @@ router.patch('/:id/reactivate', async (req: Request, res: Response) => {
   const knowledgeService = container.get('knowledgeService');
   const context = getContext(req);
 
-  const entry = await knowledgeService.reactivate(id, context);
+  const entry = requireKnowledgeWriteReceipt(
+    await knowledgeService.reactivate(id, context),
+    'reactivate',
+    id
+  );
   res.json({ success: true, data: sanitizeForAPI(entry) });
 });
 
@@ -389,7 +409,11 @@ router.patch('/:id/stage', async (req: Request, res: Response) => {
   const knowledgeService = container.get('knowledgeService');
   const context = getContext(req);
 
-  const entry = await knowledgeService.stage(id, context);
+  const entry = requireKnowledgeWriteReceipt(
+    await knowledgeService.stage(id, context),
+    'stage',
+    id
+  );
   res.json({ success: true, data: sanitizeForAPI(entry) });
 });
 
@@ -403,7 +427,11 @@ router.patch('/:id/evolve', async (req: Request, res: Response) => {
   const knowledgeService = container.get('knowledgeService');
   const context = getContext(req);
 
-  const entry = await knowledgeService.evolve(id, context);
+  const entry = requireKnowledgeWriteReceipt(
+    await knowledgeService.evolve(id, context),
+    'evolve',
+    id
+  );
   res.json({ success: true, data: sanitizeForAPI(entry) });
 });
 
@@ -417,7 +445,11 @@ router.patch('/:id/decay', async (req: Request, res: Response) => {
   const knowledgeService = container.get('knowledgeService');
   const context = getContext(req);
 
-  const entry = await knowledgeService.decay(id, context);
+  const entry = requireKnowledgeWriteReceipt(
+    await knowledgeService.decay(id, context),
+    'decay',
+    id
+  );
   res.json({ success: true, data: sanitizeForAPI(entry) });
 });
 
@@ -431,7 +463,11 @@ router.patch('/:id/restore', async (req: Request, res: Response) => {
   const knowledgeService = container.get('knowledgeService');
   const context = getContext(req);
 
-  const entry = await knowledgeService.restore(id, context);
+  const entry = requireKnowledgeWriteReceipt(
+    await knowledgeService.restore(id, context),
+    'restore',
+    id
+  );
   res.json({ success: true, data: sanitizeForAPI(entry) });
 });
 
@@ -453,15 +489,23 @@ router.post('/batch-publish', validate(BatchPublishBody), async (req: Request, r
   const context = getContext(req);
 
   const results = await Promise.allSettled(
-    ids.map((id: string) => ioLimit(() => recipeProductionGateway.publish(id, context)))
+    ids.map((id: string) =>
+      ioLimit(async () =>
+        requireKnowledgeWriteReceipt(
+          await recipeProductionGateway.publish(id, context),
+          'publish',
+          id
+        )
+      )
+    )
   );
 
   const published = results
     .filter((r) => r.status === 'fulfilled')
     .map((r) => sanitizeForAPI(r.value));
-  const failed = results
-    .map((r, i) => (r.status === 'rejected' ? { id: ids[i], error: r.reason?.message } : null))
-    .filter(Boolean);
+  const failed = results.flatMap((r, i) =>
+    r.status === 'rejected' ? [batchWriteFailure(ids[i], r.reason)] : []
+  );
   const searchFreshness = await refreshKnowledgeSearchSurface(container, 'knowledge batch-publish');
 
   res.json({
@@ -472,8 +516,10 @@ router.post('/batch-publish', validate(BatchPublishBody), async (req: Request, r
       total: ids.length,
       successCount: published.length,
       failureCount: failed.length,
+      ...unknownWriteSummary(failed, published.length),
       publication: {
         route: 'admin/controller',
+        // 保留入口控制器确认语义；只有 published 子集代表已获成功回执。
         confirmed: true,
         lifecycle: 'active',
       },
@@ -535,16 +581,22 @@ router.post(
 
     const results = await Promise.allSettled(
       ids.map((id: string) =>
-        ioLimit(() => knowledgeService.deprecate(id, reason || 'batch deprecate', context))
+        ioLimit(async () =>
+          requireKnowledgeWriteReceipt(
+            await knowledgeService.deprecate(id, reason || 'batch deprecate', context),
+            'deprecate',
+            id
+          )
+        )
       )
     );
 
     const deprecated = results
       .filter((r) => r.status === 'fulfilled')
       .map((r) => sanitizeForAPI(r.value));
-    const failed = results
-      .map((r, i) => (r.status === 'rejected' ? { id: ids[i], error: r.reason?.message } : null))
-      .filter(Boolean);
+    const failed = results.flatMap((r, i) =>
+      r.status === 'rejected' ? [batchWriteFailure(ids[i], r.reason)] : []
+    );
 
     res.json({
       success: true,
@@ -554,6 +606,7 @@ router.post(
         total: ids.length,
         successCount: deprecated.length,
         failureCount: failed.length,
+        ...unknownWriteSummary(failed, deprecated.length),
       },
     });
   }
@@ -634,7 +687,47 @@ router.patch('/:id/quality', async (req: Request, res: Response) => {
   res.json({ success: true, data: result });
 });
 
+// 该错误只有 operation/id/状态等已知安全字段。生产环境也必须保留读回提示；
+// 其他 Core 错误对象原样交给既有中间件，不展开任意 cause、stack 或未知 details。
+router.use((error: unknown, _req: Request, res: Response, next: NextFunction) => {
+  if (!(error instanceof KnowledgeWriteReceiptUnavailableError)) {
+    next(error);
+    return;
+  }
+  res.status(error.statusCode).json({
+    success: false,
+    error: {
+      code: error.code,
+      message: error.message,
+      retryable: error.retryable,
+      details: error.details,
+    },
+  });
+});
+
 export default router;
+
+function batchWriteFailure(id: string, error: unknown) {
+  return {
+    id,
+    error: error instanceof Error ? error.message : String(error),
+    ...(error instanceof KnowledgeWriteReceiptUnavailableError
+      ? { code: error.code, details: error.details, retryable: error.retryable }
+      : {}),
+  };
+}
+
+function unknownWriteSummary(
+  failed: Array<ReturnType<typeof batchWriteFailure>>,
+  confirmedCount: number
+) {
+  const unknownCount = failed.filter(
+    (item) => item.code === 'KNOWLEDGE_WRITE_RECEIPT_UNAVAILABLE'
+  ).length;
+  return unknownCount > 0
+    ? { unknownCount, partial: confirmedCount > 0, requiresReadback: true, retryable: false }
+    : {};
+}
 
 interface KnowledgeRouteContainer {
   get(name: string): unknown;

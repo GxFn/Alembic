@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createProjectDescriptor } from '@alembic/core';
 import { readAlembicMigrationBundleManifest } from '@alembic/core/database';
+import { RecipeProductionGateway } from '@alembic/core/knowledge';
 import { ANATOMY_LENS_IDS } from '@alembic/core/plans';
 import {
   assertSemanticDispositionReviewDurableAttestationV5,
@@ -71,6 +72,71 @@ async function makeTreeWritable(root: string): Promise<void> {
 }
 
 describe('RecipePipelineFacade strict production integration', () => {
+  it('stops before content-ready when a real publish write loses its receipt', async () => {
+    const fixture = await createFixture();
+    const publish = RecipeProductionGateway.prototype.publish;
+    const writtenIds: string[] = [];
+    const droppedReceipt = vi
+      .spyOn(RecipeProductionGateway.prototype, 'publish')
+      .mockImplementation(async function (this: RecipeProductionGateway, id, context) {
+        await publish.call(this, id, context); // 真 Core 写入成功，只有返回回执在受控边界丢失。
+        writtenIds.push(id);
+        return null;
+      });
+    try {
+      await expect(executeFixture(fixture)).rejects.toMatchObject({
+        code: 'KNOWLEDGE_WRITE_RECEIPT_UNAVAILABLE',
+        retryable: false,
+        details: {
+          operation: 'publish',
+          id: expect.any(String),
+          writeState: 'unknown',
+          requiresReadback: true,
+        },
+      });
+      expect(droppedReceipt).toHaveBeenCalledOnce();
+      const operationRoot = path.join(
+        fixture.dataRoot,
+        'strict-production/operations/strict-integration-run'
+      );
+      const checkpoint = await readJson(
+        path.join(operationRoot, 'strict-production.checkpoint.json')
+      );
+      expect(checkpoint).not.toHaveProperty('privateCorpusContent');
+      expect(checkpoint).not.toHaveProperty('privateCorpus');
+      const journal = await fsp.readFile(
+        path.join(operationRoot, 'strict-production.journal.jsonl'),
+        'utf8'
+      );
+      expect(journal).not.toContain('CONTENT_READY_CORPUS_SEALED');
+      expect(journal).not.toContain('PUBLIC_CAS_PREPARED');
+      const init = await readJson(
+        path.join(operationRoot, 'strict-private-revision-init-receipt.json')
+      );
+      const database = new Database(
+        path.join(
+          fixture.dataRoot,
+          '.asd/context/recipe-runs/strict-integration-run/corpora',
+          String(init.revisionId),
+          '.asd/alembic.db'
+        ),
+        { readonly: true, fileMustExist: true }
+      );
+      try {
+        expect(
+          database
+            .prepare('SELECT id, lifecycle FROM knowledge_entries WHERE id = ?')
+            .get(writtenIds[0])
+        ).toEqual({ id: writtenIds[0], lifecycle: 'active' });
+      } finally {
+        database.close();
+      }
+    } finally {
+      droppedReceipt.mockRestore();
+      fixture.database.close();
+    }
+  }, 30_000);
+
   it('runs the real Facade/Generate/ColdStart chain through one public CAS without network access', async () => {
     const fixture = await createFixture();
     try {

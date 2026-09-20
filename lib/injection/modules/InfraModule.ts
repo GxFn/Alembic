@@ -17,7 +17,6 @@ import Logger from '@alembic/core/logging';
 import { MemoryRepositoryImpl } from '@alembic/core/memory';
 import {
   type AlembicRepositoryBundle,
-  type AlembicRepositoryDatabase,
   createAlembicRepositories,
 } from '@alembic/core/repositories';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
@@ -38,7 +37,7 @@ export function getCoreRepositoryBundle(ct: ServiceContainer): AlembicRepository
     return existing;
   }
 
-  const bundle = createAlembicRepositories(ct.get('database') as AlembicRepositoryDatabase);
+  const bundle = createAlembicRepositories(ct.get('database'));
   ct.singletons._coreRepositoryBundle = bundle;
   return bundle;
 }
@@ -58,18 +57,13 @@ export function register(c: ServiceContainer) {
   c.register('logger', () => Logger.getInstance());
 
   c.singleton('auditStore', (ct: ServiceContainer) => {
-    const db = ct.get('database') as ConstructorParameters<typeof AuditStore>[0];
+    const db = ct.get('database');
     return new AuditStore(db);
   });
   c.singleton(
     'auditLogger',
     (ct: ServiceContainer) =>
-      new AuditLogger(
-        ct.get('auditStore') as ConstructorParameters<typeof AuditLogger>[0],
-        ct.services.eventBus
-          ? (ct.get('eventBus') as ConstructorParameters<typeof AuditLogger>[1])
-          : null
-      )
+      new AuditLogger(ct.get('auditStore'), ct.services.eventBus ? ct.get('eventBus') : null)
   );
   c.singleton('gateway', () => new Gateway());
   c.singleton('eventBus', () => new EventBus({ maxListeners: 30 }));
@@ -146,12 +140,12 @@ export function register(c: ServiceContainer) {
   );
 
   c.singleton('auditRepository', (ct: ServiceContainer) => {
-    const db = ct.get('database') as ConstructorParameters<typeof AuditRepositoryImpl>[0];
+    const db = ct.get('database');
     return new AuditRepositoryImpl(db);
   });
 
   c.singleton('memoryRepository', (ct: ServiceContainer) => {
-    const db = ct.get('database') as unknown as { getDrizzle(): unknown };
+    const db = ct.get('database');
     const drizzle = db.getDrizzle();
     return new MemoryRepositoryImpl(
       drizzle as ConstructorParameters<typeof MemoryRepositoryImpl>[0]
@@ -178,6 +172,14 @@ export function register(c: ServiceContainer) {
     (ct: ServiceContainer) => getCoreRepositoryBundle(ct).coverageLedgerRepository
   );
 
+  c.singleton('warningRepository', (ct: ServiceContainer) => {
+    return getCoreRepositoryBundle(ct).warningRepository;
+  });
+
+  c.singleton('lifecycleEventRepository', (ct: ServiceContainer) => {
+    return getCoreRepositoryBundle(ct).lifecycleEventRepository;
+  });
+
   c.singleton('knowledgeFileWriter', (ct: ServiceContainer) => {
     const dataRoot = resolveDataRoot(ct);
     const wz = ct.singletons.writeZone as import('@alembic/core/io').WriteZone | undefined;
@@ -198,7 +200,7 @@ export function register(c: ServiceContainer) {
 
   c.singleton('reportStore', (ct: ServiceContainer) => {
     const dataRoot = resolveDataRoot(ct);
-    const wz = ct.get('writeZone') as WriteZone | null;
+    const wz = ct.get('writeZone');
     return new ReportStore(path.join(dataRoot, '.asd', 'logs', 'reports'), wz ?? undefined);
   });
 }
