@@ -1,6 +1,7 @@
 /** 查询前的本地索引门禁；不把模型空间迁移误计为 embedding 服务熔断失败。 */
 import Logger from '@alembic/core/logging';
 import { VectorService } from '@alembic/core/vector';
+import type { GenerationRoutingVectorStore } from './RecipeVectorGenerationRuntime.js';
 
 type Options = ConstructorParameters<typeof VectorService>[0];
 type ProfileFailure = 'embedding-profile-migration-required' | 'vector-store-unavailable';
@@ -8,14 +9,13 @@ type ProfileFailure = 'embedding-profile-migration-required' | 'vector-store-una
 export class ProfiledVectorService extends VectorService {
   readonly #hybrid: Options['hybridRetriever'];
   readonly #configured: boolean;
+  readonly #store: GenerationRoutingVectorStore;
 
-  constructor(
-    options: Options,
-    private readonly assertProfile: () => Promise<void>
-  ) {
+  constructor(options: Options & { vectorStore: GenerationRoutingVectorStore }) {
     super(options);
     this.#hybrid = options.hybridRetriever;
     this.#configured = !!options.embedProvider;
+    this.#store = options.vectorStore;
   }
 
   override async search(
@@ -55,7 +55,7 @@ export class ProfiledVectorService extends VectorService {
 
   async #profileFailure(): Promise<ProfileFailure | null> {
     try {
-      await this.assertProfile();
+      await this.#store.assertEmbeddingProfile();
       return null;
     } catch (err: unknown) {
       // 本地索引不可读与模型空间变更分开报告；二者都不应给远端服务累计失败。

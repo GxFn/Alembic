@@ -88,21 +88,12 @@ export function registerKnowledgeRetrieval(c: ServiceContainer) {
   c.singleton('indexingPipeline', (ct: ServiceContainer) => {
     const embedProvider = getEmbeddingProvider(ct);
     const dataRoot = resolveDataRoot(ct);
-    const pipeline = new ProfiledIndexingPipeline(
-      {
-        projectRoot: dataRoot,
-        scanDirs: resolveKnowledgeScanDirs(ct),
-        vectorStore: ct.get('vectorStore'),
-        aiProvider: embedProvider ?? undefined,
-      },
-      async () => {
-        const store = ct.get('vectorStore');
-        if (!(store instanceof GenerationRoutingVectorStore)) {
-          throw new Error('Indexing requires a profile-aware vector store');
-        }
-        await store.assertIndexingProfile();
-      }
-    );
+    const pipeline = new ProfiledIndexingPipeline({
+      projectRoot: dataRoot,
+      scanDirs: resolveKnowledgeScanDirs(ct),
+      vectorStore: ct.get('vectorStore'),
+      aiProvider: embedProvider ?? undefined,
+    });
     pipeline.setContextualEnricher(createLiveContextualEnricher(ct));
     return pipeline;
   });
@@ -122,17 +113,21 @@ export function registerKnowledgeRetrieval(c: ServiceContainer) {
 
 /** 宿主迁移门禁；分块、增量算法及 embedding 批处理仍完整委托给 Core。 */
 class ProfiledIndexingPipeline extends IndexingPipeline {
+  readonly #store: GenerationRoutingVectorStore;
+
   constructor(
-    options: ConstructorParameters<typeof IndexingPipeline>[0],
-    private readonly assertProfile: () => Promise<void>
+    options: ConstructorParameters<typeof IndexingPipeline>[0] & {
+      vectorStore: GenerationRoutingVectorStore;
+    }
   ) {
     super(options);
+    this.#store = options.vectorStore;
   }
 
   override async run(options: NonNullable<Parameters<IndexingPipeline['run']>[0]> = {}) {
     // force/clear 都由调用者明确请求重建，Core 在这两条路径不会复用历史向量。
     if (!options.force && !options.clear) {
-      await this.assertProfile();
+      await this.#store.assertIndexingProfile();
     }
     return super.run(options);
   }

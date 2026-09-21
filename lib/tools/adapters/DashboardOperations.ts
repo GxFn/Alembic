@@ -160,33 +160,10 @@ async function rebuildSemanticIndex(request: ToolExecutionRequest, deps: Dashboa
 
   const clear = request.args.clear !== false;
   const force = Boolean(request.args.force ?? false);
-  const vectorService = container.services.vectorService
-    ? (container.get('vectorService') as unknown as {
-        clear(): Promise<void>;
-        fullBuild(options: Record<string, unknown>): Promise<BuildResultLike>;
-      })
-    : null;
-
-  let result: Record<string, unknown>;
-  if (vectorService) {
-    if (clear) {
-      await vectorService.clear();
-    }
-    const buildResult = await vectorService.fullBuild({ force });
-    result = {
-      scanned: buildResult.scanned,
-      chunked: buildResult.chunked,
-      embedded: buildResult.embedded,
-      upserted: buildResult.upserted,
-      skipped: buildResult.skipped,
-      errors: buildResult.errors,
-    };
-  } else {
-    const indexingPipeline = container.get('indexingPipeline') as {
-      run(options: Record<string, unknown>): Promise<Record<string, unknown>>;
-    };
-    result = await indexingPipeline.run({ clear, force });
-  }
+  // Core fullBuild 透传同一重建请求；清理次序由管线统一负责，宿主不另行清空。
+  const result = container.services.vectorService
+    ? await container.get('vectorService').fullBuild({ clear, force })
+    : await container.get('indexingPipeline').run({ clear, force });
 
   logger.info('Semantic index rebuilt via dashboard router', { result });
   return {
@@ -306,13 +283,4 @@ function asRecord(value: unknown) {
 
 function numberArg(value: unknown, fallback: number) {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
-}
-
-interface BuildResultLike {
-  scanned?: unknown;
-  chunked?: unknown;
-  embedded?: unknown;
-  upserted?: unknown;
-  skipped?: unknown;
-  errors?: unknown;
 }

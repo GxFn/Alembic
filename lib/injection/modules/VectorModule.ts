@@ -40,43 +40,27 @@ export function register(c: ServiceContainer) {
         | Record<string, unknown>
         | undefined) || {};
 
-    return new ProfiledVectorService(
-      {
-        vectorStore: ct.get('vectorStore'),
-        indexingPipeline: ct.get('indexingPipeline'),
-        hybridRetriever: ct.services.hybridRetriever
-          ? (ct.get('hybridRetriever') as ConstructorParameters<
-              typeof VectorService
-            >[0]['hybridRetriever'])
-          : null,
-        eventBus: ct.services.eventBus
-          ? (ct.get('eventBus') as unknown as ConstructorParameters<
-              typeof VectorService
-            >[0]['eventBus'])
-          : null,
-        embedProvider,
-        recipeGenerationManager: ct.get('recipeVectorGenerationManager'),
-        recipeVectorTruthRemover: ct.get('recipeVectorGenerationStorage'),
-        contextualEnricher: createLiveContextualEnricher(ct),
-        autoSyncOnCrud: (config.autoSyncOnCrud as boolean) !== false,
-        syncDebounceMs: (config.syncDebounceMs as number) || 2000,
-        drizzle: ct.services.database
-          ? ((ct.get('database') as unknown as { getDrizzle?(): unknown }).getDrizzle?.() as
-              | import('@alembic/core/database').DrizzleDB
-              | undefined)
-          : undefined,
-      },
-      async () => {
-        const store = ct.get('vectorStore');
-        if (
-          !('assertEmbeddingProfile' in store) ||
-          typeof store.assertEmbeddingProfile !== 'function'
-        ) {
-          throw new Error('embedding-profile-migration-required');
-        }
-        await store.assertEmbeddingProfile();
-      }
-    );
+    return new ProfiledVectorService({
+      vectorStore: ct.get('vectorStore'),
+      indexingPipeline: ct.get('indexingPipeline'),
+      hybridRetriever: ct.services.hybridRetriever ? ct.get('hybridRetriever') : null,
+      eventBus: ct.services.eventBus
+        ? (ct.get('eventBus') as unknown as ConstructorParameters<
+            typeof VectorService
+          >[0]['eventBus'])
+        : null,
+      embedProvider,
+      recipeGenerationManager: ct.get('recipeVectorGenerationManager'),
+      recipeVectorTruthRemover: ct.get('recipeVectorGenerationStorage'),
+      contextualEnricher: createLiveContextualEnricher(ct),
+      autoSyncOnCrud: (config.autoSyncOnCrud as boolean) !== false,
+      syncDebounceMs: (config.syncDebounceMs as number) || 2000,
+      drizzle: ct.services.database
+        ? ((ct.get('database') as unknown as { getDrizzle?(): unknown }).getDrizzle?.() as
+            | import('@alembic/core/database').DrizzleDB
+            | undefined)
+        : undefined,
+    });
   });
 }
 

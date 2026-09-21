@@ -8,21 +8,19 @@
  *   - AI Provider 自动探测与创建
  *   - AiProviderManager 统一管理层
  *   - 独立固定 embedding 服务装配
- *   - AiFactory 实例注入
  *
  * @module AiModule
  */
 
-import { AiProviderManager, type ManagedAiProvider } from '@alembic/agent/ai';
+import { AiProviderManager, autoDetectProvider, type ManagedAiProvider } from '@alembic/agent/ai';
 import { alignDeepSeekReasoningEffort } from '../../infrastructure/config/RuntimeConfigLoadReceipt.js';
-import { getAiRuntimeStatus } from '../AiRuntimeStatus.js';
 import { createEmbeddingProvider } from '../EmbeddingProvider.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
 
 /**
  * 初始化 AI Provider（在模块注册前调用）
  *
- * 1. 装配独立 embedding 后动态导入 AiFactory
+ * 1. 装配独立 embedding
  * 2. 自动探测可用 AI Provider
  * 3. 创建 AiProviderManager（统一管理层）
  * 4. 绑定 LLM Token 追踪与生成型服务的 DI 失效
@@ -36,34 +34,20 @@ export async function initialize(c: ServiceContainer) {
   // an explicit provider-specific override always wins.
   alignDeepSeekReasoningEffort(process.env);
 
-  // AiFactory 模块引用
-  try {
-    c.singletons._aiFactory = await import('@alembic/agent/ai');
-  } catch {
-    c.singletons._aiFactory = null;
-  }
-
-  // 自动探测 AI Provider
-  if (!c.singletons.aiProvider && c.singletons._aiFactory) {
+  // 与 Manager 使用同一个公开 Agent 入口；不再缓存整份模块或伪装为可选 duck-type factory。
+  if (!c.singletons.aiProvider) {
     try {
-      const aiFactory = c.singletons._aiFactory as {
-        autoDetectProvider?: () => Record<string, unknown>;
-      };
-      if (typeof aiFactory.autoDetectProvider === 'function') {
-        c.singletons.aiProvider = aiFactory.autoDetectProvider();
-        const provider = c.singletons.aiProvider as Record<string, unknown> | null;
-        if (provider?.name === 'mock') {
-          logger.warn(
-            'AI provider auto-detect returned disabled mock provider; treating AI as unavailable'
-          );
-        } else {
-          logger.info('AI provider injected into container', {
-            provider: (provider?.constructor as { name?: string } | undefined)?.name || 'unknown',
-          });
-        }
-      }
-    } catch {
+      const provider = autoDetectProvider();
+      c.singletons.aiProvider = provider;
+      logger.info('AI provider detection completed', {
+        provider: provider?.name ?? null,
+        configured: !!provider && provider.name !== 'mock',
+      });
+    } catch (err: unknown) {
       c.singletons.aiProvider = null;
+      logger.warn('AI provider detection failed; runtime remains unavailable', {
+        errorKind: err instanceof Error ? err.name : 'unknown',
+      });
     }
   }
 
@@ -75,15 +59,10 @@ export async function initialize(c: ServiceContainer) {
     logger.warn('AI provider unavailable at startup; real provider configuration is required');
     return;
   }
-
-  // Token 追踪 AOP（manager 自身已在构造时 wire，此处延迟注入 recorder）
-  // recorder 注入放到 register() 之后（tokenUsageStore 需先注册）
-
-  // embedding 已在 LLM 探测前独立装配；生成模型就绪不参与其选择。
 }
 
 /** 一个容器只装配一次固定 embedding；换 LLM 不读取后来的 embedding env。 */
-export function initializeEmbedding(c: ServiceContainer): void {
+function initializeEmbedding(c: ServiceContainer): void {
   if (Object.hasOwn(c.singletons, '_embedProvider')) {
     return;
   }
@@ -104,22 +83,11 @@ export function initializeEmbedding(c: ServiceContainer): void {
 /**
  * 注册 AI 相关的服务到容器
  *
- * - 标记 AI 模块就绪
  * - 注册 aiProviderManager 服务
- * - 延迟注入 TokenRecorder（tokenUsageStore 此时已可用）
+ * - recorder 由 Manager 创建时绑定一次，调用时再解析存储。
  */
 export function register(c: ServiceContainer) {
-  c.singletons._aiModuleReady = true;
-
-  // 注册 aiProviderManager（消费者通过 container.get('aiProviderManager') 获取）
-  c.register('aiProviderManager', () => c.singletons._aiProviderManager);
-
-  // 延迟注入 TokenRecorder 到 manager（tokenUsageStore 在 AppModule 中注册）
-  const manager = c.singletons._aiProviderManager as AiProviderManager | null;
-  if (!manager) {
-    return;
-  }
-  attachTokenRecorder(c, manager);
+  c.register('aiProviderManager', () => c.singletons._aiProviderManager ?? null);
 }
 
 export function ensureManagerForProvider(
@@ -151,7 +119,10 @@ export function ensureManagerForProvider(
   manager._bindDependentClearer(() => clearAiDependentSingletons(c));
 
   // 无 LLM 启动后的首次启用也必须挂载 recorder；存储仍按调用时惰性解析。
-  attachTokenRecorder(c, manager);
+  manager.setTokenRecorder({
+    // Manager 隔离并诊断计量错误；此处不再吞掉真实存储故障，也无需重复安装 hook。
+    record: (usage) => c.get('tokenUsageStore').record(usage),
+  });
 
   return manager;
 }
@@ -165,30 +136,4 @@ export function clearAiDependentSingletons(c: ServiceContainer): string[] {
     }
   }
   return cleared;
-}
-
-export function attachTokenRecorder(c: ServiceContainer, manager: AiProviderManager): void {
-  const containerRef = c;
-  manager.setTokenRecorder({
-    record(r: {
-      source: string;
-      provider?: string;
-      model?: string;
-      inputTokens: number;
-      outputTokens: number;
-    }) {
-      try {
-        const store = containerRef.get('tokenUsageStore') as {
-          record: (rec: typeof r) => void;
-        };
-        store.record(r);
-      } catch {
-        /* tokenUsageStore not available yet */
-      }
-    },
-  });
-}
-
-export function isAiRuntimeReady(c: ServiceContainer): boolean {
-  return getAiRuntimeStatus(c).ready;
 }

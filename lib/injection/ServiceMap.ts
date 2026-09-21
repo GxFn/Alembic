@@ -102,6 +102,7 @@ import type { SkillHooks } from '../service/skills/SkillHooks.js';
 import type { ContextualEnricher } from '../service/vector/ContextualEnricher.js';
 import type {
   FileRecipeVectorGenerationStorage,
+  GenerationRoutingVectorStore,
   RecipeVectorGenerationRuntime,
 } from '../service/vector/RecipeVectorGenerationRuntime.js';
 
@@ -161,7 +162,7 @@ export interface ServiceMap {
   // ═══ KnowledgeRetrievalModule ═══
   searchEngine: SearchEngine;
   baseVectorStore: VectorStore;
-  vectorStore: VectorStore;
+  vectorStore: GenerationRoutingVectorStore;
   recipeVectorGenerationStorage: FileRecipeVectorGenerationStorage;
   recipeVectorGenerationManager: RecipeVectorGenerationManager;
   recipeVectorGenerationRuntime: RecipeVectorGenerationRuntime;

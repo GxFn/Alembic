@@ -112,9 +112,15 @@ describe('Dashboard semantic-index embedding boundary', () => {
   }
 
   test.each([
-    true,
-    false,
-  ])('allows independently configured embedding with no LLM (vectorService=%s)', async (useVectorService) => {
+    { useVectorService: true, clear: undefined, force: true },
+    { useVectorService: false, clear: undefined, force: true },
+    { useVectorService: true, clear: false, force: false },
+    { useVectorService: false, clear: false, force: false },
+  ])('passes one explicit rebuild request with no LLM (vectorService=$useVectorService, clear=$clear)', async ({
+    useVectorService,
+    clear,
+    force,
+  }) => {
     const { vector, pipeline, stats } = configuredBuild(useVectorService);
     mocks.container.singletons._embedProvider = createEmbeddingProvider(
       {},
@@ -128,16 +134,16 @@ describe('Dashboard semantic-index embedding boundary', () => {
       method: 'POST',
       mountPath: '/api/v1/commands',
       path: '/api/v1/commands/embed',
-      body: { force: true },
+      body: { clear, force },
     });
     expect(response.status, JSON.stringify(response.body)).toBe(200);
     expect(response.body).toMatchObject({ success: true, data: stats });
     if (useVectorService) {
-      expect(vector.clear).toHaveBeenCalledOnce();
-      expect(vector.fullBuild).toHaveBeenCalledExactlyOnceWith({ force: true });
+      expect(vector.clear).not.toHaveBeenCalled();
+      expect(vector.fullBuild).toHaveBeenCalledExactlyOnceWith({ clear: clear !== false, force });
       expect(pipeline.run).not.toHaveBeenCalled();
     } else {
-      expect(pipeline.run).toHaveBeenCalledExactlyOnceWith({ clear: true, force: true });
+      expect(pipeline.run).toHaveBeenCalledExactlyOnceWith({ clear: clear !== false, force });
       expect(vector.clear).not.toHaveBeenCalled();
       expect(vector.fullBuild).not.toHaveBeenCalled();
     }

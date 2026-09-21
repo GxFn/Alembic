@@ -390,7 +390,7 @@ router.post(
 
     // 通过 reloadAiProvider → AiProviderManager.switchProvider() 统一热切换
     const container = getServiceContainer();
-    container.reloadAiProvider(newProvider as unknown as Record<string, unknown>);
+    container.reloadAiProvider(newProvider);
     logger.info('AI provider switched via AiProviderManager', {
       provider: provider.toLowerCase(),
       model: newProvider.model,
@@ -960,7 +960,7 @@ router.post(
         model: model || undefined,
       });
       const container = getServiceContainer();
-      container.reloadAiProvider(newProvider as unknown as Record<string, unknown>);
+      container.reloadAiProvider(newProvider);
       logger.info('AI provider hot-swapped via AiProviderManager after env update', {
         provider,
         model: newProvider.model,

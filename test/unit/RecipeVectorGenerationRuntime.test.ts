@@ -47,34 +47,32 @@ describe('RecipeVectorGenerationRuntime', () => {
     await first.runtime.rebuild('migration');
     const provider = embeddingProvider({ model: 'embed-v2' });
     const query = vi.spyOn(provider, 'embedQuery');
-    let storageRecovered = mode === 'profile-migration';
     const routed = new GenerationRoutingVectorStore(
       jsonStore(path.join(root, 'base')),
       first.storage,
       () => provider.describeCapabilities()
     );
-    const service = new ProfiledVectorService(
-      {
+    // 故障发生在真实存储的 profile 检查边界；不再给服务注入另一套检查回调。
+    const failedRead =
+      mode === 'storage-unavailable'
+        ? vi
+            .spyOn(routed, 'assertEmbeddingProfile')
+            .mockRejectedValue(new Error('Fixture index unavailable'))
+        : null;
+    const service = new ProfiledVectorService({
+      vectorStore: routed,
+      indexingPipeline: new IndexingPipeline({
+        projectRoot: root,
         vectorStore: routed,
-        indexingPipeline: new IndexingPipeline({
-          projectRoot: root,
-          vectorStore: routed,
-          aiProvider: provider,
-        }),
-        hybridRetriever: new HybridRetriever({ vectorStore: routed }),
-        embedProvider: provider,
-        eventBus: null,
-        contextualEnricher: null,
-        autoSyncOnCrud: false,
-        syncDebounceMs: 10,
-      },
-      async () => {
-        if (!storageRecovered) {
-          throw new Error('Fixture index unavailable');
-        }
-        await routed.assertEmbeddingProfile();
-      }
-    );
+        aiProvider: provider,
+      }),
+      hybridRetriever: new HybridRetriever({ vectorStore: routed }),
+      embedProvider: provider,
+      eventBus: null,
+      contextualEnricher: null,
+      autoSyncOnCrud: false,
+      syncDebounceMs: 10,
+    });
     const sparseSearchFn = () => [{ id: 'lexical-fixture', score: 1 }];
     for (let i = 0; i < 4; i++) {
       const hits = await service.hybridSearch('recipe', { sparseSearchFn });
@@ -92,7 +90,7 @@ describe('RecipeVectorGenerationRuntime', () => {
     }
     expect(query).not.toHaveBeenCalled();
     await buildRuntime(root, provider).runtime.rebuild('migration');
-    storageRecovered = true;
+    failedRead?.mockRestore();
     await service.hybridSearch('recipe', { sparseSearchFn });
     expect(query).toHaveBeenCalledOnce();
     query.mockRestore();

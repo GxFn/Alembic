@@ -4,7 +4,7 @@
  * 覆盖范围:
  *   - IndexingPipeline scan / hashContent / run
  *   - Chunker 分块策略 (whole / section / fixed / auto)
- *   - Mock VectorStore 交互验证
+ *   - 真实 VectorStore 与受控 embedding 交互
  *   - 增量索引（hash 变化检测）
  *   - dryRun 模式
  *   - 边界: 无文件、空内容
@@ -13,7 +13,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { chunk, IndexingPipeline } from '@alembic/core/vector';
+import { chunk, IndexingPipeline, JsonVectorAdapter } from '@alembic/core/vector';
 
 describe('Integration: Indexing Pipeline & Chunker', () => {
   // ─── Chunker ──────────────────────────────────
@@ -78,6 +78,12 @@ describe('Integration: Indexing Pipeline & Chunker', () => {
   describe('IndexingPipeline', () => {
     let tmpDir: string;
 
+    function createStore() {
+      const store = new JsonVectorAdapter(tmpDir);
+      store.initSync();
+      return store;
+    }
+
     beforeEach(() => {
       tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'asd-idx-test-'));
     });
@@ -138,62 +144,82 @@ describe('Integration: Indexing Pipeline & Chunker', () => {
       expect(Array.isArray(files)).toBe(true);
     });
 
-    test('should run with mock vector store', async () => {
+    test('indexes with injected store/provider and reports progress', async () => {
       const recipesDir = path.join(tmpDir, 'recipes');
       fs.mkdirSync(recipesDir, { recursive: true });
       fs.writeFileSync(path.join(recipesDir, 'test.md'), '# Test Recipe\nSome content here');
 
-      const upserted: Array<{ id: string; content: string }> = [];
-      const mockVectorStore = {
-        init: async () => {},
-        listIds: async () => [],
-        getById: async () => null,
-        batchUpsert: async (items: Array<{ id: string; content: string }>) => {
-          upserted.push(...items);
-        },
-        remove: async () => {},
-      };
-
+      const store = createStore();
+      const embed = vi.fn(async (texts: string | string[]) =>
+        Array.isArray(texts) ? texts.map(() => [1, 0]) : [1, 0]
+      );
       const pipeline = new IndexingPipeline({
         scanDirs: ['recipes'],
         projectRoot: tmpDir,
-        vectorStore: mockVectorStore as any,
       });
-
-      const stats = await pipeline.run();
-      expect(stats.scanned).toBeGreaterThanOrEqual(1);
-      expect(stats.chunked).toBeGreaterThanOrEqual(1);
-      expect(stats.upserted).toBeGreaterThanOrEqual(1);
-      expect(upserted.length).toBeGreaterThanOrEqual(1);
+      pipeline.setVectorStore(store);
+      pipeline.setAiProvider({ embed });
+      const phases: string[] = [];
+      expect(await pipeline.run({ onProgress: (info) => phases.push(info.phase) })).toMatchObject({
+        scanned: 1,
+        chunked: 1,
+        embedded: 1,
+        upserted: 1,
+        errors: 0,
+      });
+      const ids = await store.listIds();
+      expect(ids).toHaveLength(1);
+      expect(await store.getById(ids[0])).toMatchObject({
+        content: '# Test Recipe\nSome content here',
+        vector: [1, 0],
+        metadata: { sourcePath: 'recipes/test.md' },
+      });
+      expect(embed).toHaveBeenCalledOnce();
+      expect(phases).toContain('upsert');
     });
 
     test('should skip unchanged files (incremental)', async () => {
       const recipesDir = path.join(tmpDir, 'recipes');
       fs.mkdirSync(recipesDir, { recursive: true });
-      fs.writeFileSync(path.join(recipesDir, 'stable.md'), '# Stable Content');
-
-      const content = fs.readFileSync(path.join(recipesDir, 'stable.md'), 'utf-8');
+      const source = path.join(recipesDir, 'stable.md');
+      fs.writeFileSync(source, '# Stable Content');
+      const store = createStore();
+      const upsert = vi.spyOn(store, 'batchUpsert');
+      const embed = vi.fn(async (texts: string | string[]) =>
+        Array.isArray(texts) ? texts.map(() => [1, 0]) : [1, 0]
+      );
       const pipeline = new IndexingPipeline({
         scanDirs: ['recipes'],
         projectRoot: tmpDir,
+        vectorStore: store,
+        aiProvider: { embed },
       });
-      const hash = pipeline.hashContent(content);
+      try {
+        // 使用首次真实写入的 sourcePath/producer/完整分块事实，不伪造只有 hash 的旧行。
+        expect(await pipeline.run()).toMatchObject({ skipped: 0, embedded: 1, upserted: 1 });
+        const ids = await store.listIds();
+        expect(ids).toHaveLength(1);
+        expect(await store.getById(ids[0])).toMatchObject({
+          content: '# Stable Content',
+          vector: [1, 0],
+          metadata: { sourcePath: 'recipes/stable.md' },
+        });
+        embed.mockClear();
+        upsert.mockClear();
 
-      const mockVectorStore = {
-        listIds: async () => ['recipes_stable.md_0'],
-        getById: async (id: string) => {
-          if (id === 'recipes_stable.md_0') {
-            return { metadata: { sourceHash: hash } };
-          }
-          return null;
-        },
-        batchUpsert: async () => {},
-        remove: async () => {},
-      };
+        expect(await pipeline.run()).toMatchObject({ skipped: 1, embedded: 0, upserted: 0 });
+        expect(embed).not.toHaveBeenCalled();
+        expect(upsert).not.toHaveBeenCalled();
+        expect(await store.listIds()).toEqual(ids);
 
-      pipeline.setVectorStore(mockVectorStore as any);
-      const stats = await pipeline.run();
-      expect(stats.skipped).toBeGreaterThanOrEqual(1);
+        fs.writeFileSync(source, '# Changed Content');
+        expect(await pipeline.run()).toMatchObject({ skipped: 0, embedded: 1, upserted: 1 });
+        expect(embed).toHaveBeenCalledOnce();
+        expect(upsert).toHaveBeenCalledOnce();
+        expect(await store.getById(ids[0])).toMatchObject({ content: '# Changed Content' });
+      } finally {
+        upsert.mockRestore();
+      }
     });
 
     test('should run in dryRun mode without writing', async () => {
@@ -201,68 +227,24 @@ describe('Integration: Indexing Pipeline & Chunker', () => {
       fs.mkdirSync(recipesDir, { recursive: true });
       fs.writeFileSync(path.join(recipesDir, 'dry.md'), '# Dry Run Test');
 
-      let upsertCalled = false;
-      const mockVectorStore = {
-        listIds: async () => [],
-        getById: async () => null,
-        batchUpsert: async () => {
-          upsertCalled = true;
-        },
-        remove: async () => {},
-      };
-
+      const store = createStore();
+      await store.upsert({ id: 'retained', content: 'prior data', vector: [], metadata: {} });
       const pipeline = new IndexingPipeline({
         scanDirs: ['recipes'],
         projectRoot: tmpDir,
-        vectorStore: mockVectorStore as any,
+        vectorStore: store,
       });
 
-      const stats = await pipeline.run({ dryRun: true });
-      expect(upsertCalled).toBe(false);
+      const stats = await pipeline.run({ dryRun: true, clear: true });
       expect(stats.upserted).toBe(0);
       expect(stats.chunked).toBeGreaterThanOrEqual(1);
+      expect(await store.listIds()).toEqual(['retained']);
+      expect(await store.getById('retained')).toMatchObject({ content: 'prior data' });
     });
 
     test('should throw without VectorStore', async () => {
       const pipeline = new IndexingPipeline({ projectRoot: tmpDir });
       await expect(pipeline.run()).rejects.toThrow('VectorStore not set');
-    });
-
-    test('should set vector store and AI provider dynamically', () => {
-      const pipeline = new IndexingPipeline();
-      const mockStore = { init: async () => {} };
-      const mockAi = { embed: async () => [[0.1, 0.2]] };
-
-      pipeline.setVectorStore(mockStore as any);
-      pipeline.setAiProvider(mockAi as any);
-      // Should not throw
-      expect(true).toBe(true);
-    });
-
-    test('should report progress via callback', async () => {
-      const recipesDir = path.join(tmpDir, 'recipes');
-      fs.mkdirSync(recipesDir, { recursive: true });
-      fs.writeFileSync(path.join(recipesDir, 'progress.md'), '# Progress');
-
-      const mockVectorStore = {
-        listIds: async () => [],
-        getById: async () => null,
-        batchUpsert: async () => {},
-        remove: async () => {},
-      };
-
-      const phases: string[] = [];
-      const pipeline = new IndexingPipeline({
-        scanDirs: ['recipes'],
-        projectRoot: tmpDir,
-        vectorStore: mockVectorStore as any,
-      });
-
-      await pipeline.run({
-        onProgress: (info) => phases.push(info.phase),
-      });
-
-      expect(phases).toContain('upsert');
     });
   });
 });

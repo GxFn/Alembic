@@ -1,4 +1,5 @@
 // ─── v3.1: Multi-Language Discovery + Enhancement ────────
+import type { AiProviderManager, ManagedAiProvider } from '@alembic/agent/ai';
 import { initFrameworkEnhancements } from '@alembic/core/enhancement';
 // ─── P3: Infrastructure ──────────────────────────────
 import Logger from '@alembic/core/logging';
@@ -166,38 +167,28 @@ export class ServiceContainer {
   /**
    * 热重载 AI Provider（API Key 变更后调用，无需重启进程）
    *
-   * 委托给 AiProviderManager.switchProvider() — 原子操作:
-   *  1. 替换 provider 引用 + DI 数据管道同步
-   *  2. Token 追踪 AOP 重新挂载
-   *  3. Embedding fallback 重建
-   *  4. 清除已缓存的依赖 AI 的 singleton（SearchEngine 等）
-   *  5. 监听器回调通知
+   * 通过 Agent 的公开 Manager 合同同步 LLM/计量并失效生成型依赖；
+   * 独立 embedding 与检索资源保留。首次启用也走同一装配入口。
    */
-  reloadAiProvider(newProvider: Record<string, unknown> | null) {
+  reloadAiProvider(newProvider: ManagedAiProvider | null) {
     if (!newProvider) {
       this.logger.warn('[ServiceContainer] reloadAiProvider called with null — ignored');
       return;
     }
-    const provider = newProvider as unknown as import('@alembic/agent/ai').ManagedAiProvider;
-    if (provider.name === 'mock') {
+    if (newProvider.name === 'mock') {
       this.logger.warn(
         '[ServiceContainer] mock AI provider reload rejected — configure a real provider'
       );
       return;
     }
 
-    const manager = this.singletons._aiProviderManager as
-      | {
-          switchProvider: (p: Record<string, unknown>) => unknown;
-        }
-      | null
-      | undefined;
+    const manager = this.singletons._aiProviderManager as AiProviderManager | null | undefined;
     if (manager) {
       manager.switchProvider(newProvider);
       return;
     }
 
-    AiModule.ensureManagerForProvider(this, provider);
+    AiModule.ensureManagerForProvider(this, newProvider);
     AiModule.clearAiDependentSingletons(this);
   }
 
