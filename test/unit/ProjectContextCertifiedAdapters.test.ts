@@ -37,11 +37,17 @@ afterEach(async () => {
 });
 
 describe('Alembic Main strict-v2 ProjectContext adapters', () => {
-  test('extracts each source once across the real certified capture batch', async () => {
+  test('extracts each source once per recorded and replayed capture view', async () => {
     const walk = vi.spyOn(typeScriptAstPlugin, 'walk');
     try {
-      await captureSingleRepository(2);
-      expect(walk).toHaveBeenCalledTimes(2);
+      const fixture = await captureSingleRepository(2);
+      const artifact = await openArtifact(fixture.dataRoot, fixture.certified);
+      expect(artifact.facts.inputClosure).toBeDefined();
+      expect(artifact.manifest.inputClosureHash).toBe(
+        hashCanonicalJson(artifact.facts.inputClosure)
+      );
+      // 每个视图内复用提取；独立重放必须重新计算，而不是复用记录阶段的 AST。
+      expect(walk).toHaveBeenCalledTimes(4);
     } finally {
       walk.mockRestore();
     }
