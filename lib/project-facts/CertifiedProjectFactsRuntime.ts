@@ -2,10 +2,12 @@ import path from 'node:path';
 import type { DimensionDef } from '@alembic/core/host-agent-workflows';
 import {
   buildProjectContextPresenterInput,
+  type ProjectContextContract,
   type ProjectContextEnvelope,
   type ProjectContextPresenterInput,
   type ProjectContextRequestKind,
   type ProjectContextResult,
+  withProjectContextSession,
 } from '@alembic/core/project-context';
 import {
   buildProjectContextRequestMatrixV2,
@@ -222,9 +224,19 @@ export function resolveMainCertifiedProjectScopeHash(
 export async function captureMainCertifiedProjectFacts(
   input: CaptureMainCertifiedProjectFactsInput
 ): Promise<MainCertifiedProjectFactsState> {
+  // 本次 capture 的所有请求共享实际源码版本和提取；退出或失败均由 Core 释放会话。
+  return withProjectContextSession((projectContext) =>
+    captureMainFactsInSession(input, projectContext)
+  );
+}
+
+async function captureMainFactsInSession(
+  input: CaptureMainCertifiedProjectFactsInput,
+  projectContext: ProjectContextContract
+): Promise<MainCertifiedProjectFactsState> {
   const scope = createMainScopeBinding(input);
   const inventoryPolicy = inventoryPolicyForScope(scope.manifest.repositories);
-  const ports = new NodeProjectContextFoundationHostPorts(undefined, {
+  const ports = new NodeProjectContextFoundationHostPorts(projectContext, {
     portableRoots: scope.repositories.map((repository) => ({
       portableId: repository.repoId,
       sourceRoot: repository.sourceRoot,

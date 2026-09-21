@@ -7,7 +7,8 @@ import {
   FileCertifiedProjectFactsStore,
   hashCanonicalJson,
 } from '@alembic/core/project-context-foundation';
-import { afterEach, describe, expect, test } from 'vitest';
+import { typeScriptAstPlugin } from '@alembic/core/test-fixtures';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import {
   assertMainCertifiedProjectFactsCarrier,
   buildStrictProjectContextWorkflowFacts,
@@ -36,6 +37,16 @@ afterEach(async () => {
 });
 
 describe('Alembic Main strict-v2 ProjectContext adapters', () => {
+  test('extracts each source once across the real certified capture batch', async () => {
+    const walk = vi.spyOn(typeScriptAstPlugin, 'walk');
+    try {
+      await captureSingleRepository(2);
+      expect(walk).toHaveBeenCalledTimes(2);
+    } finally {
+      walk.mockRestore();
+    }
+  });
+
   test('keeps the persisted session carrier bounded after real >12-file projection', async () => {
     const fixture = await captureSingleRepository(13);
     for (const consumer of Object.keys(MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS) as Array<
