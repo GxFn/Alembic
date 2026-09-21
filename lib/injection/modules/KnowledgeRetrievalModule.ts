@@ -13,30 +13,30 @@ import {
   GenerationRoutingVectorStore,
   RecipeVectorGenerationRuntime,
 } from '../../service/vector/RecipeVectorGenerationRuntime.js';
+import { createLiveContextualEnricher } from '../ContextualEnrichment.js';
+import { getEmbeddingProvider } from '../EmbeddingProvider.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
 
 export function registerKnowledgeRetrieval(c: ServiceContainer) {
   // ═══ Search + Vector ═══
 
-  c.singleton(
-    'searchEngine',
-    (ct: ServiceContainer) => {
-      const aiProvider = ct.singletons.aiProvider || null;
-      const embedProvider = ct.singletons._embedProvider || aiProvider;
-      const vectorService = ct.services.vectorService ? ct.get('vectorService') : null;
-      return new SearchEngine(ct.get('database'), {
-        aiProvider: embedProvider,
-        vectorStore: ct.get('vectorStore'),
-        vectorService,
-        hybridRetriever: ct.get('hybridRetriever'),
-        crossEncoderReranker: null,
-        signalBus: ct.singletons.signalBus || null,
-        knowledgeRepo: ct.get('knowledgeRepository'),
-        sourceRefRepo: ct.get('recipeSourceRefRepository'),
-      } as unknown as ConstructorParameters<typeof SearchEngine>[1]);
-    },
-    { aiDependent: true }
-  );
+  c.singleton('searchEngine', (ct: ServiceContainer) => {
+    const embedProvider = getEmbeddingProvider(ct);
+    const vectorService = ct.services.vectorService ? ct.get('vectorService') : null;
+    return new SearchEngine(ct.get('database'), {
+      // Core 的兼容查询槽只调用 embed(query)；显式投影到 query 避免丢失 Qwen 指令。
+      aiProvider: embedProvider
+        ? { embed: (query: string) => embedProvider.embedQuery(query) }
+        : null,
+      vectorStore: ct.get('vectorStore'),
+      vectorService,
+      hybridRetriever: ct.get('hybridRetriever'),
+      crossEncoderReranker: null,
+      signalBus: ct.singletons.signalBus || null,
+      knowledgeRepo: ct.get('knowledgeRepository'),
+      sourceRefRepo: ct.get('recipeSourceRefRepository'),
+    } as unknown as ConstructorParameters<typeof SearchEngine>[1]);
+  });
 
   c.singleton('baseVectorStore', (ct: ServiceContainer) => {
     const dataRoot = resolveDataRoot(ct);
@@ -67,45 +67,45 @@ export function registerKnowledgeRetrieval(c: ServiceContainer) {
     return new RecipeVectorGenerationManager(storage, storage);
   });
 
-  c.singleton(
-    'recipeVectorGenerationRuntime',
-    (ct: ServiceContainer) => {
-      const aiProvider = ct.singletons.aiProvider || null;
-      const embedProvider = ct.singletons._embedProvider || aiProvider;
-      return new RecipeVectorGenerationRuntime({
-        embedProvider: embedProvider as ConstructorParameters<
-          typeof RecipeVectorGenerationRuntime
-        >[0]['embedProvider'],
-        generationManager: ct.get('recipeVectorGenerationManager'),
-        knowledgeService: ct.get('knowledgeService'),
-        storage: ct.get('recipeVectorGenerationStorage'),
-      });
-    },
-    { aiDependent: true }
-  );
+  c.singleton('recipeVectorGenerationRuntime', (ct: ServiceContainer) => {
+    const embedProvider = getEmbeddingProvider(ct);
+    return new RecipeVectorGenerationRuntime({
+      embedProvider,
+      generationManager: ct.get('recipeVectorGenerationManager'),
+      knowledgeService: ct.get('knowledgeService'),
+      storage: ct.get('recipeVectorGenerationStorage'),
+    });
+  });
 
   c.singleton('vectorStore', (ct: ServiceContainer) => {
     return new GenerationRoutingVectorStore(
       ct.get('baseVectorStore'),
-      ct.get('recipeVectorGenerationStorage')
+      ct.get('recipeVectorGenerationStorage'),
+      () => getEmbeddingProvider(ct)?.describeCapabilities() ?? null
     );
   });
 
-  c.singleton(
-    'indexingPipeline',
-    (ct: ServiceContainer) => {
-      const aiProvider = ct.singletons.aiProvider || null;
-      const embedProvider = ct.singletons._embedProvider || aiProvider;
-      const dataRoot = resolveDataRoot(ct);
-      return new IndexingPipeline({
+  c.singleton('indexingPipeline', (ct: ServiceContainer) => {
+    const embedProvider = getEmbeddingProvider(ct);
+    const dataRoot = resolveDataRoot(ct);
+    const pipeline = new ProfiledIndexingPipeline(
+      {
         projectRoot: dataRoot,
         scanDirs: resolveKnowledgeScanDirs(ct),
         vectorStore: ct.get('vectorStore'),
-        aiProvider: embedProvider,
-      } as ConstructorParameters<typeof IndexingPipeline>[0]);
-    },
-    { aiDependent: true }
-  );
+        aiProvider: embedProvider ?? undefined,
+      },
+      async () => {
+        const store = ct.get('vectorStore');
+        if (!(store instanceof GenerationRoutingVectorStore)) {
+          throw new Error('Indexing requires a profile-aware vector store');
+        }
+        await store.assertIndexingProfile();
+      }
+    );
+    pipeline.setContextualEnricher(createLiveContextualEnricher(ct));
+    return pipeline;
+  });
 
   c.singleton('hybridRetriever', (ct: ServiceContainer) => {
     const config = (ct.singletons._config as Record<string, unknown> | undefined)?.vector as
@@ -118,6 +118,24 @@ export function registerKnowledgeRetrieval(c: ServiceContainer) {
       alpha: (hybrid.alpha as number) || 0.5,
     } as ConstructorParameters<typeof HybridRetriever>[0]);
   });
+}
+
+/** 宿主迁移门禁；分块、增量算法及 embedding 批处理仍完整委托给 Core。 */
+class ProfiledIndexingPipeline extends IndexingPipeline {
+  constructor(
+    options: ConstructorParameters<typeof IndexingPipeline>[0],
+    private readonly assertProfile: () => Promise<void>
+  ) {
+    super(options);
+  }
+
+  override async run(options: NonNullable<Parameters<IndexingPipeline['run']>[0]> = {}) {
+    // force/clear 都由调用者明确请求重建，Core 在这两条路径不会复用历史向量。
+    if (!options.force && !options.clear) {
+      await this.assertProfile();
+    }
+    return super.run(options);
+  }
 }
 
 function createConfiguredVectorStore(

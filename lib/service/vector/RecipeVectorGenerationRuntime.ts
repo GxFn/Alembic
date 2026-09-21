@@ -1,10 +1,12 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import Logger from '@alembic/core/logging';
 import {
   asEmbeddingPort,
   buildRecipeVectorGenerationManifest,
+  type EmbeddingCapabilityDescriptor,
+  type EmbedProvider,
   type RecipeRegionSourceEntry,
   type RecipeVectorGenerationBuildResult,
   type RecipeVectorGenerationManager,
@@ -45,15 +47,8 @@ interface RecipeKnowledgeService {
   ): Promise<{ data?: unknown[]; items?: unknown[] }>;
 }
 
-interface EmbeddingProviderLike {
-  embed?(texts: string | string[]): Promise<number[] | number[][]>;
-  embedDocuments?(texts: readonly string[]): Promise<number[][]>;
-  embedQuery?(text: string): Promise<number[]>;
-  describeCapabilities?(): Record<string, unknown>;
-}
-
 export interface RecipeVectorGenerationRuntimeOptions {
-  embedProvider: EmbeddingProviderLike | null;
+  embedProvider: EmbedProvider | null;
   generationManager: RecipeVectorGenerationManager;
   knowledgeService: RecipeKnowledgeService;
   storage: FileRecipeVectorGenerationStorage;
@@ -66,7 +61,7 @@ export interface RecipeVectorGenerationRuntimeOptions {
  * 自动维护在尚未完成首次显式迁移时保持 plan-only，避免启动/重扫偷偷改写旧索引。
  */
 export class RecipeVectorGenerationRuntime {
-  readonly #embedProvider: EmbeddingProviderLike | null;
+  readonly #embedProvider: EmbedProvider | null;
   readonly #generationManager: RecipeVectorGenerationManager;
   readonly #knowledgeService: RecipeKnowledgeService;
   readonly #storage: FileRecipeVectorGenerationStorage;
@@ -95,10 +90,7 @@ export class RecipeVectorGenerationRuntime {
       manifest,
       changes: {
         corpusChanged: activeManifest?.corpusFingerprint !== manifest.corpusFingerprint,
-        embeddingChanged:
-          activeManifest?.provider !== manifest.provider ||
-          activeManifest?.model !== manifest.model ||
-          activeManifest?.dimension !== manifest.dimension,
+        embeddingChanged: !activeManifest || !sameEmbeddingProfile(activeManifest, descriptor),
         documentCount: manifest.documentCount,
         recipeCount: manifest.recipeCount,
       },
@@ -109,16 +101,20 @@ export class RecipeVectorGenerationRuntime {
     createdFrom: RecipeVectorGenerationSource = 'full-build'
   ): Promise<RecipeVectorGenerationBuildResult> {
     const entries = await this.#listAuthoritativeRecipes();
-    return this.#generationManager.buildAndActivate(
-      entries,
-      this.#embeddingPort() as Parameters<RecipeVectorGenerationManager['buildAndActivate']>[1],
-      { createdFrom }
-    );
+    return this.#generationManager.buildAndActivate(entries, this.#embeddingPort(), {
+      createdFrom,
+    });
   }
 
   async maintain(createdFrom: Exclude<RecipeVectorGenerationSource, 'migration'>) {
     const active = await this.#storage.readActive();
-    if (!active) {
+    const manifest = active ? await this.#storage.readManifest(active.generationId) : null;
+    if (
+      !active ||
+      !manifest ||
+      !sameEmbeddingProfile(manifest, this.#embeddingPort().describeCapabilities())
+    ) {
+      // 改 embedding 属于显式迁移；后台 CRUD 维护不能悄悄切换向量空间。
       const plan = await this.dryRun(createdFrom);
       return { ...plan, status: 'planned' as const };
     }
@@ -156,7 +152,7 @@ export class RecipeVectorGenerationRuntime {
     if (!this.#embedProvider) {
       throw new Error('Recipe vector generation requires an embedding provider');
     }
-    return asEmbeddingPort(this.#embedProvider as Parameters<typeof asEmbeddingPort>[0]);
+    return asEmbeddingPort(this.#embedProvider);
   }
 
   async #listAuthoritativeRecipes(): Promise<RecipeRegionSourceEntry[]> {
@@ -459,7 +455,11 @@ export class GenerationRoutingVectorStore extends VectorStore {
   readonly #storage: FileRecipeVectorGenerationStorage;
   #invalidActiveSignature: string | null = null;
 
-  constructor(base: VectorStore, storage: FileRecipeVectorGenerationStorage) {
+  constructor(
+    base: VectorStore,
+    storage: FileRecipeVectorGenerationStorage,
+    private readonly describeEmbedding?: () => EmbeddingCapabilityDescriptor | null
+  ) {
     super();
     this.#base = base;
     this.#storage = storage;
@@ -471,17 +471,17 @@ export class GenerationRoutingVectorStore extends VectorStore {
 
   async upsert(item: VectorItem): Promise<void> {
     const store = await this.#writeStore(item);
-    await store.upsert(item);
+    await store.upsert(store === this.#base ? this.#tagBase(item) : item);
   }
 
   async batchUpsert(items: VectorItem[]): Promise<void> {
     const recipeItems = items.filter(isRecipeVectorItem);
     const baseItems = items.filter((item) => !isRecipeVectorItem(item));
     if (baseItems.length > 0) {
-      await this.#base.batchUpsert(baseItems);
+      await this.#base.batchUpsert(baseItems.map((item) => this.#tagBase(item)));
     }
     if (recipeItems.length > 0) {
-      const active = await this.#verifiedActiveStore();
+      const { active } = await this.#denseSnapshot();
       if (!active) {
         throw new Error('recipe-vector-generation-not-active');
       }
@@ -514,9 +514,11 @@ export class GenerationRoutingVectorStore extends VectorStore {
     queryVector: number[],
     options?: Record<string, unknown>
   ): Promise<VectorSearchResult[]> {
-    const active = await this.#verifiedActiveStore();
+    const { active, profile } = await this.#denseSnapshot(queryVector.length);
     const baseResults = filterBaseResults(
-      await this.#base.searchVector(queryVector, options),
+      await this.#searchBase(options ?? {}, profile, (scoped) =>
+        this.#base.searchVector(queryVector, scoped)
+      ),
       Boolean(active)
     );
     const activeResults = active ? await active.searchVector(queryVector, options) : [];
@@ -559,11 +561,21 @@ export class GenerationRoutingVectorStore extends VectorStore {
   }
 
   async query(queryVector: number[], topK = 10) {
-    const active = await this.#verifiedActiveStore();
-    const baseResults = filterBaseResults(
-      await queryStore(this.#base, queryVector, topK),
-      Boolean(active)
-    );
+    const { active, profile } = await this.#denseSnapshot(queryVector.length);
+    const baseValues = profile
+      ? (
+          await this.#searchBase({ topK }, profile, (scoped) =>
+            this.#base.searchVector(queryVector, scoped)
+          )
+        ).map(({ item, score }) => ({
+          id: item.id,
+          similarity: score,
+          score,
+          content: item.content,
+          metadata: item.metadata ?? {},
+        }))
+      : await queryStore(this.#base, queryVector, topK);
+    const baseResults = filterBaseResults(baseValues, Boolean(active));
     const activeResults = active ? await queryStore(active, queryVector, topK) : [];
     return mergeGenericRanked([...baseResults, ...activeResults], topK);
   }
@@ -573,11 +585,15 @@ export class GenerationRoutingVectorStore extends VectorStore {
     queryText: string,
     options: Record<string, unknown> = {}
   ) {
-    const active = await this.#verifiedActiveStore();
-    const baseResults = filterBaseResults(
-      await hybridSearchStore(this.#base, queryVector, queryText, options),
-      Boolean(active)
-    );
+    const { active, profile } = queryVector
+      ? await this.#denseSnapshot(queryVector.length)
+      : { active: await this.#verifiedActiveStore(), profile: null };
+    const baseItems = queryVector
+      ? await this.#searchBase(options, profile, (scoped) =>
+          hybridSearchStore(this.#base, queryVector, queryText, scoped)
+        )
+      : await hybridSearchStore(this.#base, queryVector, queryText, options);
+    const baseResults = filterBaseResults(baseItems, Boolean(active));
     const activeResults = active
       ? await hybridSearchStore(active, queryVector, queryText, options)
       : [];
@@ -586,6 +602,179 @@ export class GenerationRoutingVectorStore extends VectorStore {
 
   destroy(): void {
     this.#base.destroy();
+  }
+
+  /** 新宿主在生成 query vector 前也调用此门，令 Core 诚实选择 sparse fallback。 */
+  async assertEmbeddingProfile(queryDimension?: number): Promise<void> {
+    await this.#denseSnapshot(queryDimension);
+  }
+
+  /** Core 增量管线会复用旧块向量；先阻止未知空间被当成当前模型重新标记。 */
+  async assertIndexingProfile(): Promise<void> {
+    const profile = this.describeEmbedding?.();
+    if (!profile) {
+      return;
+    }
+    const expected = embeddingSpaceKey(profile);
+    for (const id of await this.#base.listIds()) {
+      const item = await this.#base.getById(id);
+      if (
+        !item ||
+        isRecipeSearchValue(item) ||
+        !Array.isArray(item.vector) ||
+        item.vector.length === 0
+      ) {
+        continue;
+      }
+      const metadata = item.metadata as Record<string, unknown> | undefined;
+      if (metadata?.embeddingProfile !== expected || item.vector.length !== profile.dimension) {
+        logger.warn(
+          '[vector] incremental_indexing_profile_mismatch; existing vectors retained, explicit force/clear rebuild required',
+          { model: profile.model }
+        );
+        throw Object.assign(new Error('embedding-profile-migration-required'), {
+          code: 'EMBEDDING_PROFILE_MIGRATION_REQUIRED',
+        });
+      }
+    }
+  }
+
+  async #denseSnapshot(
+    queryDimension?: number
+  ): Promise<{ active: VectorStore | null; profile: EmbeddingCapabilityDescriptor | null }> {
+    if (!this.describeEmbedding) {
+      return { active: await this.#verifiedActiveStore(), profile: null };
+    }
+    const profile = this.describeEmbedding();
+    const active = await this.#storage.readActive();
+    const generationId = active?.generationId;
+    const manifestHash = active?.manifestHash;
+    const manifest = generationId ? await this.#storage.readManifest(generationId) : null;
+    let verified =
+      !!profile &&
+      Number.isSafeInteger(profile.dimension) &&
+      (profile.dimension ?? 0) > 0 &&
+      (queryDimension === undefined || queryDimension === profile.dimension);
+    if (verified && profile) {
+      if (generationId) {
+        verified =
+          manifest?.status === 'ready' &&
+          manifest.manifestHash === manifestHash &&
+          sameEmbeddingProfile(manifest, profile);
+      } else {
+        verified = false;
+        const matches = await this.#base.searchByFilter({ tags: [embeddingProfileTag(profile)] });
+        for (const item of matches) {
+          if (
+            (item.metadata as Record<string, unknown> | undefined)?.embeddingProfile !==
+            embeddingSpaceKey(profile)
+          ) {
+            continue;
+          }
+          // HNSW searchByFilter 返回元数据，向量通过其公开 getById 读取。
+          const stored = Array.isArray(item.vector)
+            ? item
+            : await this.#base.getById(String(item.id));
+          if (Array.isArray(stored?.vector) && stored.vector.length === profile.dimension) {
+            verified = true;
+            break;
+          }
+        }
+      }
+    }
+    if (!verified) {
+      logger.warn(
+        '[vector] embedding-profile-migration-required; dense disabled, existing data and pointer preserved',
+        { generationId: generationId ?? null, model: profile?.model ?? null }
+      );
+      throw Object.assign(new Error('embedding-profile-migration-required'), {
+        code: 'EMBEDDING_PROFILE_MIGRATION_REQUIRED',
+      });
+    }
+    // 读写只打开刚验证的 generationId；不能再次读取 active 而落到另一向量空间。
+    return { active: generationId ? await this.#storage.open(generationId) : null, profile };
+  }
+
+  #tagBase(item: VectorItem): VectorItem {
+    const profile = this.describeEmbedding?.();
+    if (!profile || item.vector.length === 0) {
+      return item;
+    }
+    if (item.vector.length !== profile.dimension) {
+      throw new Error('embedding-profile-vector-dimension-mismatch');
+    }
+    const tags = Array.isArray(item.metadata.tags)
+      ? item.metadata.tags.filter(
+          (tag) => typeof tag !== 'string' || !tag.startsWith(EMBEDDING_PROFILE_TAG)
+        )
+      : [];
+    return {
+      ...item,
+      metadata: {
+        ...item.metadata,
+        embeddingProfile: embeddingSpaceKey(profile),
+        tags: [...tags, embeddingProfileTag(profile)],
+      },
+    };
+  }
+
+  async #searchBase<T>(
+    options: Record<string, unknown>,
+    profile: EmbeddingCapabilityDescriptor | null,
+    query: (scoped: Record<string, unknown>) => Promise<T[]>
+  ): Promise<T[]> {
+    if (!profile) {
+      return query(options);
+    }
+    const filter = options.filter;
+    if (filter != null && (typeof filter !== 'object' || Array.isArray(filter))) {
+      throw new Error('Invalid vector filter');
+    }
+    const original = (filter ?? {}) as Record<string, unknown>;
+    const userTags = original.tags;
+    if (userTags != null && !Array.isArray(userTags)) {
+      throw new Error('Invalid vector tags filter');
+    }
+    const topK = Number(options.topK ?? 10);
+    // Core只支持声明过的metadata过滤键；使用保留tag先限定空间，不发送会被忽略的自定义filter。
+    // tags本身是OR语义；同时有业务tag时先取当前空间候选，再执行交集和最终topK。
+    const limit = userTags ? Math.max(topK, (await this.#base.getStats()).count) : topK;
+    const results = await this.#baseDense(() =>
+      query({
+        ...options,
+        topK: limit,
+        filter: { ...original, tags: [embeddingProfileTag(profile)] },
+      })
+    );
+    return results
+      .filter((value) => {
+        if (!value || typeof value !== 'object') {
+          return false;
+        }
+        const result = value as Record<string, unknown>;
+        const item = (result.item ?? result) as Record<string, unknown>;
+        const metadata = item.metadata as Record<string, unknown> | undefined;
+        const itemTags = metadata?.tags;
+        return (
+          metadata?.embeddingProfile === embeddingSpaceKey(profile) &&
+          (!userTags || (Array.isArray(itemTags) && userTags.some((tag) => itemTags.includes(tag))))
+        );
+      })
+      .slice(0, topK);
+  }
+
+  async #baseDense<T>(query: () => Promise<T[]>): Promise<T[]> {
+    try {
+      return await query();
+    } catch (err: unknown) {
+      if (!this.describeEmbedding) {
+        throw err;
+      }
+      logger.warn(
+        '[vector] legacy base dense unavailable; use verified generation or sparse retrieval'
+      );
+      return [];
+    }
   }
 
   async #verifiedActiveStore() {
@@ -613,7 +802,7 @@ export class GenerationRoutingVectorStore extends VectorStore {
     if (!isRecipeVectorItem(item)) {
       return this.#base;
     }
-    const active = await this.#verifiedActiveStore();
+    const { active } = await this.#denseSnapshot(item.vector.length);
     if (!active) {
       throw new Error('recipe-vector-generation-not-active');
     }
@@ -643,6 +832,39 @@ export class GenerationRoutingVectorStore extends VectorStore {
       }
     );
   }
+}
+
+function sameEmbeddingProfile(
+  manifest: RecipeVectorGenerationManifest,
+  profile: EmbeddingCapabilityDescriptor
+): boolean {
+  return (
+    manifest.provider === profile.provider &&
+    manifest.model === profile.model &&
+    manifest.dimension === profile.dimension &&
+    manifest.formatProfile === profile.formatProfile &&
+    manifest.normalization === profile.normalization
+  );
+}
+
+const EMBEDDING_PROFILE_TAG = '__alembic_embedding_profile__:';
+
+function embeddingProfileTag(profile: EmbeddingCapabilityDescriptor): string {
+  return `${EMBEDDING_PROFILE_TAG}${embeddingSpaceKey(profile)}`;
+}
+
+function embeddingSpaceKey(profile: EmbeddingCapabilityDescriptor): string {
+  return createHash('sha256')
+    .update(
+      JSON.stringify([
+        profile.provider,
+        profile.model,
+        profile.dimension,
+        profile.formatProfile,
+        profile.normalization,
+      ])
+    )
+    .digest('hex');
 }
 
 async function readJson<T>(filePath: string): Promise<T | null> {

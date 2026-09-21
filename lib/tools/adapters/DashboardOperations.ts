@@ -1,18 +1,20 @@
 import type { ToolCapabilityManifest, ToolExecutionRequest } from '@alembic/agent';
 import Logger from '@alembic/core/logging';
+import type { EmbeddingPort } from '@alembic/core/vector';
 // Type-only bridges: the layer contract forbids tools -> injection runtime
 // imports (AD4 remediated the former getAiRuntimeStatus reach-through); the
-// AI-status helpers now arrive via createDashboardOperationHandlers deps.
+// host capability helpers arrive via createDashboardOperationHandlers deps.
 import type { AiRuntimeStatus } from '../../injection/AiRuntimeStatus.js';
 import type { ServiceContainer } from '../../injection/ServiceContainer.js';
 import type { ModuleScanProjectResult } from '../../service/module/ModuleService.js';
 
 export type DashboardOperationHandler = (request: ToolExecutionRequest) => Promise<unknown>;
 
-/** Constructed injection (AD4): AI-status projection over the request's service container. */
+/** Constructed injection (AD4): host capability projection over the request's service container. */
 export interface DashboardOperationAiDeps {
   aiStatus: (container: ServiceContainer) => AiRuntimeStatus;
   aiUnavailableMessage: (status: AiRuntimeStatus) => string;
+  getEmbeddingProvider: (container: ServiceContainer) => EmbeddingPort | null;
 }
 
 const logger = Logger.getInstance();
@@ -147,9 +149,13 @@ async function updateModuleMap(request: ToolExecutionRequest) {
 
 async function rebuildSemanticIndex(request: ToolExecutionRequest, deps: DashboardOperationAiDeps) {
   const container = getContainer(request);
-  const aiStatus = deps.aiStatus(container);
-  if (!aiStatus.ready) {
-    return { error: `${deps.aiUnavailableMessage(aiStatus)} Embedding 不可用。` };
+  // 生成模型不决定检索能力；独立typed embedding缺席时，在获取/清空任何索引服务前失败。
+  // 抛错交给既有Dashboard error envelope，不能把{error}包成HTTP成功结果。
+  if (!deps.getEmbeddingProvider(container)) {
+    logger.warn('Semantic index rebuild blocked: independent embedding provider unavailable');
+    throw new Error(
+      'Independent embedding provider unavailable. Configure embedding before rebuilding the semantic index.'
+    );
   }
 
   const clear = request.args.clear !== false;

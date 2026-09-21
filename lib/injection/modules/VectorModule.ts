@@ -9,8 +9,11 @@
  * 依赖 InfraModule 先注册: eventBus, database
  */
 
-import { VectorService } from '@alembic/core/vector';
+import type { VectorService } from '@alembic/core/vector';
 import { ContextualEnricher } from '../../service/vector/ContextualEnricher.js';
+import { ProfiledVectorService } from '../../service/vector/ProfiledVectorService.js';
+import { createLiveContextualEnricher } from '../ContextualEnrichment.js';
+import { getEmbeddingProvider } from '../EmbeddingProvider.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
 
 export function register(c: ServiceContainer) {
@@ -30,17 +33,15 @@ export function register(c: ServiceContainer) {
   );
 
   // ═══ VectorService ═══
-  c.singleton(
-    'vectorService',
-    (ct: ServiceContainer) => {
-      const aiProvider = ct.singletons.aiProvider || null;
-      const embedProvider = ct.singletons._embedProvider || aiProvider;
-      const config =
-        ((ct.singletons._config as Record<string, unknown> | undefined)?.vector as
-          | Record<string, unknown>
-          | undefined) || {};
+  c.singleton('vectorService', (ct: ServiceContainer) => {
+    const embedProvider = getEmbeddingProvider(ct);
+    const config =
+      ((ct.singletons._config as Record<string, unknown> | undefined)?.vector as
+        | Record<string, unknown>
+        | undefined) || {};
 
-      return new VectorService({
+    return new ProfiledVectorService(
+      {
         vectorStore: ct.get('vectorStore'),
         indexingPipeline: ct.get('indexingPipeline'),
         hybridRetriever: ct.services.hybridRetriever
@@ -53,14 +54,10 @@ export function register(c: ServiceContainer) {
               typeof VectorService
             >[0]['eventBus'])
           : null,
-        embedProvider: embedProvider as ConstructorParameters<
-          typeof VectorService
-        >[0]['embedProvider'],
+        embedProvider,
         recipeGenerationManager: ct.get('recipeVectorGenerationManager'),
         recipeVectorTruthRemover: ct.get('recipeVectorGenerationStorage'),
-        contextualEnricher: ct.services.contextualEnricher
-          ? (ct.get('contextualEnricher') as InstanceType<typeof ContextualEnricher> | null)
-          : null,
+        contextualEnricher: createLiveContextualEnricher(ct),
         autoSyncOnCrud: (config.autoSyncOnCrud as boolean) !== false,
         syncDebounceMs: (config.syncDebounceMs as number) || 2000,
         drizzle: ct.services.database
@@ -68,10 +65,19 @@ export function register(c: ServiceContainer) {
               | import('@alembic/core/database').DrizzleDB
               | undefined)
           : undefined,
-      });
-    },
-    { aiDependent: true }
-  );
+      },
+      async () => {
+        const store = ct.get('vectorStore');
+        if (
+          !('assertEmbeddingProfile' in store) ||
+          typeof store.assertEmbeddingProfile !== 'function'
+        ) {
+          throw new Error('embedding-profile-migration-required');
+        }
+        await store.assertEmbeddingProfile();
+      }
+    );
+  });
 }
 
 /**
@@ -79,25 +85,6 @@ export function register(c: ServiceContainer) {
  * 用于绑定 EventBus 监听等异步初始化操作，同时将 ContextualEnricher 注入 IndexingPipeline
  */
 export async function initializeVectorService(c: ServiceContainer): Promise<void> {
-  // 将 ContextualEnricher 注入 IndexingPipeline（如果可用）
-  if (c.services.contextualEnricher && c.services.indexingPipeline) {
-    const config =
-      ((c.singletons._config as Record<string, unknown> | undefined)?.vector as
-        | Record<string, unknown>
-        | undefined) || {};
-    if (config.contextualEnrich) {
-      const enricher = c.get('contextualEnricher') as InstanceType<
-        typeof ContextualEnricher
-      > | null;
-      if (enricher) {
-        const pipeline = c.get('indexingPipeline') as {
-          setContextualEnricher?: (e: unknown) => void;
-        };
-        pipeline.setContextualEnricher?.(enricher);
-      }
-    }
-  }
-
   if (c.services.vectorService) {
     try {
       const vectorService = c.get('vectorService') as InstanceType<typeof VectorService>;

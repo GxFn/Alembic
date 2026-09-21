@@ -7,6 +7,8 @@ import {
 } from '@alembic/agent/memory';
 import Logger from '@alembic/core/logging';
 import type { IncrementalPlan } from '@alembic/core/types';
+import type { EmbeddingPort } from '@alembic/core/vector';
+import { embeddingProfileId, getEmbeddingProvider } from '../../../injection/EmbeddingProvider.js';
 import {
   buildProjectScopeSourceIdentityMap,
   type ProjectScopeSourceIdentity,
@@ -20,7 +22,7 @@ export interface GenerateRuntimeContainer {
   get(name: string): unknown;
   singletons: {
     aiProvider?: Record<string, unknown> | null;
-    _embedProvider?: Record<string, unknown> | null;
+    _embedProvider?: EmbeddingPort | null;
     [key: string]: unknown;
   };
 }
@@ -171,25 +173,26 @@ function createBootstrapSemanticMemory({
     if (!db) {
       return null;
     }
-    let embeddingFn: ((text: string) => Promise<number[]>) | undefined;
-    try {
-      const ep = container.singletons?._embedProvider ?? container.singletons?.aiProvider;
-      if (ep && typeof (ep as Record<string, unknown>).embed === 'function') {
-        const provider = ep as { embed(t: string | string[]): Promise<number[] | number[][]> };
-        embeddingFn = async (text: string) => {
-          const result = await provider.embed(text);
-          return result as number[];
-        };
-      }
-    } catch {
-      /* EmbedProvider is optional. */
-    }
+    const embedding = getEmbeddingProvider(container);
+    const embeddingFn: NonNullable<
+      ConstructorParameters<typeof PersistentMemory>[1]
+    >['embeddingFn'] = embedding
+      ? async (text, options) => {
+          const context = { signal: options?.abortSignal };
+          if (options?.inputKind === 'document') {
+            return (await embedding.embedDocuments([text], context))[0] ?? [];
+          }
+          return embedding.embedQuery(text, context);
+        }
+      : undefined;
     const semanticMemory = new PersistentMemory(
       db as ConstructorParameters<typeof PersistentMemory>[0],
       {
         logger,
         embeddingFn,
-        embeddingStore: new MemoryEmbeddingStore(dataRoot),
+        embeddingStore: new MemoryEmbeddingStore(dataRoot, {
+          profileId: embedding ? embeddingProfileId(embedding) : undefined,
+        }),
       }
     );
     const smStats = semanticMemory.getStats();

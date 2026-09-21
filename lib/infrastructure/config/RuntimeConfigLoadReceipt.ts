@@ -166,10 +166,11 @@ export function createRuntimeConfigLoadReceiptV1(input: {
   }
 
   const embeddingProvider =
-    actualEmbedding.provider ??
-    text(env.ALEMBIC_EMBED_PROVIDER) ??
-    (provider ? 'primary-provider-fallback' : 'unavailable');
-  const embeddingModel = actualEmbedding.model ?? text(env.ALEMBIC_EMBED_MODEL);
+    actualEmbedding.provider ?? text(env.ALEMBIC_EMBED_PROVIDER) ?? 'unavailable';
+  const embeddingModel =
+    embeddingProvider === 'unavailable'
+      ? null
+      : (actualEmbedding.model ?? text(env.ALEMBIC_EMBED_MODEL));
   const configuredEmbeddingProvider = text(env.ALEMBIC_EMBED_PROVIDER);
   if (
     actualEmbedding.provider &&
@@ -208,16 +209,15 @@ export function createRuntimeConfigLoadReceiptV1(input: {
     : text(env.ALEMBIC_DEEPSEEK_BASE_URL)
       ? 'env:ALEMBIC_DEEPSEEK_BASE_URL'
       : 'provider-default:deepseek';
-  const embedEndpointSymbol = text(env.ALEMBIC_EMBED_BASE_URL)
-    ? embeddingProvider === 'primary-provider-fallback'
-      ? 'primary-provider-fallback'
-      : sourceForKey('ALEMBIC_EMBED_BASE_URL', env, workspace, resolverConfig.localEmbedding) ===
+  const embedEndpointSymbol =
+    embeddingProvider === 'unavailable'
+      ? 'unavailable'
+      : text(env.ALEMBIC_EMBED_BASE_URL)
+        ? sourceForKey('ALEMBIC_EMBED_BASE_URL', env, workspace, resolverConfig.localEmbedding) ===
           'workspace-resolver-vector-localEmbedding-fallback'
-        ? 'workspace-resolver:vector.localEmbedding.endpoint'
-        : 'env:ALEMBIC_EMBED_BASE_URL'
-    : embeddingProvider === 'primary-provider-fallback'
-      ? 'primary-provider-fallback'
-      : `provider-default:${embeddingProvider}`;
+          ? 'workspace-resolver:vector.localEmbedding.endpoint'
+          : 'env:ALEMBIC_EMBED_BASE_URL'
+        : `provider-default:${embeddingProvider}`;
   const effective = Object.freeze({
     provider: provider ?? null,
     model: model ?? null,
@@ -284,7 +284,7 @@ function keyReceipt(input: {
   }
   const embedProvider = text(env.ALEMBIC_EMBED_PROVIDER);
   if (key === 'ALEMBIC_EMBED_API_KEY' && !embedProvider) {
-    return notApplicable('embedding-uses-primary-provider-fallback');
+    return notApplicable('embedding-not-configured');
   }
   if (key === 'ALEMBIC_EMBED_API_KEY' && embedProvider === 'ollama') {
     return notApplicable('embedding-provider-does-not-require-credential');

@@ -28,7 +28,7 @@ export interface AiProviderLike {
   name?: string;
   chat(
     prompt: string,
-    options?: { system?: string; maxTokens?: number; temperature?: number }
+    options?: { systemPrompt?: string; maxTokens?: number; temperature?: number }
   ): Promise<string>;
 }
 
@@ -156,7 +156,7 @@ export class ContextualEnricher implements VectorChunkEnricher {
     const userPrompt = `<chunk>\n${chunkContent}\n</chunk>`;
 
     const response = await this.#aiProvider.chat(userPrompt, {
-      system: systemPrompt,
+      systemPrompt,
       maxTokens: 120,
       temperature: 0,
     });

@@ -751,7 +751,7 @@ export class SetupService {
       if (!container.services.vectorService) {
         return {
           status: 'skipped',
-          reason: 'vectorService 未注册（AI Provider 未配置或容器未完全初始化）',
+          reason: 'vectorService 未注册（容器未完全初始化）',
           hint: '运行 `alembic embed` 构建语义向量索引',
         };
       }
@@ -764,8 +764,8 @@ export class SetupService {
       if (!stats.embedProviderAvailable) {
         return {
           status: 'skipped',
-          reason: '未配置 AI API Key',
-          hint: '配置 API Key 后运行 `alembic embed` 启用语义搜索',
+          reason: '未配置独立 embedding 服务',
+          hint: '启用固定 Qwen embedding 后运行 `alembic embed`，无需配置 LLM API Key',
         };
       }
 

@@ -2,12 +2,14 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { createEmbeddingProvider } from '../../lib/injection/EmbeddingProvider.js';
 import { invokeRouter } from '../helpers/express.js';
 
 const mocks = vi.hoisted(() => ({
   container: {
     get: vi.fn(),
     singletons: {} as Record<string, unknown>,
+    services: {} as Record<string, () => unknown>,
   },
 }));
 
@@ -25,6 +27,7 @@ describe('commands file routes AO3 path boundary', () => {
     const projectRoot = mkdtempSync(join(tmpdir(), 'alembic-commands-route-'));
     tempDirs.push(projectRoot);
     mocks.container.singletons = { _projectRoot: projectRoot };
+    mocks.container.services = {};
     mocks.container.get.mockImplementation((name: string) => {
       throw new Error(`Unexpected service requested: ${name}`);
     });
@@ -66,5 +69,119 @@ describe('commands file routes AO3 path boundary', () => {
       code: 'INVALID_FILE_PATH',
       reasonCode: 'invalid-input',
     });
+  });
+});
+
+describe('Dashboard semantic-index embedding boundary', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    const projectRoot = mkdtempSync(join(tmpdir(), 'alembic-dashboard-embed-'));
+    tempDirs.push(projectRoot);
+    mocks.container.singletons = { _projectRoot: projectRoot };
+    mocks.container.services = {};
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('Dashboard admission must not probe a model service');
+      })
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    for (const dir of tempDirs.splice(0)) {
+      rmSync(dir, { force: true, recursive: true });
+    }
+  });
+
+  function configuredBuild(useVectorService: boolean) {
+    const stats = { scanned: 2, chunked: 3, embedded: 3, upserted: 3, skipped: 0, errors: 0 };
+    const vector = { clear: vi.fn(async () => undefined), fullBuild: vi.fn(async () => stats) };
+    const pipeline = { run: vi.fn(async () => stats) };
+    mocks.container.services = useVectorService ? { vectorService: () => vector } : {};
+    mocks.container.get.mockImplementation((name: string) => {
+      if (name === 'vectorService') {
+        return vector;
+      }
+      if (name === 'indexingPipeline') {
+        return pipeline;
+      }
+      throw new Error(`Unexpected service requested: ${name}`);
+    });
+    return { vector, pipeline, stats };
+  }
+
+  test.each([
+    true,
+    false,
+  ])('allows independently configured embedding with no LLM (vectorService=%s)', async (useVectorService) => {
+    const { vector, pipeline, stats } = configuredBuild(useVectorService);
+    mocks.container.singletons._embedProvider = createEmbeddingProvider(
+      {},
+      {
+        ALEMBIC_EMBED_PROVIDER: 'ollama',
+        ALEMBIC_EMBED_MODEL: 'qwen3-embedding:0.6b',
+        ALEMBIC_EMBED_BASE_URL: 'http://embedding.invalid',
+      }
+    );
+    const response = await invokeRouter(commandsRouter, {
+      method: 'POST',
+      mountPath: '/api/v1/commands',
+      path: '/api/v1/commands/embed',
+      body: { force: true },
+    });
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
+    expect(response.body).toMatchObject({ success: true, data: stats });
+    if (useVectorService) {
+      expect(vector.clear).toHaveBeenCalledOnce();
+      expect(vector.fullBuild).toHaveBeenCalledExactlyOnceWith({ force: true });
+      expect(pipeline.run).not.toHaveBeenCalled();
+    } else {
+      expect(pipeline.run).toHaveBeenCalledExactlyOnceWith({ clear: true, force: true });
+      expect(vector.clear).not.toHaveBeenCalled();
+      expect(vector.fullBuild).not.toHaveBeenCalled();
+    }
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    { useVectorService: true, legacyOnly: false },
+    { useVectorService: false, legacyOnly: false },
+    { useVectorService: true, legacyOnly: true },
+    { useVectorService: false, legacyOnly: true },
+  ])('rejects missing independent embedding before mutations despite a ready LLM: $useVectorService/$legacyOnly', async ({
+    useVectorService,
+    legacyOnly,
+  }) => {
+    const { vector, pipeline } = configuredBuild(useVectorService);
+    const legacyEmbed = vi.fn();
+    mocks.container.singletons.aiProvider = {
+      name: 'openai',
+      model: 'fixture-llm',
+      embed: legacyEmbed,
+    };
+    mocks.container.singletons._aiProviderManager = { isReady: true, isMock: false };
+    mocks.container.singletons._embedProvider = legacyOnly ? { embed: legacyEmbed } : null;
+    const response = await invokeRouter(commandsRouter, {
+      method: 'POST',
+      mountPath: '/api/v1/commands',
+      path: '/api/v1/commands/embed',
+      body: {},
+    });
+    expect(response.status).toBe(500);
+    expect(response.body).toMatchObject({
+      success: false,
+      error: {
+        message:
+          'Independent embedding provider unavailable. Configure embedding before rebuilding the semantic index.',
+      },
+      data: { ok: false, status: 'error' },
+    });
+    expect(mocks.container.get).not.toHaveBeenCalled();
+    expect(vector.clear).not.toHaveBeenCalled();
+    expect(vector.fullBuild).not.toHaveBeenCalled();
+    expect(pipeline.run).not.toHaveBeenCalled();
+    expect(legacyEmbed).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
   });
 });

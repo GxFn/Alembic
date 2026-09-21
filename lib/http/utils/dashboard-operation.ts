@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { ToolResultDiagnostics, ToolResultEnvelope, ToolResultTrust } from '@alembic/agent';
 import type { Request, Response } from 'express';
+import { getEmbeddingProvider } from '../../injection/EmbeddingProvider.js';
 import { sendToolEnvelopeResponse } from './tool-envelope-response.js';
 
 export interface DashboardOperationContainer {
@@ -42,9 +43,9 @@ export async function executeDashboardOperation(
 
   try {
     const { createDashboardOperationHandlers, DASHBOARD_OPERATION_MANIFESTS } = await import(
-      '#tools/adapters/DashboardOperations.js'
+      '../../tools/adapters/DashboardOperations.js'
     );
-    // AD4 constructed injection: the http area wires the AI-status helpers
+    // AD4 constructed injection: the http area wires the host capability helpers
     // into the tools-area handler factory (http -> injection is an allowed
     // contract edge; tools no longer reaches into injection at runtime).
     const { getAiRuntimeStatus, getAiUnavailableMessage } = await import(
@@ -53,6 +54,7 @@ export async function executeDashboardOperation(
     const handlers = createDashboardOperationHandlers({
       aiStatus: getAiRuntimeStatus,
       aiUnavailableMessage: getAiUnavailableMessage,
+      getEmbeddingProvider,
     });
     const handler = handlers[toolId];
     if (!handler) {

@@ -180,8 +180,9 @@ describe('RuntimeConfigLoadReceiptV1', () => {
     });
     expect(receipt.keys.ALEMBIC_EMBED_API_KEY).toMatchObject({
       presence: 'not-applicable',
-      reason: 'embedding-uses-primary-provider-fallback',
+      reason: 'embedding-not-configured',
     });
+    expect(receipt.effective.embedding.provider).toBe('unavailable');
     expect(JSON.stringify(receipt)).not.toContain('openai-secret');
   });
 

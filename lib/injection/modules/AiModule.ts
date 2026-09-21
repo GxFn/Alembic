@@ -7,7 +7,7 @@
  * 职责:
  *   - AI Provider 自动探测与创建
  *   - AiProviderManager 统一管理层
- *   - Embedding fallback provider 管理
+ *   - 独立固定 embedding 服务装配
  *   - AiFactory 实例注入
  *
  * @module AiModule
@@ -16,18 +16,20 @@
 import { AiProviderManager, type ManagedAiProvider } from '@alembic/agent/ai';
 import { alignDeepSeekReasoningEffort } from '../../infrastructure/config/RuntimeConfigLoadReceipt.js';
 import { getAiRuntimeStatus } from '../AiRuntimeStatus.js';
+import { createEmbeddingProvider } from '../EmbeddingProvider.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
 
 /**
  * 初始化 AI Provider（在模块注册前调用）
  *
- * 1. 动态导入 AiFactory
+ * 1. 装配独立 embedding 后动态导入 AiFactory
  * 2. 自动探测可用 AI Provider
  * 3. 创建 AiProviderManager（统一管理层）
- * 4. 绑定 Token 追踪、Embedding fallback、DI 级联清理
+ * 4. 绑定 LLM Token 追踪与生成型服务的 DI 失效
  */
 export async function initialize(c: ServiceContainer) {
   const logger = c.logger;
+  initializeEmbedding(c);
 
   // WorkspaceSettingsStore persists the provider-neutral key while DeepSeekProvider consumes
   // its provider-specific env contract. Reconcile once, before any provider is constructed;
@@ -77,82 +79,26 @@ export async function initialize(c: ServiceContainer) {
   // Token 追踪 AOP（manager 自身已在构造时 wire，此处延迟注入 recorder）
   // recorder 注入放到 register() 之后（tokenUsageStore 需先注册）
 
-  // Embedding fallback: manager 的 embedFallbackInit 回调已绑定，初始化时主动触发一次
-  // 优先使用独立的 embed provider（ALEMBIC_EMBED_PROVIDER），其次 fallback 机制
-  let initialEmbed: ManagedAiProvider | null = null;
-
-  try {
-    const aiFactory = c.singletons._aiFactory as {
-      createEmbedProvider?: () => ManagedAiProvider | null;
-    };
-    if (typeof aiFactory?.createEmbedProvider === 'function') {
-      initialEmbed = aiFactory.createEmbedProvider();
-      if (initialEmbed) {
-        logger.info('Dedicated embed provider created from ALEMBIC_EMBED_PROVIDER', {
-          provider: initialEmbed.name,
-        });
-      }
-    }
-  } catch (err: unknown) {
-    logger.warn('Failed to create dedicated embed provider', {
-      error: (err as Error).message,
-    });
-  }
-
-  // 若无独立 embed provider，走旧的 fallback 逻辑
-  if (!initialEmbed) {
-    initialEmbed = createEmbedFallback(c, c.singletons.aiProvider as ManagedAiProvider | null);
-  }
-
-  if (initialEmbed) {
-    manager.setEmbedProvider(initialEmbed);
-    c.singletons._embedProvider = initialEmbed;
-  }
+  // embedding 已在 LLM 探测前独立装配；生成模型就绪不参与其选择。
 }
 
-/**
- * 纯函数: 尝试为给定 provider 创建 Embedding fallback
- * 被 initEmbeddingFallback() 和 AiProviderManager 的 embedFallbackInit 回调共用
- */
-function createEmbedFallback(
-  c: ServiceContainer,
-  currentProvider: ManagedAiProvider | null
-): ManagedAiProvider | null {
-  if (
-    !currentProvider ||
-    (typeof currentProvider.supportsEmbedding === 'function' && currentProvider.supportsEmbedding())
-  ) {
-    return null; // 主 provider 已支持 embedding，无需 fallback
+/** 一个容器只装配一次固定 embedding；换 LLM 不读取后来的 embedding env。 */
+export function initializeEmbedding(c: ServiceContainer): void {
+  if (Object.hasOwn(c.singletons, '_embedProvider')) {
+    return;
   }
   try {
-    const aiFactory = (c.singletons._aiFactory || {}) as {
-      getAvailableFallbacks?: (name: string) => string[];
-      createProvider?: (opts: Record<string, unknown>) => ManagedAiProvider;
-    };
-    const providerName = (currentProvider.name || '').replace('-', '');
-    const fbCandidates =
-      typeof aiFactory.getAvailableFallbacks === 'function'
-        ? aiFactory.getAvailableFallbacks(providerName)
-        : [];
-    for (const fb of fbCandidates) {
-      try {
-        const fbProvider = aiFactory.createProvider?.({ provider: fb });
-        if (
-          fbProvider &&
-          typeof fbProvider.supportsEmbedding === 'function' &&
-          fbProvider.supportsEmbedding()
-        ) {
-          c.logger.info('Embedding fallback provider created', { provider: fb });
-          return fbProvider;
-        }
-      } catch {
-        /* skip */
-      }
-    }
-  } catch {
-    /* no embed fallback available */
+    const config = c.singletons._config as Record<string, unknown> | undefined;
+    c.singletons._embedProvider = createEmbeddingProvider(config);
+    c.logger.info('[embedding] independent provider initialized', {
+      configured: !!c.singletons._embedProvider,
+    });
+  } catch (err: unknown) {
+    c.singletons._embedProvider = null;
+    c.logger.warn('[embedding] configuration rejected; no generating-provider fallback', {
+      reason: err instanceof Error ? err.message : 'invalid configuration',
+    });
   }
-  return null;
 }
 
 /**
@@ -180,6 +126,7 @@ export function ensureManagerForProvider(
   c: ServiceContainer,
   provider: ManagedAiProvider | null
 ): AiProviderManager | null {
+  initializeEmbedding(c);
   if (!provider || provider.name === 'mock') {
     c.singletons._aiProviderManager = null;
     c.singletons.aiProvider = provider?.name === 'mock' ? null : provider;
@@ -196,18 +143,15 @@ export function ensureManagerForProvider(
   c.singletons._aiProviderManager = manager;
 
   // 绑定: DI 数据管道同步（切换时更新 singletons 中的 provider 引用，供工厂函数读取）
-  manager._bindDiSync((nextProvider, embed) => {
+  manager._bindDiSync((nextProvider) => {
     c.singletons.aiProvider = nextProvider;
-    c.singletons._embedProvider = embed;
   });
 
   // 绑定: DI 级联清理回调
   manager._bindDependentClearer(() => clearAiDependentSingletons(c));
 
-  // 绑定: Embedding fallback 初始化器
-  manager._bindEmbedFallbackInit((currentProvider) => {
-    return createEmbedFallback(c, currentProvider);
-  });
+  // 无 LLM 启动后的首次启用也必须挂载 recorder；存储仍按调用时惰性解析。
+  attachTokenRecorder(c, manager);
 
   return manager;
 }

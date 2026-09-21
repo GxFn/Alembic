@@ -1,3 +1,8 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import type { EmbeddingExecutionContext, EmbeddingPort } from '@alembic/core/vector';
+import Database from 'better-sqlite3';
 import { describe, expect, test, vi } from 'vitest';
 import type { IncrementalPlan } from '../../#types/handler-runtime.js';
 import {
@@ -31,6 +36,62 @@ function makeIncrementalPlan(
 }
 
 describe('initializeGenerateRuntime', () => {
+  test('uses only the independent query/document embedding port for semantic memory', async () => {
+    const db = new Database(':memory:');
+    const root = mkdtempSync(join(tmpdir(), 'embedding-runtime-'));
+    const embedQuery = vi.fn(async (_text: string, _context?: EmbeddingExecutionContext) => [1, 0]);
+    const embedDocuments = vi.fn(async (texts: readonly string[]) => texts.map(() => [1, 0]));
+    const embedding: EmbeddingPort = {
+      embedQuery,
+      embedDocuments,
+      describeCapabilities: () => ({
+        provider: 'fixture',
+        model: 'fixed',
+        dimension: 2,
+        batchSupported: true,
+        inputKinds: ['query', 'document'],
+        normalization: 'normalized',
+        formatProfile: 'asymmetric',
+      }),
+    };
+    const llmEmbed = vi.fn(async () => [0, 1]);
+    let memory: Awaited<ReturnType<typeof initializeGenerateRuntime>>['semanticMemory'] = null;
+    try {
+      const runtime = await initializeGenerateRuntime({
+        container: makeContainer({
+          get: () => db,
+          singletons: { _embedProvider: embedding, aiProvider: { embed: llmEmbed } },
+        }),
+        projectRoot: root,
+        dataRoot: root,
+        primaryLang: 'ts',
+        allFiles: [],
+        targetFileMap: {},
+      });
+      memory = runtime.semanticMemory;
+      expect(memory).not.toBeNull();
+      if (!memory) {
+        throw new Error('Expected semantic memory');
+      }
+      const embed = memory.getEmbeddingFunction();
+      expect(embed).toBeTypeOf('function');
+      if (!embed) {
+        throw new Error('Expected independent embedding callback');
+      }
+      const controller = new AbortController();
+      await embed('document', { inputKind: 'document', abortSignal: controller.signal });
+      memory.add({ content: 'fixed vector space', type: 'fact' });
+      await memory.retrieve('vector', { abortSignal: controller.signal });
+      expect(embedDocuments).toHaveBeenCalledOnce();
+      expect(embedQuery).toHaveBeenCalledOnce();
+      expect(embedQuery.mock.calls[0][1]).toMatchObject({ signal: expect.any(AbortSignal) });
+      expect(llmEmbed).not.toHaveBeenCalled();
+    } finally {
+      db.close();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   test('initializes project info, runtime stores and memory coordinator without legacy graph', async () => {
     const legacyGraphBuilder = vi.fn(async () => ({
       getOverview: vi.fn(() => ({ totalClasses: 2, totalProtocols: 1, buildTimeMs: 10 })),

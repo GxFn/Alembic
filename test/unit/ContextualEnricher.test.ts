@@ -24,6 +24,24 @@ beforeAll(async () => {
 // ── Tests ──
 
 describe('ContextualEnricher', () => {
+  it('passes document context using the Agent chat systemPrompt contract', async () => {
+    const chat = vi.fn(async () => 'generated context');
+    const enricher = new ContextualEnricher({ aiProvider: { chat } });
+    await enricher.enrichChunks(
+      {
+        title: 'Fixture document',
+        content: 'Document body',
+        kind: 'code',
+        sourcePath: 'fixture.ts',
+      },
+      [{ content: 'chunk', metadata: {} }]
+    );
+    expect(chat).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ systemPrompt: expect.stringContaining('Document body') })
+    );
+  });
+
   let aiProvider: ReturnType<typeof createMockAiProvider>;
 
   beforeEach(() => {
@@ -84,7 +102,7 @@ describe('ContextualEnricher', () => {
       expect(aiProvider.chat).toHaveBeenCalledWith(
         expect.stringContaining('<chunk>'),
         expect.objectContaining({
-          system: expect.stringContaining(document.title),
+          systemPrompt: expect.stringContaining(document.title),
           maxTokens: 120,
           temperature: 0,
         })
@@ -101,7 +119,7 @@ describe('ContextualEnricher', () => {
 
       await enricher.enrichChunks(longDoc, chunks);
 
-      const systemPrompt = aiProvider.chat.mock.calls[0][1]?.system as string;
+      const systemPrompt = aiProvider.chat.mock.calls[0][1]?.systemPrompt as string;
       expect(systemPrompt).toContain('[... document truncated ...]');
       expect(systemPrompt.length).toBeLessThan(10500); // should be truncated
     });
@@ -116,7 +134,7 @@ describe('ContextualEnricher', () => {
 
       await enricher.enrichChunks(xssDoc, chunks);
 
-      const systemPrompt = aiProvider.chat.mock.calls[0][1]?.system as string;
+      const systemPrompt = aiProvider.chat.mock.calls[0][1]?.systemPrompt as string;
       expect(systemPrompt).toContain('&lt;script&gt;');
       expect(systemPrompt).not.toContain('<script>');
     });

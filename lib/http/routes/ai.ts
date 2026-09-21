@@ -39,6 +39,12 @@ import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import express, { type Request, type Response } from 'express';
 import { getRealtimeService } from '../../infrastructure/realtime/RealtimeService.js';
 import { getAiRuntimeStatus, getAiUnavailableMessage } from '../../injection/AiRuntimeStatus.js';
+import {
+  createEmbeddingProvider,
+  embeddingProfileId,
+  FixedEmbeddingProvider,
+  getEmbeddingProvider,
+} from '../../injection/EmbeddingProvider.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import {
   AiChatBody,
@@ -796,11 +802,37 @@ function readLlmConfig() {
     ...processConfig,
   };
   const vars = maskAiEnvConfig(rawVars);
+  const container = getServiceContainer();
+  let embeddingRestartRequired = false;
+  let embeddingRebuildRequired = false;
+  let embeddingConfigurationError: string | undefined;
+  try {
+    const active = getEmbeddingProvider(container);
+    const desired = createEmbeddingProvider(
+      container.singletons._config as Record<string, unknown> | undefined,
+      rawVars
+    );
+    const activeProfile = active ? embeddingProfileId(active) : null;
+    const desiredProfile = desired?.profileId ?? null;
+    embeddingRebuildRequired = !!desired && activeProfile !== desiredProfile;
+    embeddingRestartRequired =
+      activeProfile !== desiredProfile ||
+      (active instanceof FixedEmbeddingProvider &&
+        desired !== null &&
+        active.configurationId !== desired.configurationId);
+  } catch (err: unknown) {
+    // 旧 embedding 配置出错不阻断独立 LLM 的读取/更新；也不把它当作已热生效。
+    embeddingConfigurationError =
+      err instanceof Error ? err.message : 'Invalid embedding configuration';
+  }
   const hasSettings = settingsConfig.hasSettingsFile || settingsConfig.hasSecretsFile;
   const hasProcessConfig = Object.keys(processConfig).length > 0;
 
   return {
     vars,
+    embeddingRestartRequired,
+    embeddingRebuildRequired,
+    ...(embeddingConfigurationError ? { embeddingConfigurationError } : {}),
     hasSettingsFile: settingsConfig.hasSettingsFile,
     hasSecretsFile: settingsConfig.hasSecretsFile,
     settingsPath: settingsConfig.settingsPath,
@@ -878,16 +910,33 @@ router.post(
       updates[keyName] = apiKey;
     }
 
-    if (embedProvider) {
-      updates.ALEMBIC_EMBED_PROVIDER = embedProvider;
-      if (embedModel) {
-        updates.ALEMBIC_EMBED_MODEL = embedModel;
+    // 每个 embedding 字段独立更新；轮换凭据或改模型无需重复提交 provider。
+    for (const [key, value] of Object.entries({
+      ALEMBIC_EMBED_PROVIDER: embedProvider,
+      ALEMBIC_EMBED_MODEL: embedModel,
+      ALEMBIC_EMBED_BASE_URL: embedBaseUrl,
+      ALEMBIC_EMBED_API_KEY: embedApiKey,
+    })) {
+      if (value !== undefined) {
+        updates[key] = String(value);
       }
-      if (embedBaseUrl) {
-        updates.ALEMBIC_EMBED_BASE_URL = embedBaseUrl;
-      }
-      if (embedApiKey) {
-        updates.ALEMBIC_EMBED_API_KEY = embedApiKey;
+    }
+    if (Object.keys(updates).some((key) => key.startsWith('ALEMBIC_EMBED_'))) {
+      try {
+        const container = getServiceContainer();
+        createEmbeddingProvider(
+          container.singletons._config as Record<string, unknown> | undefined,
+          { ...process.env, ...updates }
+        );
+      } catch (err: unknown) {
+        res.status(400).json({
+          success: false,
+          error: {
+            code: 'EMBEDDING_CONFIG_INVALID',
+            message: err instanceof Error ? err.message : 'Invalid embedding configuration',
+          },
+        });
+        return;
       }
     }
 
@@ -899,7 +948,7 @@ router.post(
     store.writeAiConfig(updates);
     logger.info('LLM workspace config updated', { provider, model });
 
-    // 同步到当前进程环境变量（热生效）
+    // LLM 可热切换；embedding 只保存期望配置，独立实例与当前索引保留至显式重启/迁移。
     for (const [k, v] of Object.entries(updates)) {
       process.env[k] = String(v);
     }

@@ -1,14 +1,14 @@
 import type { AgentService, SystemRunContextFactory } from '@alembic/agent/service';
+import type { EmbeddingPort } from '@alembic/core/vector';
 import type { GenerateFileEntry } from './AgentRunInputBuilders.js';
 
 interface BootstrapWorkflowSingletons {
   aiProvider?: {
     name?: string;
     model?: string;
-    supportsEmbedding?: () => boolean;
     [key: string]: unknown;
   } | null;
-  _embedProvider?: { embed?: (text: string) => Promise<number[]>; [key: string]: unknown } | null;
+  _embedProvider?: EmbeddingPort | null;
   _fileCache?: GenerateFileEntry[] | null;
   _projectRoot?: string;
   _config?: Record<string, unknown>;
