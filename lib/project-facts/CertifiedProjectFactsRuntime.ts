@@ -1,13 +1,15 @@
+import { realpathSync } from 'node:fs';
 import path from 'node:path';
 import type { DimensionDef } from '@alembic/core/host-agent-workflows';
 import {
   buildProjectContextPresenterInput,
+  type CodeGraphProjectContextRuntime,
   type ProjectContextContract,
   type ProjectContextEnvelope,
   type ProjectContextPresenterInput,
   type ProjectContextRequestKind,
   type ProjectContextResult,
-  withProjectContextSession,
+  withCodeGraphProjectContextSession,
 } from '@alembic/core/project-context';
 import {
   buildProjectContextRequestMatrixV2,
@@ -213,6 +215,7 @@ interface MainCertifiedProjectScopeInput {
 interface CaptureMainCertifiedProjectFactsInput extends MainCertifiedProjectScopeInput {
   dimensions: DimensionDef[];
   source: 'alembic-main-bootstrap' | 'alembic-main-rescan';
+  signal?: AbortSignal;
 }
 
 export function resolveMainCertifiedProjectScopeHash(
@@ -224,18 +227,27 @@ export function resolveMainCertifiedProjectScopeHash(
 export async function captureMainCertifiedProjectFacts(
   input: CaptureMainCertifiedProjectFactsInput
 ): Promise<MainCertifiedProjectFactsState> {
-  // 本次 capture 的所有请求共享实际源码版本和提取；退出或失败均由 Core 释放会话。
-  return withProjectContextSession((projectContext) =>
-    captureMainFactsInSession(input, projectContext)
+  // 先验证真实source roots，SDK创建dataRoot时不能将无效项目路径变成“存在的项目”。
+  const scope = createMainScopeBinding(input);
+  return withCodeGraphProjectContextSession(
+    {
+      dataRoot: path.resolve(input.analysisScope?.dataRoot ?? input.projectRoot),
+      signal: input.signal,
+    },
+    (projectContext, runtime) => captureMainFactsInSession(input, projectContext, runtime, scope)
   );
 }
 
 async function captureMainFactsInSession(
   input: CaptureMainCertifiedProjectFactsInput,
-  projectContext: ProjectContextContract
+  projectContext: ProjectContextContract,
+  runtime: CodeGraphProjectContextRuntime,
+  scope: ReturnType<typeof createMainScopeBinding>
 ): Promise<MainCertifiedProjectFactsState> {
-  const scope = createMainScopeBinding(input);
-  const inventoryPolicy = inventoryPolicyForScope(scope.manifest.repositories);
+  const inventoryPolicy = inventoryPolicyForScope(
+    scope.repositories,
+    realpathSync(runtime.runtimeRoot)
+  );
   const ports = new NodeProjectContextFoundationHostPorts(projectContext, {
     portableRoots: scope.repositories.map((repository) => ({
       portableId: repository.repoId,
@@ -251,6 +263,7 @@ async function captureMainFactsInSession(
       files: await ports.enumerateEligibleFiles({
         policy: inventoryPolicy,
         repository,
+        signal: input.signal,
       }),
       repository,
     });
@@ -278,7 +291,7 @@ async function captureMainFactsInSession(
           consumers: MAIN_CERTIFIED_CONSUMERS,
           foundation: 'strict-v2',
         }),
-        parserHash: hashCanonicalJson({ authority: 'core-node-project-context-host-ports' }),
+        parserHash: runtime.engineHash,
         scopeIdentityHash: scope.manifest.canonicalScopeHash,
       },
       detailPolicy: {
@@ -295,6 +308,7 @@ async function captureMainFactsInSession(
       repositories: scope.repositories,
       requestMatrix,
       requestPlans: requestMatrix.plans,
+      signal: input.signal,
     },
     ports
   );
@@ -1221,18 +1235,32 @@ function mainCertifiedStoreRoot(dataRoot: string): string {
 }
 
 function inventoryPolicyForScope(
-  repositories: readonly { relativeRoot: string }[]
+  repositories: readonly ProjectContextFoundationRepositoryInput[],
+  runtimeRoot: string
 ): ProjectContextInventoryPolicyV1 {
   const nestedRoots = repositories
     .map((repository) => repository.relativeRoot)
     .filter((relativeRoot) => relativeRoot !== '.')
     .sort();
+  const excludeRelativePaths = repositories.some((repository) => repository.relativeRoot === '.')
+    ? [...nestedRoots]
+    : [];
+  // 只排除固定私有父目录，不把随机session目录写进policy hash；/var和软链接按真实路径比较。
+  for (const repository of repositories) {
+    const relative = path.relative(repository.sourceRoot, runtimeRoot);
+    if (!relative) {
+      throw new TypeError('CodeGraph runtime directory must not be a source repository.');
+    }
+    if (!path.isAbsolute(relative) && relative !== '..' && !relative.startsWith(`..${path.sep}`)) {
+      excludeRelativePaths.push(relative.split(path.sep).join('/'));
+    }
+  }
   return {
     ...INVENTORY_POLICY,
     excludeDirectories: [...INVENTORY_POLICY.excludeDirectories],
     includeExtensions: [...INVENTORY_POLICY.includeExtensions],
-    ...(repositories.some((repository) => repository.relativeRoot === '.') && nestedRoots.length
-      ? { excludeRelativePaths: nestedRoots }
+    ...(excludeRelativePaths.length
+      ? { excludeRelativePaths: [...new Set(excludeRelativePaths)].sort() }
       : {}),
   };
 }

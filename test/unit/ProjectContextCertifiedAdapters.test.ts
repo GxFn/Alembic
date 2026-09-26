@@ -1,7 +1,8 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { GenerateSessionManager } from '@alembic/core/host-agent-workflows';
+import { getCodeGraphProjectContextIdentity } from '@alembic/core/project-context';
 import {
   type CertifiedProjectFactsArtifactV1,
   FileCertifiedProjectFactsStore,
@@ -43,6 +44,9 @@ describe('Alembic Main strict-v2 ProjectContext adapters', () => {
       const fixture = await captureSingleRepository(2);
       const artifact = await openArtifact(fixture.dataRoot, fixture.certified);
       expect(artifact.facts.inputClosure).toBeDefined();
+      expect(artifact.certification.parserHash).toBe(
+        (await getCodeGraphProjectContextIdentity()).engineHash
+      );
       expect(artifact.manifest.inputClosureHash).toBe(
         hashCanonicalJson(artifact.facts.inputClosure)
       );
@@ -51,6 +55,84 @@ describe('Alembic Main strict-v2 ProjectContext adapters', () => {
     } finally {
       walk.mockRestore();
     }
+  });
+
+  test('excludes SDK runtime files when dataRoot is inside the real source root', async () => {
+    const projectRoot = await makeTemporaryRoot('alembic-main-sdk-overlap-');
+    await mkdir(path.join(projectRoot, 'src'));
+    await writeFile(path.join(projectRoot, 'src', 'entry.ts'), 'export class Entry {}\n');
+    const certified = await captureMainCertifiedProjectFacts({
+      projectRoot,
+      dimensions: dimensions(),
+      source: 'alembic-main-bootstrap',
+    });
+    const artifact = await openArtifact(projectRoot, certified);
+    expect(artifact.certification.parserHash).toBe(
+      (await getCodeGraphProjectContextIdentity()).engineHash
+    );
+    expect(artifact.facts.inventory.files.map((file) => file.relativePath)).toEqual([
+      'src/entry.ts',
+    ]);
+    expect(artifact.facts.inventory.includeExcludePolicy.excludeRelativePaths).toContain(
+      '.asd/codegraph-sessions'
+    );
+  });
+
+  test('does not manufacture a missing source root by initializing SDK scratch first', async () => {
+    const root = await makeTemporaryRoot('alembic-main-sdk-missing-');
+    const projectRoot = path.join(root, 'missing');
+    await expect(
+      captureMainCertifiedProjectFacts({
+        projectRoot,
+        dimensions: dimensions(),
+        source: 'alembic-main-bootstrap',
+      })
+    ).rejects.toThrow();
+    await expect(stat(projectRoot)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  test('propagates an already cancelled capture before starting analysis', async () => {
+    const projectRoot = await makeTemporaryRoot('alembic-main-sdk-cancel-');
+    await writeFile(path.join(projectRoot, 'entry.ts'), 'export const entry = 1;');
+    const abort = new AbortController();
+    abort.abort();
+    await expect(
+      captureMainCertifiedProjectFacts({
+        projectRoot,
+        dimensions: dimensions(),
+        source: 'alembic-main-bootstrap',
+        signal: abort.signal,
+      })
+    ).rejects.toMatchObject({ name: 'AbortError' });
+  });
+
+  test('rejects unready SDK coverage before publishing a certified carrier', async () => {
+    const root = await makeTemporaryRoot('alembic-main-sdk-coverage-');
+    const projectRoot = path.join(root, 'project');
+    const dataRoot = path.join(root, 'data');
+    await mkdir(projectRoot);
+    await mkdir(dataRoot);
+    await writeFile(
+      path.join(projectRoot, 'entry.ts'),
+      'export namespace Hidden { export class Entry {} }'
+    );
+    await expect(
+      captureMainCertifiedProjectFacts({
+        projectRoot,
+        analysisScope: {
+          controlRoot: null,
+          currentFolderId: null,
+          dataRoot,
+          folderCount: 0,
+          projectRoot,
+          projectScope: null,
+          projectScopeId: null,
+        },
+        dimensions: dimensions(),
+        source: 'alembic-main-bootstrap',
+      })
+    ).rejects.toThrow(/readiness/);
+    await expect(stat(path.join(dataRoot, 'context'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
   test('keeps the persisted session carrier bounded after real >12-file projection', async () => {
