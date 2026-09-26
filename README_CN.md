@@ -295,7 +295,7 @@ your-project/
 
 ## 环境要求
 
-- Node.js ≥ 22
+- Node.js ≥ 22.5（CodeGraph SDK 运行时要求）
 - 推荐 macOS（智能体终端工具的 Seatbelt 沙箱仅 macOS；其余能力跨平台）
 - better-sqlite3（内置）
 

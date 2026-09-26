@@ -295,7 +295,7 @@ With `--ghost` (or the plugin, where Ghost is the default), **all of the above**
 
 ## Requirements
 
-- Node.js ≥ 22
+- Node.js ≥ 22.5 (CodeGraph SDK runtime)
 - macOS recommended (the Seatbelt sandbox for agent terminal tools is macOS-only; everything else is cross-platform)
 - better-sqlite3 (bundled)
 
