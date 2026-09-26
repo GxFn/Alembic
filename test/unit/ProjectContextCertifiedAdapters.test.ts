@@ -1,15 +1,21 @@
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { type AlembicDatabaseRuntime, openAlembicDatabase } from '@alembic/core/database';
 import { GenerateSessionManager } from '@alembic/core/host-agent-workflows';
+import { pathGuard } from '@alembic/core/io';
 import { getCodeGraphProjectContextIdentity } from '@alembic/core/project-context';
 import {
   type CertifiedProjectFactsArtifactV1,
   FileCertifiedProjectFactsStore,
   hashCanonicalJson,
 } from '@alembic/core/project-context-foundation';
+import { createProjectDescriptor } from '@alembic/core/shared';
 import { typeScriptAstPlugin } from '@alembic/core/test-fixtures';
+import { WorkspaceResolver } from '@alembic/core/workspace';
 import { afterEach, describe, expect, test, vi } from 'vitest';
+import { getCoreRepositoryBundle } from '../../lib/injection/modules/InfraModule.js';
+import { ServiceContainer } from '../../lib/injection/ServiceContainer.js';
 import {
   assertMainCertifiedProjectFactsCarrier,
   buildStrictProjectContextWorkflowFacts,
@@ -23,21 +29,178 @@ import {
   serializeMainCertifiedProjectFactsCarrier,
   summarizeMainCertifiedInstrumentation,
 } from '../../lib/project-facts/CertifiedProjectFactsRuntime.js';
+import type { ProjectContextFillView } from '../../lib/project-facts/ProjectContextWorkflowFacts.js';
+import { resolveProjectScopeAnalysisContext } from '../../lib/project-scope/ProjectScopeAnalysis.js';
 import { prepareAiDimensionPipeline } from '../../lib/recipe-pipeline/generate/execution/AiDimensionPreparation.js';
+import { GenerateTaskManager } from '../../lib/recipe-pipeline/generate/runtime/GenerateTaskManager.js';
 import {
   createModuleCertifiedFactsSessionBoundary,
   ModuleService,
 } from '../../lib/service/module/ModuleService.js';
 
 const temporaryRoots: string[] = [];
+const databases: AlembicDatabaseRuntime[] = [];
 
 afterEach(async () => {
+  vi.restoreAllMocks();
+  for (const runtime of databases.splice(0)) {
+    runtime.close();
+  }
+  pathGuard._reset();
   await Promise.all(
     temporaryRoots.splice(0).map((root) => rm(root, { force: true, recursive: true }))
   );
 });
 
 describe('Alembic Main strict-v2 ProjectContext adapters', () => {
+  test('Main live SourceGraph uses SQLite and SDK identity, then noops with the same session signal and data root', async () => {
+    const fixture = await captureSingleRepository(2);
+    const harness = await sourceGraphPreparationHarness(fixture);
+    const sourceVectorHash = fixture.certified.sourceVectorHash;
+    // SourceGraph是本次live辅助观测：认证完成后的真实源码更新不重写原carrier。
+    await writeFile(
+      path.join(fixture.projectRoot, 'src/file-0.ts'),
+      'export class LiveController { execute() { return 1; } }\n'
+    );
+    const signal = harness.taskManager.getSessionAbortSignal();
+    const signalRead = vi.spyOn(harness.taskManager, 'getSessionAbortSignal');
+    const first = await prepareAiDimensionPipeline(harness.view, dimensions());
+    expect(first.sourceGraphResult?.action).toBe('built-full');
+    expect(first.sourceGraphResult?.build?.symbols.map((symbol) => symbol.symbolId)).toContain(
+      'src/file-0.ts#LiveController.execute'
+    );
+    const engine = await getCodeGraphProjectContextIdentity();
+    expect(first.sourceGraphResult?.build?.snapshot.extractionVersion).toContain(
+      `source-graph-codegraph-v1:source-graph-indexer-v1:${engine.engineHash}`
+    );
+    expect(first.sourceGraphResult?.build?.snapshot.metadata).toMatchObject({
+      indexIdentity: {
+        config: {
+          privateRuntimeRoot: path.join(
+            await realpath(fixture.dataRoot),
+            '.asd/codegraph-sessions'
+          ),
+        },
+      },
+    });
+    expect(first.sessionAbortSignal).toBe(signal);
+    expect(first.dataRoot).toBe(fixture.dataRoot);
+    expect(first.projectRoot).toBe(fixture.projectRoot);
+    const second = await prepareAiDimensionPipeline(harness.view, dimensions());
+    expect(second.sourceGraphResult?.action).toBe('fresh-noop');
+    expect(second.sourceGraphResult?.generationId).toBe(first.sourceGraphResult?.generationId);
+    expect(second.sessionAbortSignal).toBe(signal);
+    expect(signalRead).toHaveBeenCalledTimes(2);
+    expect(
+      harness.runtime.sqlite.prepare('SELECT count(*) AS count FROM source_graph_generations').get()
+    ).toEqual({ count: 1 });
+    expect(
+      await getCoreRepositoryBundle(harness.container).sourceGraphRepository.getLatestSnapshot(
+        fixture.projectRoot
+      )
+    ).toMatchObject({ generationId: first.sourceGraphResult?.generationId });
+    expect(harness.view.projectContextFacts.certifiedProjectFacts?.sourceVectorHash).toBe(
+      sourceVectorHash
+    );
+    expect(await readdir(path.join(fixture.dataRoot, '.asd/codegraph-sessions'))).toEqual([]);
+    await expect(stat(path.join(fixture.dataRoot, '.asd/alembic.db'))).resolves.toBeDefined();
+    await expect(
+      stat(path.join(fixture.projectRoot, '.asd/codegraph-sessions'))
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+  }, 60_000);
+
+  test('Main live SourceGraph honors declared members from a member root and never widens an empty descriptor', async () => {
+    const root = await makeTemporaryRoot('alembic-main-source-graph-scope-');
+    const controlRoot = path.join(root, 'control');
+    const dataRoot = path.join(root, 'data');
+    const memberA = path.join(controlRoot, 'MemberA');
+    const memberB = path.join(controlRoot, 'MemberB');
+    for (const [relative, code] of [
+      ['MemberA/src/a.ts', 'export class A { run() {} }'],
+      ['MemberB/src/b.ts', 'export class B { run() {} }'],
+      ['loose.ts', 'export class ControlNoise {}'],
+      ['vendor/Copy/noise.ts', 'export class VendorNoise {}'],
+    ]) {
+      const file = path.join(controlRoot, relative);
+      await mkdir(path.dirname(file), { recursive: true });
+      await writeFile(file, code);
+    }
+    await mkdir(dataRoot);
+    const descriptor = createProjectDescriptor({
+      controlRoot,
+      dataRoot,
+      folders: [
+        { path: memberA, displayName: 'MemberA', repositoryId: 'member-a', role: 'source' },
+        { path: memberB, displayName: 'MemberB', repositoryId: 'member-b', role: 'source' },
+      ],
+    });
+    const resolver = WorkspaceResolver.fromProject(memberA, { projectScope: descriptor });
+    const analysis = resolveProjectScopeAnalysisContext({
+      singletons: { _projectRoot: memberA, _workspaceResolver: resolver },
+    });
+    const certified = await captureMainCertifiedProjectFacts({
+      projectRoot: memberA,
+      analysisScope: analysis,
+      dimensions: dimensions(),
+      source: 'alembic-main-bootstrap',
+    });
+    const harness = await sourceGraphPreparationHarness(
+      { projectRoot: memberA, dataRoot, certified },
+      resolver
+    );
+    const preparation = await prepareAiDimensionPipeline(harness.view, dimensions());
+    expect(preparation.projectRoot).toBe(memberA);
+    expect(preparation.sourceGraphResult?.projectRoot).toBe(controlRoot);
+    expect(
+      preparation.sourceGraphResult?.build?.files.map((file) => file.repoRelativePath)
+    ).toEqual(['MemberA/src/a.ts', 'MemberB/src/b.ts']);
+    expect(preparation.sourceGraphResult?.build?.snapshot.projectScope).toBe(
+      descriptor.projectScopeId
+    );
+    // live配置可以失去最后一个source folder；不能据旧认证文件或controlRoot合成范围。
+    harness.container.singletons._workspaceResolver = WorkspaceResolver.fromProject(memberA, {
+      projectScope: createProjectDescriptor({
+        controlRoot,
+        dataRoot,
+        projectId: descriptor.projectId,
+        projectScopeId: descriptor.projectScopeId,
+        folders: [],
+      }),
+    });
+    const empty = await prepareAiDimensionPipeline(harness.view, dimensions());
+    expect(empty.sourceGraphResult).toBeNull();
+    expect(
+      harness.runtime.sqlite.prepare('SELECT count(*) AS count FROM source_graph_generations').get()
+    ).toEqual({ count: 1 });
+  }, 60_000);
+
+  test('Main live SourceGraph propagates an existing session cancellation before any generation is written', async () => {
+    const fixture = await captureSingleRepository(1);
+    const harness = await sourceGraphPreparationHarness(fixture);
+    const signal = harness.taskManager.getSessionAbortSignal();
+    const signalRead = vi.spyOn(harness.taskManager, 'getSessionAbortSignal');
+    // 取消发生在prepare已进入、真实repository装配开始时；不是伪造SourceGraph结果。
+    harness.container.register('database', () => {
+      harness.taskManager.abortSession('Cancelled during live graph preparation');
+      return harness.runtime.connection;
+    });
+    const outcome = await prepareAiDimensionPipeline(harness.view, dimensions()).then(
+      () => ({ status: 'resolved' }),
+      (error: unknown) => ({
+        status: 'rejected',
+        name: error instanceof Error ? error.name : typeof error,
+      })
+    );
+    expect(outcome).toEqual({ status: 'rejected', name: 'AbortError' });
+    expect(signal?.aborted).toBe(true);
+    expect(signalRead).toHaveBeenCalledTimes(1);
+    expect(harness.taskManager.getSessionAbortSignal()).toBeNull();
+    expect(
+      harness.runtime.sqlite.prepare('SELECT count(*) AS count FROM source_graph_generations').get()
+    ).toEqual({ count: 0 });
+    expect(await readdir(path.join(fixture.dataRoot, '.asd/codegraph-sessions'))).toEqual([]);
+  }, 60_000);
+
   test('extracts each source once per recorded and replayed capture view', async () => {
     const walk = vi.spyOn(typeScriptAstPlugin, 'walk');
     try {
@@ -736,6 +899,62 @@ async function captureSingleRepository(fileCount: number, splitModules = false) 
     source: 'alembic-main-bootstrap',
   });
   return { certified, dataRoot, projectRoot, root };
+}
+
+async function sourceGraphPreparationHarness(
+  fixture: { certified: MainCertifiedProjectFactsCarrier; dataRoot: string; projectRoot: string },
+  workspaceResolver?: WorkspaceResolver
+) {
+  const recipe = await reopenMainCertifiedProjectFactsConsumer({
+    carrier: fixture.certified,
+    consumer: 'recipe-generation',
+    dataRoot: fixture.dataRoot,
+    entrypoint: MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS['recipe-generation'],
+  });
+  const facts = buildStrictProjectContextWorkflowFacts({
+    certified: fixture.certified,
+    controlRoot: workspaceResolver?.projectScope?.controlRoot.path ?? fixture.projectRoot,
+    dimensions: dimensions(),
+    projection: recipe.projection,
+    projectRoot: fixture.projectRoot,
+    source: 'alembic-main-bootstrap',
+  });
+  const sessions = new GenerateSessionManager({ dataRoot: fixture.dataRoot });
+  sessions.createSession({
+    dimensions: facts.dimensions,
+    projectContext: {
+      certifiedProjectFacts: serializeMainCertifiedProjectFactsCarrier(fixture.certified),
+    },
+    projectRoot: fixture.projectRoot,
+  });
+  pathGuard.configure({ projectRoot: fixture.projectRoot, extraAllowPaths: [fixture.dataRoot] });
+  const runtime = await openAlembicDatabase({
+    path: path.join(fixture.dataRoot, '.asd/alembic.db'),
+  });
+  databases.push(runtime);
+  const container = new ServiceContainer();
+  container.singletons._projectRoot = fixture.projectRoot;
+  container.singletons._workspaceResolver = workspaceResolver ?? {
+    currentFolderId: null,
+    dataRoot: fixture.dataRoot,
+    projectRoot: fixture.projectRoot,
+    projectScope: null,
+  };
+  container.register('database', () => runtime.connection);
+  container.register('generateSessionManager', () => sessions);
+  const taskManager = new GenerateTaskManager();
+  const taskSession = taskManager.startSession([
+    { id: 'architecture', meta: { dimId: 'architecture', label: 'Architecture' } },
+  ]);
+  container.register('generateTaskManager', () => taskManager);
+  const view: ProjectContextFillView = {
+    bootstrapSession: taskSession,
+    ctx: { container },
+    projectContextFacts: facts,
+    projectRoot: fixture.projectRoot,
+    targetFileMap: facts.filesByTarget,
+  };
+  return { container, runtime, taskManager, view };
 }
 
 async function makeTemporaryRoot(prefix: string) {

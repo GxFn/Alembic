@@ -21,6 +21,7 @@ import {
 import type { ProjectContextFillView } from '../../../project-facts/ProjectContextWorkflowFacts.js';
 import {
   type ProjectScopeSourceIdentity,
+  resolveProjectScopeAnalysisContext,
   resolveProjectScopeSourceIdentitiesFromCarrier,
 } from '../../../project-scope/ProjectScopeAnalysis.js';
 import type { GenerateFileEntry } from './AgentRunInputBuilders.js';
@@ -41,10 +42,9 @@ export interface AiDimensionPreparation {
    */
   depGraphData: ProjectContextDependencyGraph | null;
   /**
-   * Track2(2026-07-10)source-graph 激活:catchUpOnStartup 幂等编排(无快照全量/
-   * stale 增量/fresh noop),files 全语言入库+JS 系实体/边。observe-first:本期只
-   * 建库+日志,不进维度 prompt/briefing(Swift 实体解析与 prompt 消费登记后续)。
-   * 失败降级 null,不阻断挖掘。
+   * SourceGraph 是按当前真实 ProjectScope 读取的 live 辅助观测，不绑定或改写
+   * 上面的 certified closure。JS/TS 使用 Core CodeGraph，其他语言沿用 Core 策略；
+   * prompt 计数消费仍由既有 eval 开关控制。普通失败降级 null，取消必须停止准备。
    */
   sourceGraphResult: SourceGraphLifecycleResult | null;
   guardAudit: null;
@@ -91,6 +91,10 @@ export async function prepareAiDimensionPipeline(
   } catch {
     /* not available */
   }
+
+  // 绑定本次准备已有的session；abortSession会清空manager中的controller，不能在
+  // 异步索引结束后再取signal。更早的pre-plan尚无session时仍保持null，不制造取消令牌。
+  const sessionAbortSignal = taskManager?.getSessionAbortSignal?.() ?? null;
 
   let agentService: AgentService | null = null;
   let systemRunContextFactory: SystemRunContextFactory | null = null;
@@ -160,8 +164,7 @@ export async function prepareAiDimensionPipeline(
     }
   }
 
-  // Track2 source-graph 激活:catchUpOnStartup 幂等(全量/增量/noop),
-  // durableTables 计数即观测面。失败降级 null,不阻断挖掘。
+  // 独立live索引保持全量/增量/noop语义；空descriptor交给Core拒绝，不能扩成controlRoot扫描。
   let sourceGraphResult: SourceGraphLifecycleResult | null = null;
   try {
     const { getCoreRepositoryBundle } = await import('../../../injection/modules/InfraModule.js');
@@ -170,13 +173,16 @@ export async function prepareAiDimensionPipeline(
     const repositories = getCoreRepositoryBundle(
       ctx.container as unknown as Parameters<typeof getCoreRepositoryBundle>[0]
     );
-    const lifecycle = new SourceGraphLifecycleService(
-      repositories.sourceGraphRepository as ConstructorParameters<
-        typeof SourceGraphLifecycleService
-      >[0]
-    );
+    const lifecycle = new SourceGraphLifecycleService(repositories.sourceGraphRepository);
+    const analysisScope = resolveProjectScopeAnalysisContext(ctx.container);
     const startedAtMs = Date.now();
-    sourceGraphResult = await lifecycle.catchUpOnStartup({ projectRoot });
+    sourceGraphResult = await lifecycle.catchUpOnStartup({
+      // workflow仍保留当前folder身份；仅整份live图使用真实controlRoot作为相对路径锚点。
+      projectRoot: analysisScope.controlRoot ?? projectRoot,
+      projectScopeDescriptor: analysisScope.projectScope,
+      codeGraph: { dataRoot },
+      signal: sessionAbortSignal ?? undefined,
+    });
     logger.info(
       `[AiDimension] source graph ${sourceGraphResult.action} (${sourceGraphResult.reason}): ` +
         `files=${sourceGraphResult.durableTables.source_graph_files} ` +
@@ -185,6 +191,14 @@ export async function prepareAiDimensionPipeline(
         `durationMs=${Date.now() - startedAtMs}`
     );
   } catch (err: unknown) {
+    if (sessionAbortSignal?.aborted || (err instanceof Error && err.name === 'AbortError')) {
+      const reason = sessionAbortSignal?.reason ?? err;
+      logger.info(
+        `[AiDimension] source graph catch-up cancelled — mining stops: ${reason instanceof Error ? reason.message : String(reason)}`,
+        { projectRoot }
+      );
+      throw err instanceof Error ? err : new Error(String(err), { cause: err });
+    }
     logger.warn(
       `[AiDimension] source graph catch-up unavailable — mining proceeds without it: ${err instanceof Error ? err.message : String(err)}`
     );
@@ -210,7 +224,7 @@ export async function prepareAiDimensionPipeline(
     targetFileMap: view.targetFileMap,
     taskManager,
     sessionId: view.bootstrapSession?.id ?? '',
-    sessionAbortSignal: taskManager?.getSessionAbortSignal?.() ?? null,
+    sessionAbortSignal,
     isIncremental,
     emitter,
     allFiles: projectContextFacts.allFiles as GenerateFileEntry[] | null,
