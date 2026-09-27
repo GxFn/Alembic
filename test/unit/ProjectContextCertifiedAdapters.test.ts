@@ -219,10 +219,14 @@ describe('Alembic Main strict-v2 ProjectContext adapters', () => {
     }
   });
 
-  test('excludes SDK runtime files when dataRoot is inside the real source root', async () => {
+  test('captures SDK import targets while excluding runtime files inside the real source root', async () => {
     const projectRoot = await makeTemporaryRoot('alembic-main-sdk-overlap-');
     await mkdir(path.join(projectRoot, 'src'));
-    await writeFile(path.join(projectRoot, 'src', 'entry.ts'), 'export class Entry {}\n');
+    await writeFile(
+      path.join(projectRoot, 'src', 'entry.ts'),
+      "import { target as alias } from './z-dep';\nexport function entry() { alias(); }\n"
+    );
+    await writeFile(path.join(projectRoot, 'src', 'z-dep.ts'), 'export function target() {}\n');
     const certified = await captureMainCertifiedProjectFacts({
       projectRoot,
       dimensions: dimensions(),
@@ -234,10 +238,28 @@ describe('Alembic Main strict-v2 ProjectContext adapters', () => {
     );
     expect(artifact.facts.inventory.files.map((file) => file.relativePath)).toEqual([
       'src/entry.ts',
+      'src/z-dep.ts',
     ]);
     expect(artifact.facts.inventory.includeExcludePolicy.excludeRelativePaths).toContain(
       '.asd/codegraph-sessions'
     );
+    expect(artifact.facts.requestOutcomes.find((row) => row.kind === 'file-flow')).toMatchObject({
+      terminalStatus: 'completed',
+      output: {
+        data: {
+          callers: [
+            expect.objectContaining({
+              unresolved: false,
+              to: expect.objectContaining({
+                filePath: 'src/z-dep.ts',
+                symbol: 'target',
+                ref: expect.objectContaining({ kind: 'file-symbol' }),
+              }),
+            }),
+          ],
+        },
+      },
+    });
   });
 
   test('does not manufacture a missing source root by initializing SDK scratch first', async () => {
