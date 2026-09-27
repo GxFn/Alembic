@@ -70,9 +70,8 @@ describe('Alembic Main strict-v2 ProjectContext adapters', () => {
       'src/file-0.ts#LiveController.execute'
     );
     const engine = await getCodeGraphProjectContextIdentity();
-    expect(first.sourceGraphResult?.build?.snapshot.extractionVersion).toContain(
-      `source-graph-codegraph-v1:source-graph-indexer-v1:${engine.engineHash}`
-    );
+    // 宿主核验实际SDK身份；Core私有投影版本及代际迁移由Core自身测试负责。
+    expect(first.sourceGraphResult?.build?.snapshot.extractionVersion).toContain(engine.engineHash);
     expect(first.sourceGraphResult?.build?.snapshot.metadata).toMatchObject({
       indexIdentity: {
         config: {
