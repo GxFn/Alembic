@@ -1,4 +1,4 @@
-import { realpathSync } from 'node:fs';
+import { mkdirSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import type { DimensionDef } from '@alembic/core/host-agent-workflows';
 import {
@@ -96,7 +96,7 @@ const INVENTORY_POLICY: ProjectContextInventoryPolicyV1 = {
     'vendor',
   ],
   includeExtensions: [...SOURCE_EXTENSIONS],
-  version: 'alembic-main-source-inventory-v1',
+  version: 'alembic-main-source-inventory-v2',
 };
 
 export interface MainCertifiedProjectionPayload {
@@ -228,13 +228,20 @@ export async function captureMainCertifiedProjectFacts(
   input: CaptureMainCertifiedProjectFactsInput
 ): Promise<MainCertifiedProjectFactsState> {
   // 先验证真实source roots，SDK创建dataRoot时不能将无效项目路径变成“存在的项目”。
+  input.signal?.throwIfAborted();
   const scope = createMainScopeBinding(input);
+  const dataRoot = path.resolve(input.analysisScope?.dataRoot ?? input.projectRoot);
+  // 只预建固定宿主目录，使发布产物不会改变已捕获的祖先目录项；旧存储位置保持不变。
+  const privateDirectories = [path.join(dataRoot, '.asd'), mainCertifiedStoreRoot(dataRoot)].map(
+    (directory) => {
+      mkdirSync(directory, { recursive: true });
+      return realpathSync(directory);
+    }
+  );
   return withCodeGraphProjectContextSession(
-    {
-      dataRoot: path.resolve(input.analysisScope?.dataRoot ?? input.projectRoot),
-      signal: input.signal,
-    },
-    (projectContext, runtime) => captureMainFactsInSession(input, projectContext, runtime, scope)
+    { dataRoot, privateDirectories, signal: input.signal },
+    (projectContext, runtime) =>
+      captureMainFactsInSession(input, projectContext, runtime, scope, privateDirectories)
   );
 }
 
@@ -242,13 +249,15 @@ async function captureMainFactsInSession(
   input: CaptureMainCertifiedProjectFactsInput,
   projectContext: ProjectContextContract,
   runtime: CodeGraphProjectContextRuntime,
-  scope: ReturnType<typeof createMainScopeBinding>
+  scope: ReturnType<typeof createMainScopeBinding>,
+  privateDirectories: readonly string[]
 ): Promise<MainCertifiedProjectFactsState> {
-  const inventoryPolicy = inventoryPolicyForScope(
-    scope.repositories,
-    realpathSync(runtime.runtimeRoot)
-  );
+  const inventoryPolicy = inventoryPolicyForScope(scope.repositories, [
+    runtime.runtimeRoot,
+    ...privateDirectories,
+  ]);
   const ports = new NodeProjectContextFoundationHostPorts(projectContext, {
+    privateDirectories,
     portableRoots: scope.repositories.map((repository) => ({
       portableId: repository.repoId,
       sourceRoot: repository.sourceRoot,
@@ -1236,7 +1245,7 @@ function mainCertifiedStoreRoot(dataRoot: string): string {
 
 function inventoryPolicyForScope(
   repositories: readonly ProjectContextFoundationRepositoryInput[],
-  runtimeRoot: string
+  privateRoots: readonly string[]
 ): ProjectContextInventoryPolicyV1 {
   const nestedRoots = repositories
     .map((repository) => repository.relativeRoot)
@@ -1245,14 +1254,20 @@ function inventoryPolicyForScope(
   const excludeRelativePaths = repositories.some((repository) => repository.relativeRoot === '.')
     ? [...nestedRoots]
     : [];
-  // 只排除固定私有父目录，不把随机session目录写进policy hash；/var和软链接按真实路径比较。
+  // SDK runtime、认证存储和Git状态共用宿主拥有的固定目录，不把随机session写入policy hash。
   for (const repository of repositories) {
-    const relative = path.relative(repository.sourceRoot, runtimeRoot);
-    if (!relative) {
-      throw new TypeError('CodeGraph runtime directory must not be a source repository.');
-    }
-    if (!path.isAbsolute(relative) && relative !== '..' && !relative.startsWith(`..${path.sep}`)) {
-      excludeRelativePaths.push(relative.split(path.sep).join('/'));
+    for (const privateRoot of privateRoots) {
+      const relative = path.relative(repository.sourceRoot, privateRoot);
+      if (!relative) {
+        throw new TypeError('A private directory must not be a source repository.');
+      }
+      if (
+        !path.isAbsolute(relative) &&
+        relative !== '..' &&
+        !relative.startsWith(`..${path.sep}`)
+      ) {
+        excludeRelativePaths.push(relative.split(path.sep).join('/'));
+      }
     }
   }
   return {

@@ -9,6 +9,7 @@ import {
   type CertifiedProjectFactsArtifactV1,
   FileCertifiedProjectFactsStore,
   hashCanonicalJson,
+  NodeProjectContextFoundationHostPorts,
 } from '@alembic/core/project-context-foundation';
 import { createProjectDescriptor } from '@alembic/core/shared';
 import { typeScriptAstPlugin } from '@alembic/core/test-fixtures';
@@ -260,6 +261,32 @@ describe('Alembic Main strict-v2 ProjectContext adapters', () => {
         },
       },
     });
+    // 发布到源码根内后，存储写入不能立即使刚认证的输入过期。
+    const ports = new NodeProjectContextFoundationHostPorts();
+    const closure = artifact.facts.inputClosure;
+    const scope = artifact.manifest.projectScopeManifest;
+    if (!closure || !scope) {
+      throw new Error('Expected a complete certified input closure and project scope.');
+    }
+    expect(
+      await ports.observeInputClosureHash({
+        closure,
+        chunks: artifact.chunks,
+        controlRoot: projectRoot,
+        repositories: scope.repositories.map((repository) => ({
+          ...repository,
+          sourceRoot: path.resolve(projectRoot, repository.relativeRoot),
+        })),
+      })
+    ).toBe(artifact.manifest.inputClosureHash);
+    const repeated = await captureMainCertifiedProjectFacts({
+      projectRoot,
+      dimensions: dimensions(),
+      source: 'alembic-main-rescan',
+    });
+    expect((await openArtifact(projectRoot, repeated)).facts.inventory.files).toEqual(
+      artifact.facts.inventory.files
+    );
   });
 
   test('does not manufacture a missing source root by initializing SDK scratch first', async () => {
@@ -316,7 +343,10 @@ describe('Alembic Main strict-v2 ProjectContext adapters', () => {
         source: 'alembic-main-bootstrap',
       })
     ).rejects.toThrow(/readiness/);
-    await expect(stat(path.join(dataRoot, 'context'))).rejects.toMatchObject({ code: 'ENOENT' });
+    // 固定目录在捕获前建立以稳定输入；readiness失败仍不得写出任何认证产物或收据。
+    expect(await readdir(path.join(dataRoot, 'context', 'certified-project-facts', 'v2'))).toEqual(
+      []
+    );
   });
 
   test('keeps the persisted session carrier bounded after real >12-file projection', async () => {
