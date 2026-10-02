@@ -201,7 +201,7 @@ describe('Alembic Main strict-v2 ProjectContext adapters', () => {
     expect(await readdir(path.join(fixture.dataRoot, '.asd/codegraph-sessions'))).toEqual([]);
   }, 60_000);
 
-  test('extracts each source once per recorded and replayed capture view', async () => {
+  test('extracts each source once per certified capture', async () => {
     const walk = vi.spyOn(typeScriptAstPlugin, 'walk');
     try {
       const fixture = await captureSingleRepository(2);
@@ -213,8 +213,9 @@ describe('Alembic Main strict-v2 ProjectContext adapters', () => {
       expect(artifact.manifest.inputClosureHash).toBe(
         hashCanonicalJson(artifact.facts.inputClosure)
       );
-      // 每个视图内复用提取；独立重放必须重新计算，而不是复用记录阶段的 AST。
-      expect(walk).toHaveBeenCalledTimes(4);
+      // 一次捕获只分析一遍：九类请求共用同一份提取，两个源码文件各遍历一次。
+      // 闭包仍随工件保存，离线重放由 Core 的会话层测试核对，不在每次捕获里再算一遍。
+      expect(walk).toHaveBeenCalledTimes(2);
     } finally {
       walk.mockRestore();
     }
