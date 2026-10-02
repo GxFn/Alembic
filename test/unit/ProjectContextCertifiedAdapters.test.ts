@@ -796,6 +796,67 @@ describe('Alembic Main strict-v2 ProjectContext adapters', () => {
     }
   }, 120_000);
 
+  test('recognizes a sibling Swift package in the scope as an approved sibling dependency', async () => {
+    // 范围里两个仓库：应用导入兄弟包声明的模块。归属目录由 Core 从清单里的 Package.swift 生成，
+    // 这条依赖带着归属证据被认成兄弟依赖，而不是按名字记成外部依赖。
+    const root = await makeTemporaryRoot('alembic-main-ownership-');
+    const controlRoot = path.join(root, 'control');
+    const dataRoot = path.join(root, 'data');
+    const kitRoot = path.join(controlRoot, 'Packages', 'SharedKit');
+    await mkdir(path.join(controlRoot, 'Sources', 'App'), { recursive: true });
+    await mkdir(path.join(kitRoot, 'Sources', 'SharedKit'), { recursive: true });
+    await mkdir(dataRoot, { recursive: true });
+    await writeFile(
+      path.join(controlRoot, 'Sources', 'App', 'Main.swift'),
+      'import Foundation\nimport SharedKit\n\nstruct Main {\n    let greeter = Greeter()\n}\n'
+    );
+    const packageSwift =
+      '// swift-tools-version:5.9\nimport PackageDescription\nlet package = Package(name: "SharedKit", targets: [.target(name: "SharedKit")])\n';
+    await writeFile(path.join(kitRoot, 'Package.swift'), packageSwift);
+    await writeFile(
+      path.join(kitRoot, 'Sources', 'SharedKit', 'Greeter.swift'),
+      'public struct Greeter {\n    public init() {}\n}\n'
+    );
+    const certified = await captureMainCertifiedProjectFacts({
+      analysisScope: analysisScope(controlRoot, dataRoot, controlRoot, [
+        projectScopeFolder('app-folder', 'opaque-app', controlRoot),
+        projectScopeFolder('kit-folder', 'opaque-kit', kitRoot),
+      ]),
+      dimensions: dimensions(),
+      projectRoot: controlRoot,
+      source: 'alembic-main-bootstrap',
+    });
+    const artifact = await openArtifact(dataRoot, certified);
+    const map = artifact.facts.requestOutcomes.find(
+      (row) => row.repoId === 'opaque-app' && row.kind === 'map'
+    );
+
+    expect(artifact.readiness).toMatchObject({ verdict: 'passed', errors: [] });
+    expect(map?.dependencyResolutions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          classification: 'approved-sibling',
+          dependencyName: 'SharedKit',
+          ownerRepoId: 'opaque-kit',
+          ownershipSource: 'module-alias',
+          ownershipProvenancePath: 'Package.swift',
+        }),
+        expect.objectContaining({
+          classification: 'expected-external',
+          dependencyName: 'Foundation',
+        }),
+      ])
+    );
+    expect(map?.dependencyResolutions).toHaveLength(map?.dependencyObservationCount ?? -1);
+    // 被包声明绑定的模块，归属证据是包清单，不再只是路径形状。
+    const greeter = artifact.facts.inventory.files.find(
+      (file) => file.relativePath === 'Sources/SharedKit/Greeter.swift'
+    );
+    expect(greeter?.ownersV2).toEqual([
+      expect.objectContaining({ origin: 'package-build-declaration' }),
+    ]);
+  }, 120_000);
+
   test('rejects malformed presenter and missing graph authority instead of synthesizing empties', async () => {
     const fixture = await captureSingleRepository(2);
     const artifact = structuredClone(await openArtifact(fixture.dataRoot, fixture.certified));
