@@ -13,6 +13,7 @@ import type { SourceRefReconciler } from '@alembic/core/knowledge';
 import type { LifecycleEventRepository } from '@alembic/core/repositories';
 import type { InProcessFileChangeHandler } from '../recipe-pipeline/sustain/evolution/InProcessFileChangeHandler.js';
 import type { FileChangeDispatcher } from '../service/FileChangeDispatcher.js';
+import type { ProjectGraphPorts } from '../tools/ProjectGraphPorts.js';
 /**
  * ServiceMap — DI 容器类型安全映射
  *
@@ -63,6 +64,7 @@ import type Logger from '@alembic/core/logging';
 import type { MemoryRepositoryImpl } from '@alembic/core/memory';
 // ── Repository Types ──
 import type {
+  AlembicRepositoryBundle,
   CoverageLedgerRepository,
   GenerateRepository,
   GuardViolationRepository,
@@ -137,6 +139,7 @@ export interface ServiceMap {
   lifecycleEventRepository: LifecycleEventRepository;
   coverageLedgerRepository: CoverageLedgerRepository;
   recipeSourceRefRepository: SourceRefRepository;
+  sourceGraphRepository: AlembicRepositoryBundle['sourceGraphRepository'];
   knowledgeFileWriter: KnowledgeFileWriter;
   knowledgeSyncService: KnowledgeSyncService;
 
@@ -208,6 +211,7 @@ export interface ServiceMap {
   agentService: AgentService;
   strictSemanticReviewRuntimeFactory: StrictSemanticReviewRuntimeFactory;
   skillHooks: SkillHooks;
+  projectGraphPorts: ProjectGraphPorts;
 
   // ═══ SignalModule ═══
   signalBus: SignalBus;

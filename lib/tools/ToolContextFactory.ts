@@ -20,6 +20,7 @@ import {
   type KnowledgeSearchServiceHostPort,
   type KnowledgeServiceHostPort,
 } from './KnowledgeServiceAdapter.js';
+import type { ProjectGraphPorts } from './ProjectGraphPorts.js';
 import { ToolScopeResources } from './ToolScopeResources.js';
 
 interface ServiceContainer {
@@ -145,8 +146,12 @@ export class ToolContextFactory {
     const knowledge = isKnowledgeService(service)
       ? createKnowledgeServiceAdapter(service, userId)
       : undefined;
+    // graph 工具的两个端口来自同一个对象；数据库没有就绪时容器给不出它，工具如实报告不可用。
+    const graph = tryGet(c, 'projectGraphPorts');
+    const graphPorts = isProjectGraphPorts(graph) ? graph : undefined;
     return {
-      projectGraph: null,
+      projectGraph: graphPorts?.projectGraph ?? null,
+      codeEntityGraph: graphPorts?.codeEntityGraph,
       searchEngine: isKnowledgeSearchService(search)
         ? createKnowledgeSearchAdapter(search)
         : undefined,
@@ -172,6 +177,17 @@ function isKnowledgeService(value: unknown): value is KnowledgeServiceHostPort {
   }
   return ['get', 'update', 'reject'].every(
     (key) => typeof (value as Record<string, unknown>)[key] === 'function'
+  );
+}
+
+function isProjectGraphPorts(value: unknown): value is ProjectGraphPorts {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  const ports = value as Partial<ProjectGraphPorts>;
+  return (
+    typeof ports.projectGraph?.getCallers === 'function' &&
+    typeof ports.codeEntityGraph?.impactAnalysis === 'function'
   );
 }
 

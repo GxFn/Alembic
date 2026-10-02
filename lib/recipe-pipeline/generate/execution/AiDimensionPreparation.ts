@@ -21,8 +21,8 @@ import {
 import type { ProjectContextFillView } from '../../../project-facts/ProjectContextWorkflowFacts.js';
 import {
   type ProjectScopeSourceIdentity,
-  resolveProjectScopeAnalysisContext,
   resolveProjectScopeSourceIdentitiesFromCarrier,
+  resolveSourceIndexOptions,
 } from '../../../project-scope/ProjectScopeAnalysis.js';
 import type { GenerateFileEntry } from './AgentRunInputBuilders.js';
 import type { GenerateTaskManagerLike, GenerateWorkflowContext } from './AiDimensionTypes.js';
@@ -174,13 +174,11 @@ export async function prepareAiDimensionPipeline(
       ctx.container as unknown as Parameters<typeof getCoreRepositoryBundle>[0]
     );
     const lifecycle = new SourceGraphLifecycleService(repositories.sourceGraphRepository);
-    const analysisScope = resolveProjectScopeAnalysisContext(ctx.container);
     const startedAtMs = Date.now();
     sourceGraphResult = await lifecycle.catchUpOnStartup({
       // workflow仍保留当前folder身份；仅整份live图使用真实controlRoot作为相对路径锚点。
-      projectRoot: analysisScope.controlRoot ?? projectRoot,
-      projectScopeDescriptor: analysisScope.projectScope,
-      codeGraph: { dataRoot },
+      // 选项与图工具共用一份：之后 Agent 的 graph 查询读的就是这里建好的这一代索引。
+      ...resolveSourceIndexOptions(ctx.container, { projectRoot, dataRoot }),
       signal: sessionAbortSignal ?? undefined,
     });
     logger.info(

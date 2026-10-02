@@ -317,6 +317,7 @@
     "hostOwnedToolV2Paths": [
       "lib/tools/ToolContextFactory.ts",
       "lib/tools/KnowledgeServiceAdapter.ts",
+      "lib/tools/ProjectGraphPorts.ts",
       "lib/tools/ToolScopeResources.ts",
       "lib/tools/adapters/**"
     ],
@@ -352,6 +353,11 @@
         "path": "test/unit/MainToolAvailability.test.ts",
         "expectedSpecifiers": ["../../lib/tools/ToolContextFactory.js"],
         "reason": "Verifies Main's real service capability projection, side-effect-free discovery, and HTTP consumption through Agent public schema contracts."
+      },
+      {
+        "path": "test/unit/ProjectGraphPorts.test.ts",
+        "expectedSpecifiers": ["../../lib/tools/ToolContextFactory.js"],
+        "reason": "Drives the Agent graph tool through the real host composition root against a real Core source index, down to the evidence collector and the authoring gate."
       }
     ],
     "notes": [
@@ -452,6 +458,12 @@
       "classification": "alembic-main-knowledge-service-adapter",
       "switchAfter": "do-not-migrate-by-default",
       "reason": "Binds trusted host identity and configured Core KnowledgeService methods to Agent read/management ports; it does not implement Agent handlers or Core persistence."
+    },
+    {
+      "path": "lib/tools/ProjectGraphPorts.ts",
+      "classification": "alembic-main-project-graph-ports",
+      "switchAfter": "do-not-migrate-by-default",
+      "reason": "Binds the Agent graph tool's host ports to Core relation queries over the host database's source index: turns entity names into query targets, keeps the index current before answering, and shapes answers with citable graph refs. It implements neither Agent handlers nor Core graph algorithms."
     },
     {
       "path": "lib/tools/ToolScopeResources.ts",

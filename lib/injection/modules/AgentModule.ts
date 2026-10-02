@@ -16,11 +16,14 @@ import {
   SystemRunContextFactory,
 } from '@alembic/agent/service';
 import { RuntimeCapabilityCatalog, ToolRouterAdapter } from '@alembic/agent/tools/runtime';
+import { createProjectRelations } from '@alembic/core/project-context';
 import { resolveDataRoot, resolveProjectRoot } from '@alembic/core/workspace';
 import { DASHBOARD_OPERATION_MANIFESTS } from '#tools/adapters/DashboardOperations.js';
 import { SKILL_CAPABILITY_MANIFESTS } from '#tools/adapters/SkillCapabilities.js';
+import { resolveSourceIndexOptions } from '../../project-scope/ProjectScopeAnalysis.js';
 import { StrictSemanticReviewRuntimeFactory } from '../../service/semantic-review/StrictSemanticReviewRuntimeFactory.js';
 import { SkillHooks } from '../../service/skills/SkillHooks.js';
+import { createProjectGraphPorts } from '../../tools/ProjectGraphPorts.js';
 import { ToolContextFactory } from '../../tools/ToolContextFactory.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
 
@@ -34,6 +37,15 @@ export function register(c: ServiceContainer) {
         availability: (runtime) =>
           (ct.get('toolContextFactory') as ToolContextFactory).getAvailability(runtime),
       })
+  );
+
+  // graph 工具的后端：Core 的关系查询绑定在宿主数据库的源码索引上。
+  // 建索引的选项与挖掘准备阶段是同一份，所以工具读到的就是挖掘时建好的那一代。
+  c.singleton('projectGraphPorts', (ct: ServiceContainer) =>
+    createProjectGraphPorts({
+      relations: createProjectRelations({ repository: ct.get('sourceGraphRepository') }),
+      indexOptions: () => resolveSourceIndexOptions(ct, { projectRoot: resolveProjectRoot(ct) }),
+    })
   );
 
   // 工厂随宿主复用；可变工具状态由 runtime 的 run/view scope 创建并在 finally 释放。

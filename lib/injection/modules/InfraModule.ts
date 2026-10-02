@@ -172,6 +172,12 @@ export function register(c: ServiceContainer) {
     (ct: ServiceContainer) => getCoreRepositoryBundle(ct).coverageLedgerRepository
   );
 
+  // 源码索引的仓库：挖掘准备阶段建索引、图工具读索引，用的是同一个库。
+  c.singleton(
+    'sourceGraphRepository',
+    (ct: ServiceContainer) => getCoreRepositoryBundle(ct).sourceGraphRepository
+  );
+
   c.singleton('warningRepository', (ct: ServiceContainer) => {
     return getCoreRepositoryBundle(ct).warningRepository;
   });

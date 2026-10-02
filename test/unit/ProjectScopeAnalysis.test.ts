@@ -17,6 +17,7 @@ import {
   collectProjectScopeSourceIdentities,
   normalizeProjectScopeSourceRefsForRuntime,
   resolveProjectScopeAnalysisContext,
+  resolveSourceIndexOptions,
 } from '../../lib/project-scope/ProjectScopeAnalysis.js';
 import { initializeGenerateRuntime } from '../../lib/recipe-pipeline/generate/execution/RuntimeInitializer.js';
 
@@ -236,6 +237,51 @@ describe('ProjectScope analysis wiring', () => {
       'AlembicCore/lib/index.ts',
       'AlembicPlugin/lib/index.ts',
     ]);
+  });
+
+  test('gives mining and the graph tool one set of source index options', () => {
+    const controlRoot = mkdtempSync(join(tmpdir(), 'alembic-source-index-options-'));
+    tempDirs.push(controlRoot);
+    const dataRoot = join(controlRoot, '.ghost-data');
+    const coreRepo = createNodeProject(controlRoot, 'AlembicCore');
+    const projectScope = createProjectDescriptor({
+      controlRoot,
+      dataRoot,
+      displayName: 'AlembicWorkspace',
+      folders: [{ displayName: 'AlembicCore', path: coreRepo, role: 'source' }],
+    });
+    const scoped = {
+      singletons: {
+        _projectRoot: coreRepo,
+        _workspaceResolver: WorkspaceResolver.fromProject(controlRoot, { projectScope }),
+      },
+    };
+    // 有 ProjectScope：整份索引以 controlRoot 为锚点，范围由 descriptor 给，
+    // 调用方手里的当前 folder 不改变索引的身份。
+    const fromTool = resolveSourceIndexOptions(scoped, { projectRoot: coreRepo });
+    const fromMining = resolveSourceIndexOptions(scoped, { projectRoot: coreRepo, dataRoot });
+    expect(fromTool).toEqual(fromMining);
+    expect(fromTool).toEqual({
+      projectRoot: projectScope.controlRoot.path,
+      projectScopeDescriptor: projectScope,
+      codeGraph: { dataRoot },
+    });
+
+    // 没有 ProjectScope：就是项目根；descriptor 为空，原样交给 Core。
+    const plainRoot = mkdtempSync(join(tmpdir(), 'alembic-source-index-plain-'));
+    tempDirs.push(plainRoot);
+    const plain = {
+      singletons: {
+        _projectRoot: plainRoot,
+        _workspaceResolver: WorkspaceResolver.fromProject(plainRoot),
+      },
+    };
+    const plainOptions = resolveSourceIndexOptions(plain, { projectRoot: plainRoot });
+    expect(plainOptions.projectRoot).toBe(plainRoot);
+    expect(plainOptions.projectScopeDescriptor).toBeNull();
+    expect(plainOptions.codeGraph?.dataRoot).toBe(
+      resolveProjectScopeAnalysisContext(plain).dataRoot
+    );
   });
 
   test('normalizes sourceRefs to qualified ProjectScope refs and rejects ambiguous or missing refs', () => {

@@ -1,3 +1,4 @@
+import type { SourceGraphIndexOptions } from '@alembic/core';
 import { stripSourceRangeSuffix } from '@alembic/core/knowledge';
 import {
   buildProjectScopeSourceRefIndex,
@@ -116,6 +117,25 @@ export function resolveProjectScopeAnalysisContext(
     projectRoot: resolver.projectRoot || projectRoot,
     projectScope,
     projectScopeId: projectScope?.projectScopeId ?? null,
+  };
+}
+
+/**
+ * 本宿主建源码索引用的选项。
+ *
+ * 挖掘准备阶段与图工具必须用同一份：选项决定索引的身份，两处不一致时会轮流把对方的索引判成
+ * 过期而重建。整份索引以 controlRoot 为相对路径的锚点；没有 ProjectScope 时就是项目根。
+ * 空的 descriptor 原样交给 Core 拒绝，不在这里扩成对 controlRoot 的全量扫描。
+ */
+export function resolveSourceIndexOptions(
+  container: ContainerLike | null | undefined,
+  roots: { projectRoot?: string; dataRoot?: string } = {}
+): Pick<SourceGraphIndexOptions, 'projectRoot' | 'projectScopeDescriptor' | 'codeGraph'> {
+  const analysis = resolveProjectScopeAnalysisContext(container);
+  return {
+    projectRoot: analysis.controlRoot ?? roots.projectRoot ?? analysis.projectRoot,
+    projectScopeDescriptor: analysis.projectScope,
+    codeGraph: { dataRoot: roots.dataRoot ?? analysis.dataRoot },
   };
 }
 
