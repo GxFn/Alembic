@@ -341,7 +341,10 @@ describe('graph 工具的宿主端口：回答来自 Core 的源码索引', () =
     expect(names(impact.impactedSymbols)).toEqual(
       expect.arrayContaining(['load', 'warm', 'pending', 'run'])
     );
-    expect(impact.graphRefs.length).toBeGreaterThan(0);
+    // 引用名额先给跨文件的关系：第一条是别的文件对 store.ts 的依赖，不是它内部的调用。
+    const firstCited = parseRelationGraphRef(impact.graphRefs[0]);
+    expect(firstCited?.site.filePath).not.toBe('src/store.ts');
+    expect(impact.graphRefs.length).toBeGreaterThan(1);
     // 只给符号：受影响的是用到它的地方。
     const symbolImpact = await fixture.query<GraphImpact>('impact', 'pending');
     expect(symbolImpact.impactedFiles).toEqual(['main.ts']);

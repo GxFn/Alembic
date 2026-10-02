@@ -597,7 +597,8 @@ export function createProjectGraphPorts(options: ProjectGraphPortsOptions): Proj
           tests: paths(data.tests),
           depth: data.depth,
           truncated: data.truncated === true,
-          graphRefs: graphRefsOf(data.relations),
+          // 影响面的要点是"别的文件依赖它"：跨文件的关系排在前面，引用名额先给它们。
+          graphRefs: graphRefsOf(crossFileFirst(data.relations)),
           index: answer.index,
         };
       },
@@ -710,6 +711,16 @@ function graphRefsOf(relations: readonly RelationSummary[] | undefined): string[
     }
   }
   return refs;
+}
+
+function crossFileFirst(relations: readonly RelationSummary[] | undefined): RelationSummary[] {
+  const crossesFiles = (relation: RelationSummary) =>
+    Boolean(relation.from?.filePath && relation.to?.filePath) &&
+    relation.from?.filePath !== relation.to?.filePath;
+  // sort 是稳定的：同一组内保持索引给出的顺序。
+  return [...(relations ?? [])].sort(
+    (left, right) => Number(crossesFiles(right)) - Number(crossesFiles(left))
+  );
 }
 
 function relationTargets(
