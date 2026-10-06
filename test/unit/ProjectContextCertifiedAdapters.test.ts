@@ -9,6 +9,7 @@ import {
   type CertifiedProjectFactsArtifactV1,
   FileCertifiedProjectFactsStore,
   hashCanonicalJson,
+  isBuildManifestPath,
   NodeProjectContextFoundationHostPorts,
 } from '@alembic/core/project-context-foundation';
 import { createProjectDescriptor } from '@alembic/core/shared';
@@ -691,9 +692,12 @@ describe('Alembic Main strict-v2 ProjectContext adapters', () => {
     });
     const { files, modules } = moduleCoverage.projection;
     const ownedUnion = new Set(modules.flatMap((module) => module.ownedFiles));
-    const inventory = new Set(files.map(qualifyMainCertifiedPath));
+    // 清单里的 Package.swift 声明了这 81 个模块，自己不属于任何模块。
+    const sources = files.filter((file) => !isBuildManifestPath(file.relativePath));
+    const inventory = new Set(sources.map(qualifyMainCertifiedPath));
 
-    expect(files).toHaveLength(81);
+    expect(files).toHaveLength(82);
+    expect(sources).toHaveLength(81);
     expect(modules).toHaveLength(81);
     expect(modules.every((module) => module.ownedFiles.length > 0)).toBe(true);
     expect(ownedUnion).toEqual(inventory);
@@ -701,7 +705,7 @@ describe('Alembic Main strict-v2 ProjectContext adapters', () => {
     expect(fixture.certified.counters.cappedModuleProjectionCount).toBe(0);
   }, 120_000);
 
-  test('rejects an eligible source that has no certified module owner', async () => {
+  test('owns a root-level source by the repository root module instead of leaving it unowned', async () => {
     const root = await makeTemporaryRoot('alembic-main-unowned-source-');
     const projectRoot = path.join(root, 'project');
     const dataRoot = path.join(root, 'data');
@@ -727,20 +731,23 @@ describe('Alembic Main strict-v2 ProjectContext adapters', () => {
     expect(
       artifact.facts.inventory.files.find((file) => file.relativePath === 'src/owned.ts')
     ).toMatchObject({ ownerModuleIds: ['module:src'] });
+    // 仓库根下直接放着的源码归到仓库根这个模块；每个源码文件都有归属，覆盖消费方照常打开。
     expect(
       artifact.facts.inventory.files.find((file) => file.relativePath === 'loose.ts')
         ?.ownerModuleIds
-    ).toEqual([]);
+    ).toEqual(['module:.']);
 
-    await expect(
-      reopenMainCertifiedProjectFactsConsumer({
-        carrier: certified,
-        consumer: 'module-coverage',
-        dataRoot,
-        entrypoint: MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS['module-coverage'],
-      })
-    ).rejects.toThrow(/eligible source.*owner/i);
-    expect(certified.receipts['module-coverage']).toBeUndefined();
+    const moduleCoverage = await reopenMainCertifiedProjectFactsConsumer({
+      carrier: certified,
+      consumer: 'module-coverage',
+      dataRoot,
+      entrypoint: MAIN_CERTIFIED_PROJECT_FACTS_ENTRYPOINTS['module-coverage'],
+    });
+    expect(
+      moduleCoverage.projection.modules.map(
+        (module) => `${module.moduleId}:${module.ownedFiles.length}`
+      )
+    ).toEqual(['module:.:1', 'module:src:1']);
   }, 60_000);
 
   test('conserves the ProjectScope control root itself plus four member repositories', async () => {
@@ -989,13 +996,35 @@ async function captureSingleRepository(fileCount: number, splitModules = false) 
   const projectRoot = path.join(root, 'project');
   const dataRoot = path.join(root, 'data');
   await mkdir(dataRoot, { recursive: true });
+  const moduleNames: string[] = [];
   for (let index = 0; index < fileCount; index += 1) {
+    const moduleName = `Module${String(index).padStart(3, '0')}`;
+    moduleNames.push(moduleName);
     const relativePath = splitModules
-      ? path.join('Sources', 'Core', `module-${String(index).padStart(3, '0')}`, 'file.swift')
+      ? path.join('Sources', 'Core', moduleName, 'file.swift')
       : path.join('src', `file-${index}.ts`);
     const absolutePath = path.join(projectRoot, relativePath);
     await mkdir(path.dirname(absolutePath), { recursive: true });
     await writeFile(absolutePath, `export const value${index} = ${index};\n`);
+  }
+  if (splitModules) {
+    // 模块来自仓库的模块划分，划分来自构建清单：每个目录声明成一个 SPM target。
+    await writeFile(
+      path.join(projectRoot, 'Package.swift'),
+      [
+        '// swift-tools-version: 5.9',
+        'import PackageDescription',
+        'let package = Package(',
+        '  name: "Certified",',
+        '  targets: [',
+        ...moduleNames.map(
+          (moduleName) => `    .target(name: "${moduleName}", path: "Sources/Core/${moduleName}"),`
+        ),
+        '  ]',
+        ')',
+        '',
+      ].join('\n')
+    );
   }
   const certified = await captureMainCertifiedProjectFacts({
     analysisScope: {

@@ -22,6 +22,7 @@ import {
   createProjectContextRequestAuditPlansV2,
   FileCertifiedProjectFactsStore,
   hashCanonicalJson,
+  isBuildManifestPath,
   NodeProjectContextFoundationHostPorts,
   type ProjectContextConsumerProjectionReceiptV2,
   type ProjectContextFoundationFileDescriptor,
@@ -1251,6 +1252,11 @@ function expectedOwnerModuleCount(files: readonly MainCertifiedSourceFile[]): nu
 
 function requireCertifiedModuleOwners(file: MainCertifiedSourceFile): readonly string[] {
   if (file.moduleIds.length === 0) {
+    // 构建清单（Package.swift 等）声明模块，自己不是哪个模块的源码：它在认证清单里只作归属证据，
+    // 没有所属模块是对的，不算"源码没有归属"。
+    if (isBuildManifestPath(file.relativePath)) {
+      return [];
+    }
     throw new TypeError(
       `Certified eligible source ${file.repoId}/${file.relativePath} has no module owner.`
     );
