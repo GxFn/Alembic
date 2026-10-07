@@ -1,12 +1,25 @@
 import { EventEmitter } from 'node:events';
+import { existsSync } from 'node:fs';
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  baseDimensions,
   type DimensionDef,
   GenerateSessionLeaseError,
   GenerateSessionManager,
 } from '@alembic/core/host-agent-workflows';
+import {
+  buildProjectContextPresenterInput,
+  type ProjectContextEnvelope,
+  type ProjectContextResult,
+  type RepoContext,
+} from '@alembic/core/project-context';
+import type {
+  PlanCollectOptions,
+  PlanProjectContextAnalysis,
+  ProjectSourceFileFact,
+} from '@alembic/core/service/planFacts';
 import { createProjectDescriptor } from '@alembic/core/shared';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import {
@@ -28,7 +41,15 @@ import {
 } from '../../lib/project-facts/ProjectMapModules.js';
 
 const fixtures: string[] = [];
+// F6 之后采集在 Core 的 collectPlanProjectContext 里。这里的夹具仍按请求种类给信封：
+// 设了 executeOverride 时，用一个按同样顺序发请求的假采集器把信封合成分析结果；
+// 没设时走真实的 Core 采集器。collectCalls 记下适配层交给 Core 的范围与上限。
 const projectContextCapabilitiesMock = vi.hoisted(() => ({
+  collectCalls: [] as Array<{
+    hints: unknown;
+    options: PlanCollectOptions | undefined;
+    projectRoot: string;
+  }>,
   executeOverride: null as null | ((request: ProjectContextRequestMock) => Promise<unknown>),
 }));
 
@@ -40,24 +61,30 @@ interface ProjectContextRequestMock {
   };
 }
 
-vi.mock('@alembic/core/project-context-capabilities', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@alembic/core/project-context-capabilities')>();
+vi.mock('@alembic/core/service/planFacts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@alembic/core/service/planFacts')>();
   return {
     ...actual,
-    ProjectContextCapabilities: {
-      ...actual.ProjectContextCapabilities,
-      execute: vi.fn((request: { kind: string }) =>
-        projectContextCapabilitiesMock.executeOverride
-          ? projectContextCapabilitiesMock.executeOverride(request)
-          : actual.ProjectContextCapabilities.execute(request as never)
-      ),
-    },
+    collectPlanProjectContext: vi.fn(
+      async (projectRoot: string, hints: unknown, options?: PlanCollectOptions) => {
+        projectContextCapabilitiesMock.collectCalls.push({ hints, options, projectRoot });
+        if (!projectContextCapabilitiesMock.executeOverride) {
+          return actual.collectPlanProjectContext(projectRoot, hints as never, options);
+        }
+        return fakeCollectPlanProjectContext(
+          projectRoot,
+          options,
+          projectContextCapabilitiesMock.executeOverride,
+          actual
+        );
+      }
+    ),
   };
 });
 
 afterEach(async () => {
   projectContextCapabilitiesMock.executeOverride = null;
+  projectContextCapabilitiesMock.collectCalls.length = 0;
   vi.clearAllMocks();
   await Promise.all(fixtures.splice(0).map((dir) => rm(dir, { force: true, recursive: true })));
 });
@@ -463,15 +490,33 @@ describe('ProjectContextWorkflowFacts', () => {
       source: 'alembic-main-bootstrap',
     });
 
+    // 范围交给 Core 采集器：成员文件夹原样作为 space 的文件夹对象，第一个文件夹是 repo 的主仓库，
+    // 采集根是控制根（范围里的路径都相对它）。
+    expect(projectContextCapabilitiesMock.collectCalls).toHaveLength(1);
+    expect(projectContextCapabilitiesMock.collectCalls[0]).toMatchObject({
+      options: {
+        // 模块种子不设上限（不传 maxModuleSeeds），明细与正文沿用默认值。
+        limits: { maxFileDetails: 8, maxModuleDetails: 3, sourceSliceLines: 8 },
+        scope: {
+          repoRoot: 'Alembic',
+          sourceFolders: [
+            expect.objectContaining({
+              displayName: 'Alembic',
+              path: sourceFolders[0],
+              role: 'primary-source',
+            }),
+            expect.objectContaining({ displayName: 'AlembicCore', path: sourceFolders[1] }),
+          ],
+        },
+        source: 'alembic-main-bootstrap',
+      },
+      projectRoot: controlRoot,
+    });
     expect(requests.find((request) => request.kind === 'space')?.payload).toMatchObject({
-      includeProjectTree: true,
       sourceFolders: [
         expect.objectContaining({ displayName: 'Alembic', path: sourceFolders[0] }),
         expect.objectContaining({ displayName: 'AlembicCore', path: sourceFolders[1] }),
       ],
-    });
-    expect(requests.find((request) => request.kind === 'repo')?.payload).toMatchObject({
-      repoRoot: 'Alembic',
     });
     expect(facts.allFiles).toContainEqual(
       expect.objectContaining({
@@ -634,14 +679,18 @@ describe('ProjectContextWorkflowFacts', () => {
       source: 'alembic-main-bootstrap',
     });
 
-    expect(requests.find((request) => request.kind === 'space')?.payload).toMatchObject({
-      sourceFolders: [
-        expect.objectContaining({ path: 'Alembic' }),
-        expect.objectContaining({ path: 'AlembicCore' }),
-        expect.objectContaining({ path: 'AlembicPlugin' }),
-        expect.objectContaining({ path: 'AlembicDashboard' }),
-        expect.objectContaining({ path: 'AlembicAgent' }),
-      ],
+    expect(projectContextCapabilitiesMock.collectCalls[0]?.options).toMatchObject({
+      limits: { maxFileDetails: 0, maxFiles: 10, maxModuleDetails: 0, maxModuleSeeds: 8 },
+      scope: {
+        repoRoot: 'Alembic',
+        sourceFolders: [
+          expect.objectContaining({ path: 'Alembic' }),
+          expect.objectContaining({ path: 'AlembicCore' }),
+          expect.objectContaining({ path: 'AlembicPlugin' }),
+          expect.objectContaining({ path: 'AlembicDashboard' }),
+          expect.objectContaining({ path: 'AlembicAgent' }),
+        ],
+      },
     });
     expect(requests.find((request) => request.kind === 'repo')?.payload).toMatchObject({
       repoRoot: 'Alembic',
@@ -1101,7 +1150,11 @@ let package = Package(
       'utf8'
     );
 
-    expect(source).toContain('for (const seed of moduleSeeds.slice(0, maxModuleDetails)) {');
+    // F6：请求循环、种子推导与文件扫描都在 Core 的共用采集器里；主体只留 ProjectScope 展开与自己的派生。
+    expect(source).toContain('await collectPlanProjectContext(collectRoot, undefined, {');
+    expect(source).not.toContain('ProjectContextCapabilities');
+    expect(source).not.toContain('selectProjectContextModuleSeeds');
+    expect(source).not.toContain('PROJECT_SCOPE_LANGUAGE_BY_EXTENSION');
     expect(source).toContain('const projectMapModules = buildScopedProjectMapModules({');
     expect(source).toContain('projectMapModules,');
     expect(source).not.toContain('function buildProjectMapModules(map');
@@ -1380,6 +1433,127 @@ function mockLocalSwiftPackageProjectContext(projectRoot: string): void {
           reason: 'fixture unavailable',
         });
     }
+  };
+}
+
+/**
+ * 按 Core 采集器的顺序向夹具发请求（space → repo → map → 文件明细），把信封合成分析结果。
+ * 源码清单与语言统计用真实的 Core 实现扫夹具目录（目录不存在时为空）。
+ */
+async function fakeCollectPlanProjectContext(
+  projectRoot: string,
+  options: PlanCollectOptions | undefined,
+  execute: (request: ProjectContextRequestMock) => Promise<unknown>,
+  actual: typeof import('@alembic/core/service/planFacts')
+): Promise<PlanProjectContextAnalysis> {
+  const envelopes: ProjectContextEnvelope<ProjectContextResult>[] = [];
+  const push = async (kind: string, payload?: Record<string, unknown>) => {
+    const envelope = (await execute({
+      kind,
+      payload,
+      scope: { projectRoot },
+    })) as ProjectContextEnvelope<ProjectContextResult>;
+    envelopes.push(envelope);
+    return envelope;
+  };
+  const folders = (options?.scope?.sourceFolders ?? []).map((folder) =>
+    typeof folder === 'string' ? { path: folder } : { ...folder }
+  );
+  await push('space', {
+    includeProjectTree: true,
+    ...(folders.length > 0 ? { sourceFolders: folders } : {}),
+  });
+  const repoEnvelope = await push('repo', {
+    includeMapSummary: false,
+    ...(options?.scope?.repoRoot ? { repoRoot: options.scope.repoRoot } : {}),
+  });
+  const repo = repoEnvelope.data as RepoContext;
+  await push('map', { moduleSeeds: [] });
+  const sourceSliceLines = options?.limits?.sourceSliceLines ?? 0;
+  const detailFiles = [
+    ...new Set(
+      envelopes.flatMap((envelope) =>
+        envelope.refs.flatMap((ref) => (ref.scope.filePath ? [ref.scope.filePath] : []))
+      )
+    ),
+  ]
+    .sort()
+    .slice(0, options?.limits?.maxFileDetails ?? 0);
+  for (const filePath of detailFiles) {
+    await push('file-flow', { filePath });
+    await push('file-symbols', { filePath });
+    if (sourceSliceLines > 0) {
+      await push('source-slice', {
+        endLine: sourceSliceLines,
+        filePath,
+        includeText: true,
+        startLine: 1,
+      });
+    }
+    await push('anchor-range', { filePath, line: 1 });
+  }
+  const presenterInput = buildProjectContextPresenterInput(envelopes);
+  const sourceFileFacts: ProjectSourceFileFact[] = existsSync(projectRoot)
+    ? await actual.collectProjectSourceFileFacts(projectRoot, {
+        ...(options?.limits?.maxFiles ? { maxFiles: options.limits.maxFiles } : {}),
+        sourceFolders: folders.map((folder) => folder.path),
+      })
+    : [];
+  const languageStats: Record<string, number> = {};
+  for (const fact of sourceFileFacts) {
+    if (actual.isProjectCodeFile(fact.filePath, fact.language)) {
+      languageStats[fact.language] = (languageStats[fact.language] ?? 0) + 1;
+    }
+  }
+  const primaryLanguage =
+    Object.entries(languageStats).sort(([, left], [, right]) => right - left)[0]?.[0] ??
+    [...(repo?.languages ?? [])].sort(
+      (left, right) => (right.fileCount ?? 0) - (left.fileCount ?? 0)
+    )[0]?.language ??
+    'unknown';
+  const secondaryLanguages = Object.keys(languageStats)
+    .filter((language) => language !== primaryLanguage)
+    .sort();
+  return {
+    collection: {
+      detailFiles,
+      droppedModuleSeeds: [],
+      filteredModuleSeeds: [],
+      limits: {
+        maxFileDetails: options?.limits?.maxFileDetails ?? 0,
+        maxFiles: options?.limits?.maxFiles,
+        maxModuleDetails: options?.limits?.maxModuleDetails,
+        maxModuleSeeds: options?.limits?.maxModuleSeeds,
+        sourceSliceLines,
+      },
+      scopeSource: options?.scope ? 'explicit' : 'project-root',
+      seedSource: 'none',
+      source: options?.source ?? 'codex-host-plan',
+      sourceScanTruncated: false,
+    },
+    contextStatus: 'complete',
+    dimensions: [...baseDimensions],
+    envelopes,
+    factSource: 'project-context',
+    fileCount: Math.max(presenterInput.files.length, sourceFileFacts.length),
+    frameworks: [],
+    isEmpty: presenterInput.files.length === 0 && presenterInput.refs.length === 0,
+    isMultiLang: secondaryLanguages.length > 0,
+    languageStats,
+    moduleCount: presenterInput.map?.modules.length ?? 0,
+    moduleSeeds: [],
+    modules: [],
+    presenterInput,
+    primaryLanguage,
+    projectType:
+      repo?.packageSystems?.[0]?.kind ??
+      repo?.buildSystems?.[0]?.kind ??
+      repo?.repo?.name ??
+      'project-context',
+    requestKinds: [...new Set(envelopes.map((envelope) => envelope.queryLevel))],
+    secondaryLanguages,
+    sourceFileFacts,
+    understandingGaps: [],
   };
 }
 
