@@ -5,7 +5,7 @@
   "type": "module",
   "main": "dist/lib/Bootstrap.js",
   "engines": {
-    "node": ">=22.5.0"
+    "node": ">=24.22.2"
   },
   "imports": {
     "#shared/*": {

@@ -134,7 +134,7 @@ lib/
 
 ## 技术与代码规则
 
-- 语言：TypeScript (ES2024, NodeNext)，Node.js >= 22。
+- 语言：TypeScript (ES2024, NodeNext)，Node.js >= 24.22.2。
 - 模块系统：ESM (`"type": "module"`)，import 路径必须带 `.js` 后缀。
 - 路径别名定义在 `package.json` imports 字段，包括 `#shared/*`、`#infra/*`、`#service/*`、`#inject/*`、`#governance/*`、`#platform/*`、`#types/*`、`#http/*`、`#workflows/*`、`#tools/*`、`#sandbox/*`。
 - Lint / Format：Biome 2.x，不使用 Prettier/ESLint。
